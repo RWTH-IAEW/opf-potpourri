@@ -1,14 +1,16 @@
 #==================================================================
-#A Python script that reads Matpower test case and converts into OATS test case
+# A Python script that reads PGlibOPF test case and converts into OATS test case
 # ---Author---
-# W. Bukhsh,
-# wbukhsh@gmail.com
-# OATS
-# Copyright (c) 2017 by W. Bukhsh, Glasgow, Scotland
-# OATS is distributed under the GNU GENERAL PUBLIC LICENSE v3. (see LICENSE file for details).
+# S. Kortmann,
+# s.kortmann@iaew.rwth-aachen.de
+# POTPOURRI
+# Copyright (c) 2023 by S.Kortmann, Aachen, Germany
+# POTPOURRI is distributed under the GNU GENERAL PUBLIC LICENSE v3. (see LICENSE file for details).
 #==================================================================
 
 import pandas as pd
+
+filepath = 'pglib-opf/pglib_opf_case14_ieee.m'
 
 buscol    = ['name','baseKV','type','zone','VM','VA','VNLB','VNUB','VELB','VEUB']
 demcol    = ['name','busname','real','reactive','stat','VOLL']
@@ -31,10 +33,7 @@ dfzne    = pd.DataFrame(columns=znecol)
 dfzneNTC = pd.DataFrame(columns=znecol)
 dfgen    = pd.DataFrame(columns=gencol)
 dfts     = pd.DataFrame()
-baseMVA  = pd.DataFrame(columns={'baseMVA'})
-baseMVA.loc[0]=pd.Series({'baseMVA':100})
-
-filepath = 'matpowercases/case300.m'
+baseMVA = pd.DataFrame({'baseMVA': [100]})
 
 #value of lost load
 VOLL = str(100000)
@@ -104,7 +103,8 @@ with open(filepath,"r") as myfile:
                     ind_tr += 1
     #read mpc.gencost data
     flag    = 0
-    costdat = pd.DataFrame(columns={'gen', 'start', 'shut' ,'c2', 'c1', 'c0'})
+    column_names = ['gen', 'start', 'shut', 'c2', 'c1', 'c0']
+    costdat = pd.DataFrame(columns=column_names)
     ind_gen = 0
 with open(filepath,"r") as myfile:
     for line in myfile:
@@ -120,6 +120,7 @@ with open(filepath,"r") as myfile:
     #read mpc.generator
     flag = 0
     ind  = 0
+    
 with open(filepath,"r") as myfile:
     for line in myfile:
         if 'mpc.gen' in line:
@@ -129,27 +130,51 @@ with open(filepath,"r") as myfile:
             break
         if flag == 1:
             temp = line[:-2].split('\t')[1:]
-            dfgen.loc[ind] = pd.Series({'busname':temp[0],'name':'G'+str(ind+1),'stat':temp[7],'type':str(1),'PG':temp[1],\
-            'QG':temp[2],'PGLB':temp[9],'PGUB':temp[8],'QGLB':temp[4],'QGUB':temp[3],\
-            'VS':temp[5],'RampDown(MW/hr)':temp[18],'RampUp(MW/hr)':temp[18],'MinDownTime(hr)':str(1),\
-            'MinUpTime(hr)':str(1),'FuelType':'NA','contingency':str(0),'probability':str(0.0001),'startup':costdat['start'][costdat['gen']==ind].item(),\
-            'shutdown':costdat['shut'][costdat['gen']==ind].item(),'costc2':costdat['c2'][costdat['gen']==ind].item(),\
-            'costc1':costdat['c1'][costdat['gen']==ind].item(),'costc0':costdat['c0'][costdat['gen']==ind].item()})
+            import pandas as pd
+
+            dfgen.loc[ind] = pd.Series({
+                'busname': temp[0],
+                'name': 'G' + str(ind + 1),
+                'stat': temp[7],
+                'type': str(1),
+                'PG': temp[1],
+                'QG': temp[2],
+                'PGLB': temp[9],
+                'PGUB': temp[8],
+                'QGLB': temp[4],
+                'QGUB': temp[3],
+                'VS': temp[5],
+                # TODO
+                # Look up ramping times
+                'RampDown(MW/hr)': 100,
+                'RampUp(MW/hr)': 100,
+                'MinDownTime(hr)': str(1),
+                'MinUpTime(hr)': str(1),
+                'FuelType': 'NA',
+                'contingency': str(0),
+                'probability': str(0.0001),
+                'startup': costdat.loc[costdat['gen'] == ind, 'start'].item(),
+                'shutdown': costdat.loc[costdat['gen'] == ind, 'shut'].item(),
+                'costc2': costdat.loc[costdat['gen'] == ind, 'c2'].item(),
+                'costc1': costdat.loc[costdat['gen'] == ind, 'c1'].item(),
+                'costc0': costdat.loc[costdat['gen'] == ind, 'c0'].item()
+            })
+
             ind += 1
 
 
 #----------------------------------------------------------
 #===write oats test case===
 #
-writer = pd.ExcelWriter('oats/'+filepath.split('/')[1].split('.')[0]+'.xlsx', engine ='xlsxwriter')
-dfbus[buscol].to_excel(writer, sheet_name = 'bus',index=False , header=True)
-dfdem[demcol].to_excel(writer, sheet_name = 'demand',index=False, header=True)
-dfbrn[brncol].to_excel(writer, sheet_name = 'branch',index=False, header=True)
-dftrn[trncol].to_excel(writer, sheet_name = 'transformer',index=False, header=True)
-dfwnd[wndcol].to_excel(writer, sheet_name = 'wind',index=False, header=True)
-dfsht[shtcol].to_excel(writer, sheet_name = 'shunt',index=False, header=True)
-dfzne[znecol].to_excel(writer, sheet_name = 'zone',index=False, header=True)
-dfzneNTC[znecol].to_excel(writer, sheet_name = 'zonalNTC',index=False, header=True)
-dfgen[gencol].to_excel(writer, sheet_name = 'generator',index=False, header=True)
-dfts.to_excel(writer, sheet_name = 'timeseries',index=False, header=True)
-baseMVA.to_excel(writer, sheet_name = 'baseMVA',index=False, header=True)
+with pd.ExcelWriter(filepath.split('/')[1].split('.')[0]+'.xlsx') as writer:  
+    dfbus[buscol].to_excel(writer, sheet_name = 'bus',index=False , header=True)
+    dfdem[demcol].to_excel(writer, sheet_name = 'demand',index=False, header=True)
+    dfbrn[brncol].to_excel(writer, sheet_name = 'branch',index=False, header=True)
+    dftrn[trncol].to_excel(writer, sheet_name = 'transformer',index=False, header=True)
+    dfwnd[wndcol].to_excel(writer, sheet_name = 'wind',index=False, header=True)
+    dfsht[shtcol].to_excel(writer, sheet_name = 'shunt',index=False, header=True)
+    dfzne[znecol].to_excel(writer, sheet_name = 'zone',index=False, header=True)
+    dfzneNTC[znecol].to_excel(writer, sheet_name = 'zonalNTC',index=False, header=True)
+    dfgen[gencol].to_excel(writer, sheet_name = 'generator',index=False, header=True)
+    dfts.to_excel(writer, sheet_name = 'timeseries',index=False, header=True)
+    baseMVA.to_excel(writer, sheet_name = 'baseMVA',index=False, header=True)

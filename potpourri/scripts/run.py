@@ -9,18 +9,25 @@
 # OATS is distributed under the GNU GENERAL PUBLIC LICENSE v3. (see LICENSE file for details).
 #==================================================================
 import logging
+import datetime
 import os
 from .runcase import runcase
+
+# Get the current date and time
+current_datetime = datetime.datetime.now()
+# Format the datetime as desired
+datetime_str = current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s %(levelname)-8s %(message)s',
                     datefmt='%a, %d %b %Y %H:%M:%S',
-                    filename='oatslog.log',
+                    filename=f'potpourri/logs/log_{datetime_str}.log',
                     filemode='w')
 logging.info("OATS log file")
 logging.info("Program started")
+
 oats_dir = os.path.dirname(os.path.realpath(__file__))
-default_testcase = oats_dir+'/testcases/case24_ieee_rts.xlsx'
+default_testcase = "/home/skortmann/potpourri/testcases/matpower/case24_ieee_rts.xlsx"
 
 #----------------------------------------------------------------------
 # DC Load flow

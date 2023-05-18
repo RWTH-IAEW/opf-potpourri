@@ -104,7 +104,7 @@ def runcase(testcase,mod,opt=None):
         if (opt['print_model']):
             instance.display()
         o.printsummary()
-        o.printoutputxls()
+        o.printoutputxls(testcase)
     else:
         o.greet()
         o.solutionstatus()

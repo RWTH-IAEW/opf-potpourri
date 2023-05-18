@@ -13,23 +13,25 @@ from tabulate import tabulate
 import pandas as pd
 import math
 import sys
+from .utils import endLine, newHeading
 
 class printoutput(object):
+    
     def __init__(self, results, instance,mod):
         self.results   = results
         self.instance  = instance
         self.mod       = mod
         
     def greet(self):
-        print ("========================")
-        print ("\n Output from the OATS")
-        print ("========================")
+        endLine()
+        newHeading(heading_text="Output from the OATS")
+        endLine()
         
     def solutionstatus(self):
         self.instance.solutions.load_from(self.results)
-        print ("------Solver Message------")
+        newHeading(heading_text="Solver Message")
         print (self.results.solver)
-        print ("--------------------------")
+        endLine()
         if (self.results.solver.status == SolverStatus.ok) \
         and (self.results.solver.termination_condition == TerminationCondition.optimal):
             print ("Optimization Converged!")
@@ -41,17 +43,17 @@ class printoutput(object):
     def printsummary(self):
         if 'LF' not in self.mod:
             print ("Cost of the objective function:", str(float(self.instance.OBJ())))
-        print ("***********")
-        print ("\n Summary")
-        print ("***********")
+        endLine()
+        newHeading(heading_text="Summary")
+        endLine()
         tab_summary = []
         tab_summary.append(['Conventional generation (MW)','Wind generation (MW)', 'Demand (MW)'])
         tab_summary.append([sum(self.instance.pG[g].value for g in self.instance.G)*self.instance.baseMVA,\
         sum(self.instance.pW[w].value for w in self.instance.WIND)*self.instance.baseMVA,sum(self.instance.PD[d] for d in self.instance.D)*self.instance.baseMVA])
         print (tabulate(tab_summary, headers="firstrow", tablefmt="grid"))
-        print ("==============================================")
+        endLine()
         
-    def printoutputxls(self):
+    def printoutputxls(self, testcase:str):
         #===initialise pandas dataframes
         cols_summary    = ['Conventional generation (MW)', 'Wind generation (MW)', 'Demand (MW)','Objective function value']
         cols_bus        = ['name', 'angle(degs)']
@@ -328,7 +330,7 @@ class printoutput(object):
         bus = bus.sort_values(['name'])
         generation = generation.sort_values(['name'])
         demand = demand.sort_values(['name'])
-        with pd.ExcelWriter('results.xlsx') as writer:  
+        with pd.ExcelWriter(f'potpourri/results/results.xlsx') as writer:  
             summary.to_excel(writer, sheet_name = 'summary',index=False)
             bus.to_excel(writer, sheet_name = 'bus',index=False)
             demand.to_excel(writer, sheet_name = 'demand',index=False)
@@ -337,7 +339,7 @@ class printoutput(object):
             branch.to_excel(writer, sheet_name = 'branch',index=False)
             transformer.to_excel(writer, sheet_name = 'transformer',index=False)
 
-    def printUC(self):
+    def printUC(self, testcase:str):
         print ("Cost of the objective function:", str(float(self.instance.OBJ())))
         print ("***********")
         print ("\n Summary")
@@ -438,7 +440,7 @@ class printoutput(object):
 
         #===write output on xlsx file===
         #        
-        with pd.ExcelWriter('results.xlsx') as writer:  
+        with pd.ExcelWriter(f'potpourri/results/results.xlsx') as writer:  
             summary.to_excel(writer, sheet_name = 'summary',index=False)
             zone.to_excel(writer, sheet_name = 'zone',index=False)
             interconnect.to_excel(writer, sheet_name = 'interconnection',index=False)
