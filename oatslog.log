@@ -1,0 +1,231 @@
+Thu, 18 May 2023 15:41:18 INFO     OATS log file
+Thu, 18 May 2023 15:41:18 INFO     Program started
+Thu, 18 May 2023 15:41:18 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:41:18 INFO     Testcase selected: potpourri/testcases/case2737sop.xlsx
+Thu, 18 May 2023 15:41:18 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:41:18 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:41:19 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:41:32 INFO     Done!
+Thu, 18 May 2023 15:41:32 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:41:32 INFO     Testcase selected: potpourri/testcases/case1951rte.xlsx
+Thu, 18 May 2023 15:41:32 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:41:32 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:41:32 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:41:33 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:41:33 INFO     Testcase selected: potpourri/testcases/case9Q.xlsx
+Thu, 18 May 2023 15:41:33 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:41:33 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:41:33 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:41:33 INFO     Done!
+Thu, 18 May 2023 15:41:33 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:41:33 INFO     Testcase selected: potpourri/testcases/case6468rte.xlsx
+Thu, 18 May 2023 15:41:33 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:41:33 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:41:34 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:41:36 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:41:36 INFO     Testcase selected: potpourri/testcases/case2746wp.xlsx
+Thu, 18 May 2023 15:41:36 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:41:36 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:41:36 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:41:49 INFO     Done!
+Thu, 18 May 2023 15:41:49 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:41:49 INFO     Testcase selected: potpourri/testcases/case3375wp.xlsx
+Thu, 18 May 2023 15:41:49 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:41:49 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:41:49 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:42:09 INFO     Done!
+Thu, 18 May 2023 15:42:09 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:42:09 INFO     Testcase selected: potpourri/testcases/case30Q.xlsx
+Thu, 18 May 2023 15:42:09 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:42:09 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:42:09 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:42:09 INFO     Done!
+Thu, 18 May 2023 15:42:09 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:42:09 INFO     Testcase selected: potpourri/testcases/case2848rte.xlsx
+Thu, 18 May 2023 15:42:09 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:42:09 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:42:10 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:42:11 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:42:11 INFO     Testcase selected: potpourri/testcases/case9.xlsx
+Thu, 18 May 2023 15:42:11 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:42:11 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:42:11 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:42:11 INFO     Done!
+Thu, 18 May 2023 15:42:11 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:42:11 INFO     Testcase selected: potpourri/testcases/case33bw.xlsx
+Thu, 18 May 2023 15:42:11 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:42:11 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:42:11 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:42:11 INFO     Done!
+Thu, 18 May 2023 15:42:11 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:42:11 INFO     Testcase selected: potpourri/testcases/case14.xlsx
+Thu, 18 May 2023 15:42:11 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:42:11 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:42:11 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:42:11 INFO     Done!
+Thu, 18 May 2023 15:42:11 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:42:11 INFO     Testcase selected: potpourri/testcases/case57.xlsx
+Thu, 18 May 2023 15:42:11 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:42:11 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:42:11 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:42:11 INFO     Done!
+Thu, 18 May 2023 15:42:11 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:42:11 INFO     Testcase selected: potpourri/testcases/IrishNetwork.xlsx
+Thu, 18 May 2023 15:42:11 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:42:11 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:42:11 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:42:11 WARNING  Loading a SolverResults object with a warning status into model.name="unknown";
+  - termination condition: infeasibleOrUnbounded
+  - message from solver: Problem proven to be infeasible or unbounded.
+Thu, 18 May 2023 15:42:11 WARNING  Loading a SolverResults object with a warning status into model.name="unknown";
+  - termination condition: infeasibleOrUnbounded
+  - message from solver: Problem proven to be infeasible or unbounded.
+Thu, 18 May 2023 15:42:11 WARNING  Loading a SolverResults object with a warning status into model.name="unknown";
+  - termination condition: infeasibleOrUnbounded
+  - message from solver: Problem proven to be infeasible or unbounded.
+Thu, 18 May 2023 15:42:11 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:42:11 INFO     Testcase selected: potpourri/testcases/case9241pegase.xlsx
+Thu, 18 May 2023 15:42:11 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:42:11 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:42:14 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:44:53 INFO     Done!
+Thu, 18 May 2023 15:44:53 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:44:53 INFO     Testcase selected: potpourri/testcases/case39.xlsx
+Thu, 18 May 2023 15:44:53 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:44:53 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:44:53 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:44:53 INFO     Done!
+Thu, 18 May 2023 15:44:53 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:44:53 INFO     Testcase selected: potpourri/testcases/GB_ReducedNetwork.xlsx
+Thu, 18 May 2023 15:44:53 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:44:53 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:44:55 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:44:55 INFO     Done!
+Thu, 18 May 2023 15:44:55 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:44:55 INFO     Testcase selected: potpourri/testcases/case118.xlsx
+Thu, 18 May 2023 15:44:55 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:44:55 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:44:55 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:44:55 INFO     Done!
+Thu, 18 May 2023 15:44:55 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:44:55 INFO     Testcase selected: potpourri/testcases/case6515rte.xlsx
+Thu, 18 May 2023 15:44:55 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:44:55 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:44:56 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:44:58 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:44:58 INFO     Testcase selected: potpourri/testcases/case6470rte.xlsx
+Thu, 18 May 2023 15:44:58 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:44:58 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:44:59 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:45:01 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:45:01 INFO     Testcase selected: potpourri/testcases/case6495rte.xlsx
+Thu, 18 May 2023 15:45:01 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:45:01 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:45:03 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:45:04 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:45:04 INFO     Testcase selected: potpourri/testcases/case300.xlsx
+Thu, 18 May 2023 15:45:04 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:45:04 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:45:04 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:45:04 INFO     Done!
+Thu, 18 May 2023 15:45:04 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:45:04 INFO     Testcase selected: potpourri/testcases/case3012wp.xlsx
+Thu, 18 May 2023 15:45:04 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:45:04 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:45:05 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:45:19 INFO     Done!
+Thu, 18 May 2023 15:45:19 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:45:19 INFO     Testcase selected: potpourri/testcases/case13659pegase.xlsx
+Thu, 18 May 2023 15:45:19 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:45:19 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:45:22 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:51:15 INFO     Done!
+Thu, 18 May 2023 15:51:15 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:51:15 INFO     Testcase selected: potpourri/testcases/case6ww.xlsx
+Thu, 18 May 2023 15:51:15 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:51:15 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:51:15 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:51:15 INFO     Done!
+Thu, 18 May 2023 15:51:15 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:51:15 INFO     Testcase selected: potpourri/testcases/case2868rte.xlsx
+Thu, 18 May 2023 15:51:15 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:51:15 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:51:16 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:51:17 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:51:17 INFO     Testcase selected: potpourri/testcases/case2869pegase.xlsx
+Thu, 18 May 2023 15:51:17 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:51:17 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:51:18 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:51:35 INFO     Done!
+Thu, 18 May 2023 15:51:35 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:51:35 INFO     Testcase selected: potpourri/testcases/case1888rte.xlsx
+Thu, 18 May 2023 15:51:35 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:51:35 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:51:36 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:51:36 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:51:36 INFO     Testcase selected: potpourri/testcases/case2383wp.xlsx
+Thu, 18 May 2023 15:51:36 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:51:36 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:51:37 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:51:47 WARNING  Loading a SolverResults object with a warning status into model.name="unknown";
+  - termination condition: unbounded
+  - message from solver: Model was proven to be unbounded.
+Thu, 18 May 2023 15:51:47 WARNING  Loading a SolverResults object with a warning status into model.name="unknown";
+  - termination condition: unbounded
+  - message from solver: Model was proven to be unbounded.
+Thu, 18 May 2023 15:51:47 WARNING  Loading a SolverResults object with a warning status into model.name="unknown";
+  - termination condition: unbounded
+  - message from solver: Model was proven to be unbounded.
+Thu, 18 May 2023 15:51:47 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:51:47 INFO     Testcase selected: potpourri/testcases/case3120sp.xlsx
+Thu, 18 May 2023 15:51:47 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:51:47 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:51:48 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:51:54 ERROR    Constructing component 'KCL_const' from data=None failed:
+    KeyboardInterrupt: 
+Thu, 18 May 2023 15:51:54 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:51:54 INFO     Testcase selected: potpourri/testcases/case145.xlsx
+Thu, 18 May 2023 15:51:54 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:51:54 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:51:55 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:51:55 INFO     Done!
+Thu, 18 May 2023 15:51:55 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:51:55 INFO     Testcase selected: potpourri/testcases/case2736sp.xlsx
+Thu, 18 May 2023 15:51:55 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:51:55 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:51:56 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:51:57 ERROR    Constructing component 'KCL_const' from data=None failed:
+    KeyboardInterrupt: 
+Thu, 18 May 2023 15:51:57 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:51:57 INFO     Testcase selected: potpourri/testcases/case30pwl.xlsx
+Thu, 18 May 2023 15:51:57 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:51:57 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:51:57 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:51:57 INFO     Done!
+Thu, 18 May 2023 15:51:57 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:51:57 INFO     Testcase selected: potpourri/testcases/case24_ieee_rts.xlsx
+Thu, 18 May 2023 15:51:57 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:51:57 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:51:57 INFO     Given testcase file found and selected from the testcase library
+Thu, 18 May 2023 15:51:57 INFO     Done!
+Thu, 18 May 2023 15:51:57 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:51:57 INFO     Testcase selected: potpourri/testcases/case2746wop.xlsx
+Thu, 18 May 2023 15:51:57 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:51:57 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:51:58 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:51:58 INFO     Testcase selected: potpourri/testcases/case89pegase.xlsx
+Thu, 18 May 2023 15:51:58 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:51:58 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:51:58 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:51:58 INFO     Testcase selected: potpourri/testcases/case1354pegase.xlsx
+Thu, 18 May 2023 15:51:58 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:51:58 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:51:58 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:51:58 INFO     Testcase selected: potpourri/testcases/case30.xlsx
+Thu, 18 May 2023 15:51:58 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:51:58 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:51:58 INFO     Solver selected: gurobi
+Thu, 18 May 2023 15:51:58 INFO     Testcase selected: potpourri/testcases/case9target.xlsx
+Thu, 18 May 2023 15:51:58 INFO     Model selected: DCOPF
+Thu, 18 May 2023 15:51:58 INFO     Given model file found and selected from the models library
+Thu, 18 May 2023 15:51:58 INFO     Given testcase file found and selected from the testcase library

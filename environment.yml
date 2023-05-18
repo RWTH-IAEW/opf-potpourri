@@ -1,0 +1,40 @@
+name: potpourri_env
+channels:
+  - conda-forge
+  - defaults
+  - gurobi
+dependencies:
+  - coin-or-cbc
+  - glpk
+  - python
+  - pandas
+  - pip
+  - ipython
+  - ipopt
+  - numpy
+  - numba
+  - osqp
+  - gurobi
+  - pip:
+      - contourpy
+      - cycler
+      - deepdiff
+      - et-xmlfile
+      - fonttools
+      - kiwisolver
+      - matplotlib
+      - networkx
+      - openpyxl
+      - ordered-set
+      - packaging
+      - pandapower
+      - pillow
+      - ply
+      - pyomo
+      - pyparsing
+      - scipy
+      - simbench
+      - tabulate
+      - tqdm
+      - xlrd
+      - xlsxwriter
