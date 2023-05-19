@@ -4,7 +4,7 @@ channels:
   - defaults
   - gurobi
 dependencies:
-  - coin-or-cbc
+  - coincbc
   - glpk
   - python
   - pandas
