@@ -75,8 +75,8 @@ def convert_pp_net(net: pp.pandapowerNet, value_of_lost_load: int = 100000) -> N
     dfbrn['stat'] =  str(1)
     dfbrn['r'] = net.line.r_ohm_per_km*net.line.length_km
     dfbrn['x'] = net.line.x_ohm_per_km*net.line.length_km
-        # TODO
-        # Check if b == c???
+    # TODO
+    # Check if b == c???
     dfbrn['b'] = net.line.c_nf_per_km*net.line.length_km
     dfbrn['ShortTermRating'] = str(9999)
     dfbrn['ContinousRating'] = str(9999)
@@ -96,10 +96,14 @@ def convert_pp_net(net: pp.pandapowerNet, value_of_lost_load: int = 100000) -> N
     # TODO
     # Calculate from given formulas:
     # https://pandapower.readthedocs.io/en/v2.13.1/elements/trafo.html
-    dftrn['r'] = 0.1
-    dftrn['x'] = 0.1
+    dummy_net_sn_mva = 1
+    dummy_sn_mva = 10
+    dftrn['r'] = (net.trafo.vkr_percent/100)*(dummy_net_sn_mva/dummy_sn_mva)
+    dftrn['x'] = None
     dftrn['ShortTermRating'] = str(9999)
-    dftrn['ContinousRating'] = str(9999)        
+    dftrn['ContinousRating'] = str(9999)       
+    # TODO
+    # Check values 
     dftrn['angLB'] = -360
     dftrn['angUB'] = 360
     dftrn['PhaseShift'] = 0
@@ -121,8 +125,8 @@ def convert_pp_net(net: pp.pandapowerNet, value_of_lost_load: int = 100000) -> N
     dfgen    = pd.DataFrame(columns=['busname','name','stat','type','PG','QG','PGLB','PGUB','QGLB','QGUB','VS','RampDown(MW/hr)','RampUp(MW/hr)','MinDownTime(hr)','MinUpTime(hr)','FuelType','contingency','probability','startup','shutdown','costc2','costc1','costc0'])
     dfgen['busname'] = net.sgen.bus
     dfgen['name'] = 'G' + net.sgen.name
-        # TODO
-         # Check meaning of stat
+    # TODO
+    # Check meaning of stat
     dfgen['stat'] = str(1)
     dfgen['type'] = str(1)
     dfgen['PG'] = net.sgen.p_mw

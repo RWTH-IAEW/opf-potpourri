@@ -25,9 +25,6 @@ def retrieve_wls_gurobi_license() -> dict:
                     # Store the LICENSEID value
                     gurobi_license["LICENSEID"] = int(line[1].strip().replace("\n", ""))
                     license_id = line[1]
-                    
-                    
-    print(gurobi_license)
     
     return gurobi_license
 
