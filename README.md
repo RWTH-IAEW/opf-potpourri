@@ -15,7 +15,7 @@ This package requires Python (3.7 or higher) and Conda. Miniconda includes a Pyt
 To install the environment described in the `environment.yaml`, run each line in the terminal:
 
     conda update conda
-    conda env create -f environment.yaml
+    conda env create -f environment.yml
 
 In case you have already created an environment and just want to update it, replace 'create' with 'update' in the last line
 
