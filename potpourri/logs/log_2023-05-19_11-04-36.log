@@ -1,0 +1,27 @@
+Fri, 19 May 2023 11:04:36 INFO     OATS log file
+Fri, 19 May 2023 11:04:36 INFO     Program started
+Fri, 19 May 2023 11:04:36 INFO     Solver selected: ipopt
+Fri, 19 May 2023 11:04:36 INFO     Testcase selected: testcases/matpower/case24_ieee_rts.xlsx
+Fri, 19 May 2023 11:04:36 INFO     Model selected: ACOPF
+Fri, 19 May 2023 11:04:36 INFO     Given model file found and selected from the models library
+Fri, 19 May 2023 11:04:36 INFO     Given testcase file found and selected from the testcase library
+Fri, 19 May 2023 11:04:37 INFO     Done!
+Fri, 19 May 2023 11:04:37 INFO     Solver selected: ipopt
+Fri, 19 May 2023 11:04:37 INFO     Testcase selected: testcases/matpower/case24_ieee_rts.xlsx
+Fri, 19 May 2023 11:04:37 INFO     Model selected: ACOPF_min_gen
+Fri, 19 May 2023 11:04:37 INFO     Given model file found and selected from the models library
+Fri, 19 May 2023 11:04:37 INFO     Given testcase file found and selected from the testcase library
+Fri, 19 May 2023 11:04:38 INFO     Done!
+Fri, 19 May 2023 11:04:38 INFO     Solver selected: ipopt
+Fri, 19 May 2023 11:04:38 INFO     Testcase selected: testcases/matpower/case24_ieee_rts.xlsx
+Fri, 19 May 2023 11:04:38 INFO     Model selected: ACOPF_max_cost
+Fri, 19 May 2023 11:04:38 INFO     Given model file found and selected from the models library
+Fri, 19 May 2023 11:04:38 INFO     Given testcase file found and selected from the testcase library
+Fri, 19 May 2023 11:04:38 INFO     Done!
+Fri, 19 May 2023 11:04:38 INFO     Solver selected: gurobi
+Fri, 19 May 2023 11:04:38 INFO     Testcase selected: testcases/matpower/case24_ieee_rts.xlsx
+Fri, 19 May 2023 11:04:38 INFO     Model selected: SCOPF
+Fri, 19 May 2023 11:04:38 INFO     Given model file found and selected from the models library
+Fri, 19 May 2023 11:04:38 INFO     Given testcase file found and selected from the testcase library
+Fri, 19 May 2023 11:04:39 ERROR    Solver (gurobi) returned non-zero return code (1)
+Fri, 19 May 2023 11:04:39 ERROR    See the solver log above for diagnostic information.

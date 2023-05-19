@@ -1,0 +1,36 @@
+Fri, 19 May 2023 11:30:54 INFO     OATS log file
+Fri, 19 May 2023 11:30:54 INFO     Program started
+Fri, 19 May 2023 11:30:54 INFO     Set parameter WLSAccessID
+Fri, 19 May 2023 11:30:54 INFO     Set parameter WLSSecret
+Fri, 19 May 2023 11:30:54 INFO     Set parameter LicenseID to value 949857
+Fri, 19 May 2023 11:30:55 INFO     Academic license - for non-commercial use only - registered to steffen.kortmann@rwth-aachen.de
+Fri, 19 May 2023 11:30:55 INFO     Solver selected: glpk
+Fri, 19 May 2023 11:30:55 INFO     Testcase selected: testcases/matpower/case24_ieee_rts.xlsx
+Fri, 19 May 2023 11:30:55 INFO     Model selected: DCOPF
+Fri, 19 May 2023 11:30:55 INFO     Given model file found and selected from the models library
+Fri, 19 May 2023 11:30:55 INFO     Given testcase file found and selected from the testcase library
+Fri, 19 May 2023 11:30:55 INFO     Done!
+Fri, 19 May 2023 11:30:55 INFO     Solver selected: gurobi
+Fri, 19 May 2023 11:30:55 INFO     Testcase selected: testcases/matpower/case24_ieee_rts.xlsx
+Fri, 19 May 2023 11:30:55 INFO     Model selected: DCOPF_quadratic
+Fri, 19 May 2023 11:30:55 INFO     Given model file found and selected from the models library
+Fri, 19 May 2023 11:30:55 INFO     Given testcase file found and selected from the testcase library
+Fri, 19 May 2023 11:30:56 INFO     Done!
+Fri, 19 May 2023 11:30:56 INFO     Solver selected: ipopt
+Fri, 19 May 2023 11:30:56 INFO     Testcase selected: testcases/matpower/case24_ieee_rts.xlsx
+Fri, 19 May 2023 11:30:56 INFO     Model selected: ACOPF
+Fri, 19 May 2023 11:30:56 INFO     Given model file found and selected from the models library
+Fri, 19 May 2023 11:30:56 INFO     Given testcase file found and selected from the testcase library
+Fri, 19 May 2023 11:30:56 INFO     Done!
+Fri, 19 May 2023 11:30:56 INFO     Solver selected: ipopt
+Fri, 19 May 2023 11:30:56 INFO     Testcase selected: testcases/matpower/case24_ieee_rts.xlsx
+Fri, 19 May 2023 11:30:56 INFO     Model selected: ACOPF_min_gen
+Fri, 19 May 2023 11:30:56 INFO     Given model file found and selected from the models library
+Fri, 19 May 2023 11:30:56 INFO     Given testcase file found and selected from the testcase library
+Fri, 19 May 2023 11:30:57 INFO     Done!
+Fri, 19 May 2023 11:30:57 INFO     Solver selected: ipopt
+Fri, 19 May 2023 11:30:57 INFO     Testcase selected: testcases/matpower/case24_ieee_rts.xlsx
+Fri, 19 May 2023 11:30:57 INFO     Model selected: ACOPF_max_cost
+Fri, 19 May 2023 11:30:57 INFO     Given model file found and selected from the models library
+Fri, 19 May 2023 11:30:57 INFO     Given testcase file found and selected from the testcase library
+Fri, 19 May 2023 11:30:58 INFO     Done!

@@ -94,7 +94,8 @@ def convert_pp_net(net: pp.pandapowerNet, value_of_lost_load: int = 100000) -> N
     dftrn['stat'] = str(1)
     dftrn['type'] = str(1)
     # TODO
-    # Check possible identification of these values
+    # Calculate from given formulas:
+    # https://pandapower.readthedocs.io/en/v2.13.1/elements/trafo.html
     dftrn['r'] = 0.1
     dftrn['x'] = 0.1
     dftrn['ShortTermRating'] = str(9999)
