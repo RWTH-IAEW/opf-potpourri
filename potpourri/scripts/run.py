@@ -145,6 +145,8 @@ def acopf(tc:str = 'default',
         model = "ACOPF_min_gen"
     elif objective == "max_cost":
         model = "ACOPF_max_cost"
+    elif objective== "multiperiod":
+        model = "ACOPF_multiperiod"    
     # ==log==
     logging.info("Solver selected: "+opt['solver'])
     logging.info("Testcase selected: "+testcase)

@@ -138,7 +138,7 @@ model.alpha  = Var(model.D, initialize=1.0, domain= NonNegativeReals)# proportio
 def objective(model):
     obj = sum((model.baseMVA*model.pG[g])**2+model.baseMVA*model.pG[g] for g in model.G)
     return obj
-model.OBJ = Objective(rule=objective, sense=minimize)
+model.OBJ = Objective(rule=objective, sense=maximize)
 
 # --- Kirchoff's current law at each bus b ---
 def KCL_real_def(model, b):

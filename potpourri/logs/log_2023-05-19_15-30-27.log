@@ -1,0 +1,26 @@
+Fri, 19 May 2023 15:30:27 INFO     OATS log file
+Fri, 19 May 2023 15:30:27 INFO     Program started
+Fri, 19 May 2023 15:30:27 INFO     Solver selected: glpk
+Fri, 19 May 2023 15:30:27 INFO     Testcase selected: testcases/matpower/case89pegase.xlsx
+Fri, 19 May 2023 15:30:27 INFO     Model selected: DCOPF
+Fri, 19 May 2023 15:30:27 INFO     Given model file found and selected from the models library
+Fri, 19 May 2023 15:30:27 INFO     Given testcase file found and selected from the testcase library
+Fri, 19 May 2023 15:30:28 INFO     Done!
+Fri, 19 May 2023 15:30:28 INFO     Solver selected: ipopt
+Fri, 19 May 2023 15:30:28 INFO     Testcase selected: testcases/matpower/case89pegase.xlsx
+Fri, 19 May 2023 15:30:28 INFO     Model selected: ACOPF
+Fri, 19 May 2023 15:30:28 INFO     Given model file found and selected from the models library
+Fri, 19 May 2023 15:30:28 INFO     Given testcase file found and selected from the testcase library
+Fri, 19 May 2023 15:30:29 INFO     Done!
+Fri, 19 May 2023 15:30:29 INFO     Solver selected: ipopt
+Fri, 19 May 2023 15:30:29 INFO     Testcase selected: testcases/matpower/case89pegase.xlsx
+Fri, 19 May 2023 15:30:29 INFO     Model selected: ACOPF_min_gen
+Fri, 19 May 2023 15:30:29 INFO     Given model file found and selected from the models library
+Fri, 19 May 2023 15:30:29 INFO     Given testcase file found and selected from the testcase library
+Fri, 19 May 2023 15:30:30 INFO     Done!
+Fri, 19 May 2023 15:30:30 INFO     Solver selected: ipopt
+Fri, 19 May 2023 15:30:30 INFO     Testcase selected: testcases/matpower/case89pegase.xlsx
+Fri, 19 May 2023 15:30:30 INFO     Model selected: ACOPF_max_cost
+Fri, 19 May 2023 15:30:30 INFO     Given model file found and selected from the models library
+Fri, 19 May 2023 15:30:30 INFO     Given testcase file found and selected from the testcase library
+Fri, 19 May 2023 15:30:31 INFO     Done!
