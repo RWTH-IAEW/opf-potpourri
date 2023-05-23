@@ -117,7 +117,7 @@ model.eps = Param(within=NonNegativeReals)
 # --- variables ---
 # TODO: Bengisu, make time-variant
 model.pG       = Var(model.G, model.T, domain= NonNegativeReals)# real power output of generator
-model.qG       = Var(model.G, domain= Reals)# reactive power output of generator
+model.qG       = Var(model.G, model.T, domain= Reals)# reactive power output of generator
 model.pW       = Var(model.WIND, domain= Reals) #real power generation from wind
 model.qW       = Var(model.WIND, domain= Reals) #reactive power generation from wind
 model.pD       = Var(model.D, domain= Reals)# real power absorbed by demand
