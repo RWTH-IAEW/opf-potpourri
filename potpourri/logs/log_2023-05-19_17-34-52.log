@@ -1,0 +1,7 @@
+Fri, 19 May 2023 17:34:52 INFO     OATS log file
+Fri, 19 May 2023 17:34:52 INFO     Program started
+Fri, 19 May 2023 17:34:52 INFO     Solver selected: glpk
+Fri, 19 May 2023 17:34:52 INFO     Testcase selected: C:\Users\bong\PycharmProjects\potpourri\testcases/matpower/case24_ieee_rts.xlsx
+Fri, 19 May 2023 17:34:52 INFO     Model selected: DCOPF
+Fri, 19 May 2023 17:34:52 INFO     Given model file found and selected from the models library
+Fri, 19 May 2023 17:34:52 INFO     Given testcase file found and selected from the testcase library

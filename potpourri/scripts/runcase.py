@@ -32,7 +32,7 @@ def runcase(testcase,mod,opt=None):
         model = modelf.model
     else:
         try:
-            modelf = imp.load_source(mod, 'potpourri/models/' +mod+ '.py')
+            modelf = imp.load_source(mod, 'models/' +mod+ '.py')
             model = modelf.model
             logging.info("Given model file found and selected from the models library")
         except Exception:

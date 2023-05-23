@@ -1,0 +1,6 @@
+Fri, 19 May 2023 16:46:35 INFO     OATS log file
+Fri, 19 May 2023 16:46:35 INFO     Program started
+Fri, 19 May 2023 16:46:35 INFO     Solver selected: glpk
+Fri, 19 May 2023 16:46:35 INFO     Testcase selected: C:\Users\bong\PycharmProjects\potpourri\potpourri\testcases/matpower/case24_ieee_rts.xlsx
+Fri, 19 May 2023 16:46:35 INFO     Model selected: DCOPF
+Fri, 19 May 2023 16:46:35 ERROR    Given model file not found in the 'models' library

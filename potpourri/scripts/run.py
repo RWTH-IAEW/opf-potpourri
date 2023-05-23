@@ -21,7 +21,7 @@ datetime_str = current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s %(levelname)-8s %(message)s',
                     datefmt='%a, %d %b %Y %H:%M:%S',
-                    filename=f'potpourri/logs/log_{datetime_str}.log',
+                    filename=f'logs/log_{datetime_str}.log',
                     filemode='w')
 logging.info("OATS log file")
 logging.info("Program started")

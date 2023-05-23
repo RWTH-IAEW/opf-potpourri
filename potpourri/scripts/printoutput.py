@@ -330,7 +330,7 @@ class printoutput(object):
         bus = bus.sort_values(['name'])
         generation = generation.sort_values(['name'])
         demand = demand.sort_values(['name'])
-        with pd.ExcelWriter(f'potpourri/results/results.xlsx') as writer:  
+        with pd.ExcelWriter(f'results/results.xlsx') as writer:
             summary.to_excel(writer, sheet_name = 'summary',index=False)
             bus.to_excel(writer, sheet_name = 'bus',index=False)
             demand.to_excel(writer, sheet_name = 'demand',index=False)

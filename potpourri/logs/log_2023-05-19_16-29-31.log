@@ -1,0 +1,14 @@
+Fri, 19 May 2023 16:29:31 INFO     OATS log file
+Fri, 19 May 2023 16:29:31 INFO     Program started
+Fri, 19 May 2023 16:29:31 INFO     Solver selected: glpk
+Fri, 19 May 2023 16:29:31 INFO     Testcase selected: testcases/matpower/case24_ieee_rts.xlsx
+Fri, 19 May 2023 16:29:31 INFO     Model selected: DCOPF
+Fri, 19 May 2023 16:29:31 INFO     Given model file found and selected from the models library
+Fri, 19 May 2023 16:29:31 INFO     Given testcase file found and selected from the testcase library
+Fri, 19 May 2023 16:29:32 INFO     Done!
+Fri, 19 May 2023 16:29:32 INFO     Solver selected: gurobi
+Fri, 19 May 2023 16:29:32 INFO     Testcase selected: testcases/matpower/case24_ieee_rts.xlsx
+Fri, 19 May 2023 16:29:32 INFO     Model selected: DCOPF_quadratic
+Fri, 19 May 2023 16:29:32 INFO     Given model file found and selected from the models library
+Fri, 19 May 2023 16:29:32 INFO     Given testcase file found and selected from the testcase library
+Fri, 19 May 2023 16:29:32 WARNING  Could not locate the 'gurobi' executable, which is required for solver gurobi
