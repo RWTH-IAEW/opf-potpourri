@@ -1,3 +1,4 @@
 /home/skortmann/potpourri/potpourri/scripts/set_gurobi_key.py
 /.idea
 gurobi.lic
+/scripts/__pycache__/

@@ -1,0 +1,23 @@
+import os
+import core.scripts.run as potpourri
+from core.scripts.utils import showParameter
+from tabulate import tabulate
+test_case_folder = "testcases/matpower/"
+test_case = "case24_ieee_rts.xlsx"
+test_case = os.path.join(test_case_folder, test_case)
+showParameter(testcase=test_case)
+    
+# Check if the 'WSL_DISTRO_NAME' environment variable is present
+if 'WSL_DISTRO_NAME' in os.environ:
+    from core.scripts.set_gurobi_key import set_gurobi_key, retrieve_wls_gurobi_license
+    gurobi_license = retrieve_wls_gurobi_license()
+    set_gurobi_key(gurobi_license)
+else:
+    print("System is not running on Windows Subsystem for Linux (WSL).")
+
+potpourri.dcopf(tc=test_case, solver="glpk", print_output=True, print_solver_output=True, print_model=False)
+potpourri.dcopf(tc=test_case, solver="gurobi", print_output=True, print_solver_output=True, print_model=False, objective="quadratic")
+potpourri.acopf(tc=test_case, solver="ipopt", print_output=True, print_solver_output=True, print_model=False)
+potpourri.acopf(tc=test_case, solver="ipopt", print_output=True, print_solver_output=True, print_model=False, objective="min_gen")
+potpourri.acopf(tc=test_case, solver="ipopt", print_output=True, print_solver_output=True, print_model=False, objective="max_cost")
+potpourri.scopf(tc=test_case, solver="gurobi", print_output=True, print_solver_output=True, print_model=False)
