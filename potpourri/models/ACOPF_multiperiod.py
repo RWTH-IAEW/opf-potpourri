@@ -234,30 +234,30 @@ model.QGminC = Constraint(model.G, model.T, rule=Reactive_Power_Min)
 
 # ---wind generator power limits ---
 # TODO: Bengisu, make time-variant
-def Wind_Real_Power_Max(model,w):
-    return model.pW[w] <= model.WGmax[w]
-def Wind_Real_Power_Min(model,w):
-    return model.pW[w] >= model.WGmin[w]
-def Wind_Reactive_Power_Max(model,w):
-    return model.qW[w] <= model.WGQmax[w]
-def Wind_Reactive_Power_Min(model,w):
-    return model.qW[w] >= model.WGQmin[w]
-model.WGmaxC  = Constraint(model.WIND, rule=Wind_Real_Power_Max)
-model.WGminC  = Constraint(model.WIND, rule=Wind_Real_Power_Min)
-model.WGQmaxC = Constraint(model.WIND, rule=Wind_Reactive_Power_Max)
-model.WGQminC = Constraint(model.WIND, rule=Wind_Reactive_Power_Min)
+def Wind_Real_Power_Max(model,w, t):
+    return model.pW[w,t] <= model.WGmax[w]
+def Wind_Real_Power_Min(model,w,t):
+    return model.pW[w,t] >= model.WGmin[w]
+def Wind_Reactive_Power_Max(model,w,t):
+    return model.qW[w,t] <= model.WGQmax[w]
+def Wind_Reactive_Power_Min(model,w,t):
+    return model.qW[w,t] >= model.WGQmin[w]
+model.WGmaxC  = Constraint(model.WIND, model.T, rule=Wind_Real_Power_Max)
+model.WGminC  = Constraint(model.WIND, model.T, rule=Wind_Real_Power_Min)
+model.WGQmaxC = Constraint(model.WIND, model.T, rule=Wind_Reactive_Power_Max)
+model.WGQminC = Constraint(model.WIND, model.T, rule=Wind_Reactive_Power_Min)
 
 # --- demand and load shedding ---
 # TODO: Bengisu, make time-variant
-def Load_Shed_real(model,d):
-    return model.pD[d] == model.alpha[d]*model.PD[d]
-def Load_Shed_reactive(model,d):
-    return model.qD[d] == model.alpha[d]*model.QD[d]
+def Load_Shed_real(model,d,t):
+    return model.pD[d,t] == model.alpha[d]*model.PD[d,t]
+def Load_Shed_reactive(model,d,t):
+    return model.qD[d,t] == model.alpha[d]*model.QD[d,t]
 def alpha_FixNegDemands(model,d):
     return model.alpha[d] == 1
 
-model.LoadShed_real     = Constraint(model.D, rule=Load_Shed_real)
-model.LoadShed_reactive = Constraint(model.D, rule=Load_Shed_reactive)
+model.LoadShed_real     = Constraint(model.D, model.T, rule=Load_Shed_real)
+model.LoadShed_reactive = Constraint(model.D, model.T, rule=Load_Shed_reactive)
 model.alphaFix          = Constraint(model.DNeg, rule=alpha_FixNegDemands)
 
 
@@ -270,33 +270,33 @@ model.alphaBoundLBC = Constraint(model.D, rule=alpha_BoundLB)
 
 # --- line power limits ---
 # TODO: Bengisu, make time-variant
-def line_lim1_def(model,l):
-    return model.pLfrom[l]**2+model.qLfrom[l]**2 <= model.SLmax[l]**2
-def line_lim2_def(model,l):
-    return model.pLto[l]**2+model.qLto[l]**2 <= model.SLmax[l]**2
-model.line_lim1 = Constraint(model.L, rule=line_lim1_def)
-model.line_lim2 = Constraint(model.L, rule=line_lim2_def)
+def line_lim1_def(model,l,t):
+    return model.pLfrom[l,t]**2+model.qLfrom[l,t]**2 <= model.SLmax[l]**2
+def line_lim2_def(model,l,t):
+    return model.pLto[l,t]**2+model.qLto[l,t]**2 <= model.SLmax[l]**2
+model.line_lim1 = Constraint(model.L, model.T, rule=line_lim1_def)
+model.line_lim2 = Constraint(model.L, model.T, rule=line_lim2_def)
 
 # --- power flow limits on transformer lines---
 # TODO: Bengisu, make time-variant
-def transf_lim1_def(model,l):
-    return model.pLfromT[l]**2+model.qLfromT[l]**2 <= model.SLmaxT[l]**2
-def transf_lim2_def(model,l):
-    return model.pLtoT[l]**2+model.qLtoT[l]**2 <= model.SLmaxT[l]**2
-model.transf_lim1 = Constraint(model.TRANSF, rule=transf_lim1_def)
-model.transf_lim2 = Constraint(model.TRANSF, rule=transf_lim2_def)
+def transf_lim1_def(model,l,t):
+    return model.pLfromT[l,t]**2+model.qLfromT[l,t]**2 <= model.SLmaxT[l]**2
+def transf_lim2_def(model,l,t):
+    return model.pLtoT[l,t]**2+model.qLtoT[l,t]**2 <= model.SLmaxT[l]**2
+model.transf_lim1 = Constraint(model.TRANSF, model.T, rule=transf_lim1_def)
+model.transf_lim2 = Constraint(model.TRANSF, model.T, rule=transf_lim2_def)
 
 # --- voltage constraints ---
 # TODO: Bengisu, make time-variant
-def bus_max_voltage(model,b):
-    return model.v[b] <= model.Vmax[b]
-def bus_min_voltage(model,b):
-    return model.v[b] >= model.Vmin[b]
-model.Vmaxc = Constraint(model.B, rule=bus_max_voltage)
-model.Vminc = Constraint(model.B, rule=bus_min_voltage)
+def bus_max_voltage(model,b,t):
+    return model.v[b,t] <= model.Vmax[b]
+def bus_min_voltage(model,b,t):
+    return model.v[b,t] >= model.Vmin[b]
+model.Vmaxc = Constraint(model.B, model.T, rule=bus_max_voltage)
+model.Vminc = Constraint(model.B, model.T, rule=bus_min_voltage)
 
 # --- reference bus constraint ---
 # TODO: Bengisu, make time-variant
-def ref_bus_def(model,b):
-    return model.delta[b]==0
-model.refbus = Constraint(model.b0, rule=ref_bus_def)
+def ref_bus_def(model,b,t):
+    return model.delta[b,t]==0
+model.refbus = Constraint(model.b0, model.T, rule=ref_bus_def)
