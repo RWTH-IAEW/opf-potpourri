@@ -119,22 +119,22 @@ model.eps = Param(within=NonNegativeReals)
 model.pG       = Var(model.G, model.T, domain= NonNegativeReals)# real power output of generator
 model.qG       = Var(model.G, model.T, domain= Reals)# reactive power output of generator
 model.pW       = Var(model.WIND, model.T, domain= Reals) #real power generation from wind
-model.qW       = Var(model.WIND, domain= Reals) #reactive power generation from wind
-model.pD       = Var(model.D, domain= Reals)# real power absorbed by demand
-model.qD       = Var(model.D, domain= Reals)# reactive power absorbed by demand
-model.pLfrom   = Var(model.L, domain= Reals) # real power injected at b onto line
-model.pLto     = Var(model.L, domain= Reals) # real power injected at b' onto line
-model.qLfrom   = Var(model.L, domain= Reals) # reactive power injected at b onto line
-model.qLto     = Var(model.L, domain= Reals) # reactive power injected at b' onto line
-model.pLfromT  = Var(model.TRANSF, domain= Reals) # real power injected at b onto transformer
-model.pLtoT    = Var(model.TRANSF, domain= Reals) # real power injected at b' onto transformer
-model.qLfromT  = Var(model.TRANSF, domain= Reals) # reactive power injected at b onto transformer
-model.qLtoT    = Var(model.TRANSF, domain= Reals) # reactive power injected at b' onto transformer
+model.qW       = Var(model.WIND, model.T, domain= Reals) #reactive power generation from wind
+model.pD       = Var(model.D, model.T, domain= Reals)# real power absorbed by demand
+model.qD       = Var(model.D, model.T, domain= Reals)# reactive power absorbed by demand
+model.pLfrom   = Var(model.L, model.T, domain= Reals) # real power injected at b onto line
+model.pLto     = Var(model.L, model.T, domain= Reals) # real power injected at b' onto line
+model.qLfrom   = Var(model.L, model.T, domain= Reals) # reactive power injected at b onto line
+model.qLto     = Var(model.L, model.T, domain= Reals) # reactive power injected at b' onto line
+model.pLfromT  = Var(model.TRANSF, model.T, domain= Reals) # real power injected at b onto transformer
+model.pLtoT    = Var(model.TRANSF, model.T, domain= Reals) # real power injected at b' onto transformer
+model.qLfromT  = Var(model.TRANSF, model.T, domain= Reals) # reactive power injected at b onto transformer
+model.qLtoT    = Var(model.TRANSF, model.T, domain= Reals) # reactive power injected at b' onto transformer
 
 #model.deltaL = Var(model.L, domain= Reals) # angle difference across lines
 # TODO: Bengisu, make time-variant
-model.delta  = Var(model.B, domain= Reals, initialize=0.0) # voltage phase angle at bus b, rad
-model.v      = Var(model.B, domain= NonNegativeReals, initialize=1.0) # voltage magnitude at bus b, rad
+model.delta  = Var(model.B, model.T, domain= Reals, initialize=0.0) # voltage phase angle at bus b, rad
+model.v      = Var(model.B, model.T, domain= NonNegativeReals, initialize=1.0) # voltage magnitude at bus b, rad
 # TODO: Bengisu, make not time-variant
 model.alpha  = Var(model.D, initialize=1.0, domain= NonNegativeReals)# proportion to supply of load d
 
@@ -149,88 +149,88 @@ model.OBJ = Objective(rule=objective, sense=minimize)
 # TODO: Bengisu, make time-variant
 
 def KCL_real_def(model, b):
-    return sum(model.pG[g] for g in model.G if (b,g) in model.Gbs) +\
-    sum(model.pW[w] for w in model.WIND if (b,w) in model.Wbs)==\
-    sum(model.pD[d] for d in model.D if (b,d) in model.Dbs)+\
-    sum(model.pLfrom[l] for l in model.L if model.A[l,1]==b)+ \
-    sum(model.pLto[l] for l in model.L if model.A[l,2]==b)+\
-    sum(model.pLfromT[l] for l in model.TRANSF if model.AT[l,1]==b)+ \
-    sum(model.pLtoT[l] for l in model.TRANSF if model.AT[l,2]==b)+\
-    sum(model.GB[s]*model.v[b]**2 for s in model.SHUNT if (b,s) in model.SHUNTbs)
+    return sum(model.pG[g, t] for g in model.G for t in model.T if (b,g) in model.Gbs) +\
+    sum(model.pW[w,t] for w in model.WIND for t in model.T if (b,w) in model.Wbs)==\
+    sum(model.pD[d,t] for d in model.D for t in model.T if (b,d) in model.Dbs)+\
+    sum(model.pLfrom[l,t] for l in model.L for t in model.T if model.A[l,1]==b)+ \
+    sum(model.pLto[l,t] for l in model.L for t in model.T if model.A[l,2]==b)+\
+    sum(model.pLfromT[l,t] for l in model.TRANSF for t in model.T if model.AT[l,1]==b)+ \
+    sum(model.pLtoT[l,t] for l in model.TRANSF for t in model.T if model.AT[l,2]==b)+\
+    sum(model.GB[s]*model.v[b,t]**2 for s in model.SHUNT for t in model.T if (b,s) in model.SHUNTbs)
 def KCL_reactive_def(model, b):
-    return sum(model.qG[g] for g in model.G if (b,g) in model.Gbs) +\
-    sum(model.qW[w] for w in model.WIND if (b,w) in model.Wbs)== \
-    sum(model.qD[d] for d in model.D if (b,d) in model.Dbs)+\
-    sum(model.qLfrom[l] for l in model.L if model.A[l,1]==b)+ \
-    sum(model.qLto[l] for l in model.L if model.A[l,2]==b)+\
-    sum(model.qLfromT[l] for l in model.TRANSF if model.AT[l,1]==b)+ \
-    sum(model.qLtoT[l] for l in model.TRANSF if model.AT[l,2]==b)-\
-    sum(model.BB[s]*model.v[b]**2 for s in model.SHUNT if (b,s) in model.SHUNTbs)
+    return sum(model.qG[g,t] for g in model.G for t in model.T if (b,g) in model.Gbs) +\
+    sum(model.qW[w,t] for w in model.WIND for t in model.T if (b,w) in model.Wbs)== \
+    sum(model.qD[d,t] for d in model.D for t in model.T if (b,d) in model.Dbs)+\
+    sum(model.qLfrom[l,t] for l in model.L for t in model.T if model.A[l,1]==b)+ \
+    sum(model.qLto[l,t] for l in model.L for t in model.T if model.A[l,2]==b)+\
+    sum(model.qLfromT[l,t] for l in model.TRANSF for t in model.T if model.AT[l,1]==b)+ \
+    sum(model.qLtoT[l,t] for l in model.TRANSF for t in model.T if model.AT[l,2]==b)-\
+    sum(model.BB[s]*model.v[b,t]**2 for s in model.SHUNT for t in model.T if (b,s) in model.SHUNTbs)
 model.KCL_real     = Constraint(model.B, rule=KCL_real_def)
 model.KCL_reactive = Constraint(model.B, rule=KCL_reactive_def)
 
 # --- Kirchoff's voltage law on each line ---
 # TODO: Bengisu, make time-variant
 
-def KVL_real_fromend(model,l):
-    return model.pLfrom[l] == model.G11[l]*(model.v[model.A[l,1]]**2)+\
-    model.v[model.A[l,1]]*model.v[model.A[l,2]]*(model.B12[l]*sin(model.delta[model.A[l,1]]-\
-    model.delta[model.A[l,2]])+model.G12[l]*cos(model.delta[model.A[l,1]]-model.delta[model.A[l,2]]))
-def KVL_real_toend(model,l):
-    return model.pLto[l] == model.G22[l]*(model.v[model.A[l,2]]**2)+\
-    model.v[model.A[l,1]]*model.v[model.A[l,2]]*(model.B21[l]*sin(model.delta[model.A[l,2]]-\
-    model.delta[model.A[l,1]])+model.G21[l]*cos(model.delta[model.A[l,2]]-model.delta[model.A[l,1]]))
-def KVL_reactive_fromend(model,l):
-    return model.qLfrom[l] == -model.B11[l]*(model.v[model.A[l,1]]**2)+\
-    model.v[model.A[l,1]]*model.v[model.A[l,2]]*(model.G12[l]*sin(model.delta[model.A[l,1]]-\
-    model.delta[model.A[l,2]])-model.B12[l]*cos(model.delta[model.A[l,1]]-model.delta[model.A[l,2]]))
-def KVL_reactive_toend(model,l):
-    return model.qLto[l] == (-model.B22[l]*(model.v[model.A[l,2]]**2)+\
-    model.v[model.A[l,1]]*model.v[model.A[l,2]]*(model.G21[l]*sin(model.delta[model.A[l,2]]-\
-    model.delta[model.A[l,1]])-model.B21[l]*cos(model.delta[model.A[l,2]]-model.delta[model.A[l,1]])))
-model.KVL_real_from     = Constraint(model.L, rule=KVL_real_fromend)
-model.KVL_real_to       = Constraint(model.L, rule=KVL_real_toend)
-model.KVL_reactive_from = Constraint(model.L, rule=KVL_reactive_fromend)
-model.KVL_reactive_to   = Constraint(model.L, rule=KVL_reactive_toend)
+def KVL_real_fromend(model,l,t):
+    return model.pLfrom[l,t] == model.G11[l]*(model.v[model.A[l,1],t]**2)+\
+    model.v[model.A[l,1],t]*model.v[model.A[l,2],t]*(model.B12[l]*sin(model.delta[model.A[l,1],t]-\
+    model.delta[model.A[l,2],t])+model.G12[l]*cos(model.delta[model.A[l,1],t]-model.delta[model.A[l,2],t]))
+def KVL_real_toend(model,l,t):
+    return model.pLto[l,t] == model.G22[l]*(model.v[model.A[l,2],t]**2)+\
+    model.v[model.A[l,1],t]*model.v[model.A[l,2],t]*(model.B21[l]*sin(model.delta[model.A[l,2],t]-\
+    model.delta[model.A[l,1],t])+model.G21[l]*cos(model.delta[model.A[l,2],t]-model.delta[model.A[l,1],t]))
+def KVL_reactive_fromend(model,l,t):
+    return model.qLfrom[l,t] == -model.B11[l]*(model.v[model.A[l,1],t]**2)+\
+    model.v[model.A[l,1],t]*model.v[model.A[l,2],t]*(model.G12[l]*sin(model.delta[model.A[l,1],t]-\
+    model.delta[model.A[l,2],t])-model.B12[l]*cos(model.delta[model.A[l,1],t]-model.delta[model.A[l,2],t]))
+def KVL_reactive_toend(model,l,t):
+    return model.qLto[l,t] == (-model.B22[l]*(model.v[model.A[l,2],t]**2)+\
+    model.v[model.A[l,1],t]*model.v[model.A[l,2],t]*(model.G21[l]*sin(model.delta[model.A[l,2],t]-\
+    model.delta[model.A[l,1],t])-model.B21[l]*cos(model.delta[model.A[l,2],t]-model.delta[model.A[l,1],t])))
+model.KVL_real_from     = Constraint(model.L, model.T, rule=KVL_real_fromend)
+model.KVL_real_to       = Constraint(model.L, model.T, rule=KVL_real_toend)
+model.KVL_reactive_from = Constraint(model.L, model.T, rule=KVL_reactive_fromend)
+model.KVL_reactive_to   = Constraint(model.L, model.T, rule=KVL_reactive_toend)
 
 # --- Kirchoff's voltage law on each transformer line ---
 # TODO: Bengisu, make time-variant
 
-def KVL_real_fromendTransf(model,l):
-    return model.pLfromT[l] == model.G11T[l]*(model.v[model.AT[l,1]]**2)+\
-    model.v[model.AT[l,1]]*model.v[model.AT[l,2]]*(model.B12T[l]*sin(model.delta[model.AT[l,1]]-\
-    model.delta[model.AT[l,2]])+model.G12T[l]*cos(model.delta[model.AT[l,1]]-model.delta[model.AT[l,2]]))
-def KVL_real_toendTransf(model,l):
-    return model.pLtoT[l] == model.G22T[l]*(model.v[model.AT[l,2]]**2)+\
-    model.v[model.AT[l,1]]*model.v[model.AT[l,2]]*(model.B21T[l]*sin(model.delta[model.AT[l,2]]-\
-    model.delta[model.AT[l,1]])+model.G21T[l]*cos(model.delta[model.AT[l,2]]-model.delta[model.AT[l,1]]))
-def KVL_reactive_fromendTransf(model,l):
-    return model.qLfromT[l] == -model.B11T[l]*(model.v[model.AT[l,1]]**2)+\
-    model.v[model.AT[l,1]]*model.v[model.AT[l,2]]*(model.G12T[l]*sin(model.delta[model.AT[l,1]]-\
-    model.delta[model.AT[l,2]])-model.B12T[l]*cos(model.delta[model.AT[l,1]]-model.delta[model.AT[l,2]]))
-def KVL_reactive_toendTransf(model,l):
-    return model.qLtoT[l] == -model.B22T[l]*(model.v[model.AT[l,2]]**2)+\
-    model.v[model.AT[l,1]]*model.v[model.AT[l,2]]*(model.G21T[l]*sin(model.delta[model.AT[l,2]]-\
-    model.delta[model.AT[l,1]])-model.B21T[l]*cos(model.delta[model.AT[l,2]]-model.delta[model.AT[l,1]]))
-model.KVL_real_fromTransf     = Constraint(model.TRANSF, rule=KVL_real_fromendTransf)
-model.KVL_real_toTransf       = Constraint(model.TRANSF, rule=KVL_real_toendTransf)
-model.KVL_reactive_fromTransf = Constraint(model.TRANSF, rule=KVL_reactive_fromendTransf)
-model.KVL_reactive_toTransf   = Constraint(model.TRANSF, rule=KVL_reactive_toendTransf)
+def KVL_real_fromendTransf(model,l,t):
+    return model.pLfromT[l,t] == model.G11T[l]*(model.v[model.AT[l,1],t]**2)+\
+    model.v[model.AT[l,1],t]*model.v[model.AT[l,2],t]*(model.B12T[l]*sin(model.delta[model.AT[l,1],t]-\
+    model.delta[model.AT[l,2],t])+model.G12T[l]*cos(model.delta[model.AT[l,1],t]-model.delta[model.AT[l,2],t]))
+def KVL_real_toendTransf(model,l,t):
+    return model.pLtoT[l,t] == model.G22T[l]*(model.v[model.AT[l,2],t]**2)+\
+    model.v[model.AT[l,1],t]*model.v[model.AT[l,2],t]*(model.B21T[l]*sin(model.delta[model.AT[l,2],t]-\
+    model.delta[model.AT[l,1]],t)+model.G21T[l]*cos(model.delta[model.AT[l,2],t]-model.delta[model.AT[l,1],t]))
+def KVL_reactive_fromendTransf(model,l,t):
+    return model.qLfromT[l,t] == -model.B11T[l]*(model.v[model.AT[l,1],t]**2)+\
+    model.v[model.AT[l,1],t]*model.v[model.AT[l,2],t]*(model.G12T[l]*sin(model.delta[model.AT[l,1],t]-\
+    model.delta[model.AT[l,2],t])-model.B12T[l]*cos(model.delta[model.AT[l,1],t]-model.delta[model.AT[l,2]],t))
+def KVL_reactive_toendTransf(model,l,t):
+    return model.qLtoT[l,t] == -model.B22T[l]*(model.v[model.AT[l,2],t]**2)+\
+    model.v[model.AT[l,1],t]*model.v[model.AT[l,2],t]*(model.G21T[l]*sin(model.delta[model.AT[l,2],t]-\
+    model.delta[model.AT[l,1],t])-model.B21T[l]*cos(model.delta[model.AT[l,2],t]-model.delta[model.AT[l,1],t]))
+model.KVL_real_fromTransf     = Constraint(model.TRANSF, model.T, rule=KVL_real_fromendTransf)
+model.KVL_real_toTransf       = Constraint(model.TRANSF, model.T, rule=KVL_real_toendTransf)
+model.KVL_reactive_fromTransf = Constraint(model.TRANSF, model.T, rule=KVL_reactive_fromendTransf)
+model.KVL_reactive_toTransf   = Constraint(model.TRANSF, model.T, rule=KVL_reactive_toendTransf)
 
 # --- generator power limits ---
 # TODO: Bengisu, make time-variant
 def Real_Power_Max(model,g, t):
     return model.pG[g, t] <= model.PGmax[g]
-def Real_Power_Min(model,g):
-    return model.pG[g] >= model.PGmin[g]
-def Reactive_Power_Max(model,g):
-    return model.qG[g] <= model.QGmax[g]
-def Reactive_Power_Min(model,g):
-    return model.qG[g] >= model.QGmin[g]
+def Real_Power_Min(model,g, t):
+    return model.pG[g, t] >= model.PGmin[g]
+def Reactive_Power_Max(model,g, t):
+    return model.qG[g, t] <= model.QGmax[g]
+def Reactive_Power_Min(model,g, t):
+    return model.qG[g, t] >= model.QGmin[g]
 model.PGmaxC = Constraint(model.G, model.T, rule=Real_Power_Max)
-model.PGminC = Constraint(model.G, rule=Real_Power_Min)
-model.QGmaxC = Constraint(model.G, rule=Reactive_Power_Max)
-model.QGminC = Constraint(model.G, rule=Reactive_Power_Min)
+model.PGminC = Constraint(model.G, model.T, rule=Real_Power_Min)
+model.QGmaxC = Constraint(model.G, model.T, rule=Reactive_Power_Max)
+model.QGminC = Constraint(model.G, model.T, rule=Reactive_Power_Min)
 
 # ---wind generator power limits ---
 # TODO: Bengisu, make time-variant
