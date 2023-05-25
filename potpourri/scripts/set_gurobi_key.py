@@ -5,7 +5,7 @@ def retrieve_wls_gurobi_license() -> dict:
     gurobi_license = {}
     
     # Open the gurobi.lic file in read mode
-    with open('gurobi.lic', 'r') as file:
+    with open('../gurobi.lic', 'r') as file:
         # Iterate over each line in the file
         for line in file:
             # Remove leading/trailing whitespace and newline characters
