@@ -1,0 +1,16 @@
+Thu, 25 May 2023 13:03:52 INFO     OATS log file
+Thu, 25 May 2023 13:03:52 INFO     Program started
+Thu, 25 May 2023 13:03:52 INFO     Solver selected: ipopt
+Thu, 25 May 2023 13:03:52 INFO     Testcase selected: testcases/matpower/case24_ieee_rts.xlsx
+Thu, 25 May 2023 13:03:52 INFO     Model selected: ACOPF_max_cost
+Thu, 25 May 2023 13:03:52 INFO     Given model file found and selected from the models library
+Thu, 25 May 2023 13:03:52 INFO     Given testcase file found and selected from the testcase library
+Thu, 25 May 2023 13:04:08 WARNING  Loading a SolverResults object with a warning status into model.name="unknown";
+  - termination condition: maxIterations
+  - message from solver: Ipopt 3.14.12\x3a Maximum Number of Iterations Exceeded.
+Thu, 25 May 2023 13:04:08 WARNING  Loading a SolverResults object with a warning status into model.name="unknown";
+  - termination condition: maxIterations
+  - message from solver: Ipopt 3.14.12\x3a Maximum Number of Iterations Exceeded.
+Thu, 25 May 2023 13:04:08 WARNING  Loading a SolverResults object with a warning status into model.name="unknown";
+  - termination condition: maxIterations
+  - message from solver: Ipopt 3.14.12\x3a Maximum Number of Iterations Exceeded.

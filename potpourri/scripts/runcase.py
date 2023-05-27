@@ -44,6 +44,7 @@ def runcase(testcase,mod,opt=None):
     except Exception:
         logging.error("Given testcase  not found in the 'testcases' library", exc_info=False)
         raise
+
     datfile = 'datafile.dat'
     r = printdata(datfile,ptc,mod,opt)
     r.reducedata()
@@ -70,6 +71,8 @@ def runcase(testcase,mod,opt=None):
             r.printDCOPF()
         elif 'ACOPF' in mod:
             r.printACOPF()
+            if 'multiperiod' in mod:
+                r.printACOPF_multiperiod()
         elif mod=='SCOPF' or mod=='SCOPF_BM':
             r.printSCdat()
         if mod=='ACOPF_BM':
@@ -80,7 +83,6 @@ def runcase(testcase,mod,opt=None):
 
 
     ###############Solver settings####################
-
     optimise = SolverFactory(opt['solver'])
     #opt.options['mipgap'] = 0.1
     #################################################
@@ -88,6 +90,10 @@ def runcase(testcase,mod,opt=None):
     ############Solve###################
     instance = model.create_instance(datfile)
     instance.dual = Suffix(direction=Suffix.IMPORT)
+
+    
+
+    
     if not (opt['print_solver_output']):
         results = optimise.solve(instance,tee=False)
     else:
@@ -97,6 +103,9 @@ def runcase(testcase,mod,opt=None):
     # ##################################
     #
     # ############Output###################
+    print("__________________________Ergebnis______________________________")
+    #instance.PD.pprint()  
+    
     o = printoutput(results, instance,mod)
     
     if (opt['print_output']):
@@ -111,3 +120,7 @@ def runcase(testcase,mod,opt=None):
         
     if 'UC' in mod:
         o.printUC()
+    
+
+    # elif 'ACOPF_multiperiod' in mod:
+    #     o.printACOPF_multiperiod()

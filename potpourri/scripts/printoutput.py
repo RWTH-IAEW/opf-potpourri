@@ -47,9 +47,15 @@ class printoutput(object):
         newHeading(heading_text="Summary")
         endLine()
         tab_summary = []
-        tab_summary.append(['Conventional generation (MW)','Wind generation (MW)', 'Demand (MW)'])
-        tab_summary.append([sum(self.instance.pG[g].value for g in self.instance.G)*self.instance.baseMVA,\
-        sum(self.instance.pW[w].value for w in self.instance.WIND)*self.instance.baseMVA,sum(self.instance.PD[d] for d in self.instance.D)*self.instance.baseMVA])
+        tab_summary.append(['Time-Period','Conventional generation (MW)','Wind generation (MW)', 'Demand (MW)'])
+        print([d for d in self.instance.D])
+        print([self.instance.PD[d,0] for d in self.instance.D])
+        print(self.instance.PD["D2",0])
+        self.instance.PD.pprint()
+        for t in self.instance.T:
+            tab_summary.append([t,sum(self.instance.pG[g,t].value for g in self.instance.G)*self.instance.baseMVA,\
+            sum(self.instance.pW[w].value for w in self.instance.WIND)*self.instance.baseMVA,sum(self.instance.PD[d,t] for d in self.instance.D)*self.instance.baseMVA])
+
         print (tabulate(tab_summary, headers="firstrow", tablefmt="grid"))
         endLine()
         
@@ -94,11 +100,12 @@ class printoutput(object):
         transformer     = pd.DataFrame(columns=cols_transf)
 
         #-----write Data Frames
-
+        
         summary.loc[0] = pd.Series({'Conventional generation (MW)': sum(self.instance.pG[g].value for g in self.instance.G)*self.instance.baseMVA,\
         'Wind generation (MW)':sum(self.instance.pW[w].value for w in self.instance.WIND)*self.instance.baseMVA,\
         'Demand (MW)':sum(self.instance.PD[d] for d in self.instance.D)*self.instance.baseMVA,\
         'Objective function value': self.instance.OBJ()})
+        
 
         if ('DC' in self.mod) or ('SC' in self.mod):
             #bus data
@@ -324,6 +331,8 @@ class printoutput(object):
                     'QGUB(MVar)':self.instance.WGQmax[g[1]]*self.instance.baseMVA})
                     ind += 1
 
+            # TODO Add time series output
+
         #----------------------------------------------------------
         #===write output on xlsx file===
         #
@@ -347,10 +356,12 @@ class printoutput(object):
         tab_summary = []
         tab_summary.append(['Time Period','Units on','Conventional generation (MW)','Wind generation (MW)', 'Demand (MW)','Cost'])
         for t in self.instance.T:
-            tab_summary.append([t,sum(self.instance.u[g,t].value for g in self.instance.G),\
-            sum(self.instance.pG[g,t].value for g in self.instance.G)*self.instance.baseMVA,\
-            sum(self.instance.pW[w,t].value for w in self.instance.WIND)*self.instance.baseMVA,sum(self.instance.PD[d,t] for d in self.instance.D)*self.instance.baseMVA,\
-            self.instance.costfunc[t].value/(sum(self.instance.PD[d,t] for d in self.instance.D)*self.instance.baseMVA)])
+            tab_summary.append([t,\
+                                sum(self.instance.u[g,t].value for g in self.instance.G),\
+                                sum(self.instance.pG[g,t].value for g in self.instance.G)*self.instance.baseMVA,\
+                                sum(self.instance.pW[w,t].value for w in self.instance.WIND)*self.instance.baseMVA,\
+                                sum(self.instance.PD[d,t] for d in self.instance.D)*self.instance.baseMVA,\
+                                self.instance.costfunc[t].value/(sum(self.instance.PD[d,t] for d in self.instance.D)*self.instance.baseMVA)])
         print (tabulate(tab_summary, headers="firstrow", tablefmt="grid"))
 
         print ("***************\n")

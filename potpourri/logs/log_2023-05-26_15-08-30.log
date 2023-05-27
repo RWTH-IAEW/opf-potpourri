@@ -1,0 +1,6 @@
+Fri, 26 May 2023 15:08:30 INFO     OATS log file
+Fri, 26 May 2023 15:08:30 INFO     Program started
+Fri, 26 May 2023 15:08:30 INFO     Solver selected: ipopt
+Fri, 26 May 2023 15:08:30 INFO     Testcase selected: testcases/matpower/case14.xlsx
+Fri, 26 May 2023 15:08:30 INFO     Model selected: ACOPF_multiperiod
+Fri, 26 May 2023 15:08:30 ERROR    Given model file not found in the 'models' library

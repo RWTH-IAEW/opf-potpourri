@@ -1,0 +1,16 @@
+Fri, 26 May 2023 15:09:31 INFO     OATS log file
+Fri, 26 May 2023 15:09:31 INFO     Program started
+Fri, 26 May 2023 15:09:31 INFO     Solver selected: ipopt
+Fri, 26 May 2023 15:09:31 INFO     Testcase selected: testcases/matpower/case14.xlsx
+Fri, 26 May 2023 15:09:31 INFO     Model selected: ACOPF_multiperiod
+Fri, 26 May 2023 15:09:31 INFO     Given model file found and selected from the models library
+Fri, 26 May 2023 15:09:32 INFO     Given testcase file found and selected from the testcase library
+Fri, 26 May 2023 15:09:32 WARNING  Loading a SolverResults object with a warning status into model.name="unknown";
+  - termination condition: other
+  - message from solver: <undefined>
+Fri, 26 May 2023 15:09:32 WARNING  Loading a SolverResults object with a warning status into model.name="unknown";
+  - termination condition: other
+  - message from solver: <undefined>
+Fri, 26 May 2023 15:09:32 WARNING  Loading a SolverResults object with a warning status into model.name="unknown";
+  - termination condition: other
+  - message from solver: <undefined>

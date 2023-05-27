@@ -13,11 +13,13 @@ import math
 import sys
 deltaT = 1.0
 class printdata(object):
+
     def __init__(self,datfile,data,model,options):
         self.datfile = datfile
         self.data    = data
         self.model   = model
         self.options = options
+
     def reducedata(self):
         self.data["demand"]      = self.data["demand"].drop(self.data["demand"][self.data["demand"]['stat'] == 0].index.tolist())
         self.data["branch"]      = self.data["branch"].drop(self.data["branch"][self.data["branch"]['stat'] == 0].index.tolist())
@@ -28,13 +30,15 @@ class printdata(object):
         self.data["transformer"] = self.data["transformer"].drop(self.data["transformer"][self.data["transformer"]['stat'] == 0].index.tolist())
         self.data["wind"]        = self.data["wind"].drop(self.data["wind"][self.data["wind"]['stat'] == 0].index.tolist())
         self.data["generator"]   = self.data["generator"].drop(self.data["generator"][self.data["generator"]['stat'] == 0].index.tolist())
+
     def printheader(self):
         f = open(self.datfile, 'w')
         #####PRINT HEADER--START
-        f.write('#This is Python generated data file for Pyomo model DCLF.py\n')
+        f.write('#This is Python generated data file for Pyomo model\n')
         f.write('#_author_:W. Bukhsh\n')
         f.write('#Time stamp: '+ str(datetime.datetime.now())+'\n')
         f.close()
+
     def printkeysets(self):
         f = open(self.datfile, 'a')
         ##===sets===
@@ -61,10 +65,12 @@ class printdata(object):
             f.write(';\n')
         #===parameters===
         #---Real power demand---
+        '''
         f.write('param PD:=\n')
         for i in self.data["demand"].index.tolist():
             f.write(str(self.data["demand"]["name"][i])+" "+str(float(self.data["demand"]["real"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
         f.write(';\n')
+        '''
         # set of negative demands
         f.write('set DNeg:=\n')
         for i in self.data["demand"].index.tolist():
@@ -131,6 +137,7 @@ class printdata(object):
                 f.write(str(self.data["transformer"]["name"][i])+" "+"2"+" "+str(self.data["transformer"]["to_busname"][i])+"\n")
             f.write(';\n')
         f.close()
+
     def printLF(self):
         f = open(self.datfile, 'a')
         #---Real power generation bounds---
@@ -150,6 +157,7 @@ class printdata(object):
                 f.write(str(self.data["transformer"]["name"][i])+" "+str(float(self.data["transformer"]["TapRatio"][i]))+"\n")
             f.write(';\n')
         f.close()
+
     def printDC(self):
         f = open(self.datfile, 'a')
         #---Tranmission line chracteristics for DC load flow---
@@ -164,6 +172,7 @@ class printdata(object):
                 f.write(str(self.data["transformer"]["name"][i])+" "+str(-float(1/self.data["transformer"]["x"][i]))+"\n")
             f.write(';\n')
         f.close()
+
     def printOPF(self):
         f = open(self.datfile, 'a')
         #---Real power generation bounds---
@@ -224,6 +233,7 @@ class printdata(object):
                 f.write(str(self.data["transformer"]["name"][i])+" "+str(-float(1/self.data["transformer"]["x"][i]))+"\n")
             f.write(';\n')
         f.close()
+
     def printAC(self):
         f = open(self.datfile, 'a')
 
@@ -340,6 +350,7 @@ class printdata(object):
                 f.write(str(self.data["transformer"]["name"][i])+" "+str(temp)+"\n")
             f.write(';\n')
         f.close()
+
     def printACLF(self):
         f = open(self.datfile, 'a')
         Slack     = self.data["generator"][["name"]][self.data["generator"]["type"]==3]
@@ -405,6 +416,7 @@ class printdata(object):
                 f.write(str(self.data["transformer"]["name"][i])+" "+str(-self.data["transformer"]["x"][i]/(self.data["transformer"]["r"][i]**2+self.data["transformer"]["x"][i]**2))+"\n")
             f.write(';\n')
         f.close()
+
     def printACOPF(self):
         f = open(self.datfile, 'a')
         #---Reactive power generation bounds---
@@ -511,6 +523,124 @@ class printdata(object):
 
         f.close()
 
+    # TODO: WRite multiperiod ############################################################################################
+    def printACOPF_multiperiod(self):
+
+        f = open(self.datfile, 'r')
+
+        # for l in lines:
+            # if l startswith 'set PD:= \n'
+                # remove lines
+                # if l == ';\n'
+                # remove line
+                # break
+
+        f.close()
+
+        f = open(self.datfile, 'a')
+        #---set of time-periods---
+        f.write('set T:= \n')
+        for i in self.data["timeseries"].index:
+            f.write(str(i) + "\n")
+        f.write(';\n')
+        f.write('set TRed:= \n')
+        for i in self.data["timeseries"].index[1:]:
+            f.write(str(i) + "\n")
+        f.write(';\n')
+
+        f.write('set Tstart:= \n')
+        f.write(str(self.data["timeseries"].index[0]) + "\n")
+        f.write(';\n')
+
+        f.write('set Tend:= \n')
+        f.write(str(self.data["timeseries"].index[-1]) + "\n")
+        f.write(';\n')
+
+         #===parameters===
+        #---Real power demand---
+        f.write('param PD:=\n')
+        for i in self.data["timeseries"]["Demand"]:
+            for j in self.data["timeseries"]["Demand"].index.tolist():
+                f.write(str(i)+" "+str(j)+" "+str(float(self.data["timeseries"]["Demand"][i][j])/self.data["baseMVA"]["baseMVA"][0])+"\n")
+        f.write(';\n')
+
+        f.close()
+
+    def printBM(self):
+        f = open(self.datfile, 'a')
+        #---Reactive power generation bounds---
+        f.write('param PG:=\n')
+        for i in self.data["generator"].index.tolist():
+            f.write(str(self.data["generator"]["name"][i])+" "+str(float(self.data["generator"]["PG"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
+        f.write(';\n')
+        f.write('param QG:=\n')
+        for i in self.data["generator"].index.tolist():
+            f.write(str(self.data["generator"]["name"][i])+" "+str(float(self.data["generator"]["QG"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
+        f.write(';\n')
+        f.write('param bid:=\n')
+        for i in self.data["generator"].index.tolist():
+            f.write(str(self.data["generator"]["name"][i])+" "+str(float(self.data["generator"]["bid"][i]))+"\n")
+        f.write(';\n')
+        f.write('param offer:=\n')
+        for i in self.data["generator"].index.tolist():
+            f.write(str(self.data["generator"]["name"][i])+" "+str(float(self.data["generator"]["offer"][i]))+"\n")
+        f.write(';\n')
+
+
+        bustransf = self.data["transformer"][["name","from_busname","to_busname"]][self.data["transformer"]["type"]==2]
+        if not bustransf.empty:
+            Bvolt   = []
+            Transf2 = []
+            for i in bustransf.index.tolist():
+                Transf2.append(bustransf["name"][i])
+                frombus = self.data["bus"]["baseKV"][self.data["bus"]["name"]==bustransf["from_busname"][i]].item()
+                tobus   = self.data["bus"]["baseKV"][self.data["bus"]["name"]==bustransf["to_busname"][i]].item()
+                if frombus > tobus:
+                    Bvolt.append(self.data["bus"]["name"][self.data["bus"]["name"]==bustransf["to_busname"][i]].item())
+                else:
+                    Bvolt.append(self.data["bus"]["name"][self.data["bus"]["name"]==bustransf["from_busname"][i]].item())
+            f.write('set Transf2:=\n')
+            for i in Transf2:
+                f.write(str(i)+"\n")
+            f.write(';\n')
+            f.write('set Bvolt:=\n')
+            for i in Bvolt:
+                f.write(str(i)+"\n")
+            f.write(';\n')
+            f.write('param VTar:=\n')
+            for i in Bvolt:
+                f.write(str(i)+' '+str(self.data["bus"]["VM"][self.data["bus"]["name"]==i].item())+"\n")
+            f.write(';\n')
+        #---Voltage targets---
+        if not(self.data["transformer"].empty):
+            #---Transformer tap bounds---
+            f.write('param Tap:=\n')
+            for i in self.data["transformer"].index.tolist():
+                f.write(str(self.data["transformer"]["name"][i])+" "+str(float(self.data["transformer"]["TapRatio"][i]))+"\n")
+            f.write(';\n')
+            f.write('param TapLB:=\n')
+            for i in self.data["transformer"].index.tolist():
+                f.write(str(self.data["transformer"]["name"][i])+" "+str(float(self.data["transformer"]["TapLB"][i]))+"\n")
+            f.write(';\n')
+            f.write('param TapUB:=\n')
+            for i in self.data["transformer"].index.tolist():
+                f.write(str(self.data["transformer"]["name"][i])+" "+str(float(self.data["transformer"]["TapUB"][i]))+"\n")
+            f.write(';\n')
+            f.write('param bC:=\n')
+            for i in self.data["transformer"].index.tolist():
+                f.write(str(self.data["transformer"]["name"][i])+" "+str(self.data["transformer"]["b"][i])+"\n")
+            f.write(';\n')
+            f.write('param g:=\n')
+            for i in self.data["transformer"].index.tolist():
+                f.write(str(self.data["transformer"]["name"][i])+" "+str(self.data["transformer"]["r"][i]/(self.data["transformer"]["r"][i]**2+self.data["transformer"]["x"][i]**2))+"\n")
+            f.write(';\n')
+            f.write('param b:=\n')
+            for i in self.data["transformer"].index.tolist():
+                f.write(str(self.data["transformer"]["name"][i])+" "+str(-self.data["transformer"]["x"][i]/(self.data["transformer"]["r"][i]**2+self.data["transformer"]["x"][i]**2))+"\n")
+            f.write(';\n')
+
+        f.close()
+
     def printDCBM(self):
         f = open(self.datfile, 'a')
         #---Reactive power generation bounds---
@@ -537,6 +667,7 @@ class printdata(object):
                 f.write(str(self.data["wind"]["name"][i])+" "+str(float(self.data["wind"]["offer"][i]))+"\n")
             f.write(';\n')
         f.close()
+
     def printUCdat(self):
         f = open(self.datfile, 'a')
         ##===sets===

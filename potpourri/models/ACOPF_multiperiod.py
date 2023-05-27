@@ -38,9 +38,11 @@ model.SHUNTbs = Set(within=model.B * model.SHUNT)# shunt-bus mapping
 model.A = Param(model.L*model.LE,within=Any)       # bus-line
 model.AT = Param(model.TRANSF*model.LE,within=Any) # bus-transformer
 
+print("_______________________________")
+model.T.pprint()
 # demands
 model.PD = Param(model.D, model.T, within=Reals)  # real power demand
-model.QD = Param(model.D,model.T, within=Reals)  # reactive power demand
+model.QD = Param(model.D, within=Reals)  # reactive power demand
 model.VOLL    = Param(model.D, within=Reals) #value of lost load
 
 # generators
@@ -148,26 +150,26 @@ model.OBJ = Objective(rule=objective, sense=minimize)
 # --- Kirchoff's current law at each bus b ---
 # TODO: Bengisu, make time-variant
 
-def KCL_real_def(model, b):
-    return sum(model.pG[g, t] for g in model.G for t in model.T if (b,g) in model.Gbs) +\
-    sum(model.pW[w,t] for w in model.WIND for t in model.T if (b,w) in model.Wbs)==\
-    sum(model.pD[d,t] for d in model.D for t in model.T if (b,d) in model.Dbs)+\
-    sum(model.pLfrom[l,t] for l in model.L for t in model.T if model.A[l,1]==b)+ \
-    sum(model.pLto[l,t] for l in model.L for t in model.T if model.A[l,2]==b)+\
-    sum(model.pLfromT[l,t] for l in model.TRANSF for t in model.T if model.AT[l,1]==b)+ \
-    sum(model.pLtoT[l,t] for l in model.TRANSF for t in model.T if model.AT[l,2]==b)+\
-    sum(model.GB[s]*model.v[b,t]**2 for s in model.SHUNT for t in model.T if (b,s) in model.SHUNTbs)
-def KCL_reactive_def(model, b):
-    return sum(model.qG[g,t] for g in model.G for t in model.T if (b,g) in model.Gbs) +\
-    sum(model.qW[w,t] for w in model.WIND for t in model.T if (b,w) in model.Wbs)== \
-    sum(model.qD[d,t] for d in model.D for t in model.T if (b,d) in model.Dbs)+\
-    sum(model.qLfrom[l,t] for l in model.L for t in model.T if model.A[l,1]==b)+ \
-    sum(model.qLto[l,t] for l in model.L for t in model.T if model.A[l,2]==b)+\
-    sum(model.qLfromT[l,t] for l in model.TRANSF for t in model.T if model.AT[l,1]==b)+ \
-    sum(model.qLtoT[l,t] for l in model.TRANSF for t in model.T if model.AT[l,2]==b)-\
-    sum(model.BB[s]*model.v[b,t]**2 for s in model.SHUNT for t in model.T if (b,s) in model.SHUNTbs)
-model.KCL_real     = Constraint(model.B, rule=KCL_real_def)
-model.KCL_reactive = Constraint(model.B, rule=KCL_reactive_def)
+def KCL_real_def(model, b, t):
+    return sum(model.pG[g, t] for g in model.G if (b,g) in model.Gbs) +\
+    sum(model.pW[w,t] for w in model.WIND if (b,w) in model.Wbs)==\
+    sum(model.pD[d,t] for d in model.D if (b,d) in model.Dbs)+\
+    sum(model.pLfrom[l,t] for l in model.L if model.A[l,1]==b)+ \
+    sum(model.pLto[l,t] for l in model.L if model.A[l,2]==b)+\
+    sum(model.pLfromT[l,t] for l in model.TRANSF if model.AT[l,1]==b)+ \
+    sum(model.pLtoT[l,t] for l in model.TRANSF if model.AT[l,2]==b)+\
+    sum(model.GB[s]*model.v[b,t]**2 for s in model.SHUNT if (b,s) in model.SHUNTbs)
+def KCL_reactive_def(model, b, t):
+    return sum(model.qG[g,t] for g in model.G if (b,g) in model.Gbs) +\
+    sum(model.qW[w,t] for w in model.WIND if (b,w) in model.Wbs)== \
+    sum(model.qD[d,t] for d in model.D if (b,d) in model.Dbs)+\
+    sum(model.qLfrom[l,t] for l in model.L if model.A[l,1]==b)+ \
+    sum(model.qLto[l,t] for l in model.L if model.A[l,2]==b)+\
+    sum(model.qLfromT[l,t] for l in model.TRANSF if model.AT[l,1]==b)+ \
+    sum(model.qLtoT[l,t] for l in model.TRANSF if model.AT[l,2]==b)-\
+    sum(model.BB[s]*model.v[b,t]**2 for s in model.SHUNT if (b,s) in model.SHUNTbs)
+model.KCL_real     = Constraint(model.B, model.T, rule=KCL_real_def)
+model.KCL_reactive = Constraint(model.B, model.T, rule=KCL_reactive_def)
 
 # --- Kirchoff's voltage law on each line ---
 # TODO: Bengisu, make time-variant
@@ -203,11 +205,11 @@ def KVL_real_fromendTransf(model,l,t):
 def KVL_real_toendTransf(model,l,t):
     return model.pLtoT[l,t] == model.G22T[l]*(model.v[model.AT[l,2],t]**2)+\
     model.v[model.AT[l,1],t]*model.v[model.AT[l,2],t]*(model.B21T[l]*sin(model.delta[model.AT[l,2],t]-\
-    model.delta[model.AT[l,1]],t)+model.G21T[l]*cos(model.delta[model.AT[l,2],t]-model.delta[model.AT[l,1],t]))
+    model.delta[model.AT[l,1],t])+model.G21T[l]*cos(model.delta[model.AT[l,2],t]-model.delta[model.AT[l,1],t]))
 def KVL_reactive_fromendTransf(model,l,t):
     return model.qLfromT[l,t] == -model.B11T[l]*(model.v[model.AT[l,1],t]**2)+\
     model.v[model.AT[l,1],t]*model.v[model.AT[l,2],t]*(model.G12T[l]*sin(model.delta[model.AT[l,1],t]-\
-    model.delta[model.AT[l,2],t])-model.B12T[l]*cos(model.delta[model.AT[l,1],t]-model.delta[model.AT[l,2]],t))
+    model.delta[model.AT[l,2],t])-model.B12T[l]*cos(model.delta[model.AT[l,1],t]-model.delta[model.AT[l,2],t]))
 def KVL_reactive_toendTransf(model,l,t):
     return model.qLtoT[l,t] == -model.B22T[l]*(model.v[model.AT[l,2],t]**2)+\
     model.v[model.AT[l,1],t]*model.v[model.AT[l,2],t]*(model.G21T[l]*sin(model.delta[model.AT[l,2],t]-\
@@ -252,7 +254,7 @@ model.WGQminC = Constraint(model.WIND, model.T, rule=Wind_Reactive_Power_Min)
 def Load_Shed_real(model,d,t):
     return model.pD[d,t] == model.alpha[d]*model.PD[d,t]
 def Load_Shed_reactive(model,d,t):
-    return model.qD[d,t] == model.alpha[d]*model.QD[d,t]
+    return model.qD[d,t] == model.alpha[d]*model.QD[d]
 def alpha_FixNegDemands(model,d):
     return model.alpha[d] == 1
 

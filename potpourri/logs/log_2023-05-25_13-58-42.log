@@ -1,0 +1,13 @@
+Thu, 25 May 2023 13:58:42 INFO     OATS log file
+Thu, 25 May 2023 13:58:42 INFO     Program started
+Thu, 25 May 2023 13:58:42 INFO     Solver selected: ipopt
+Thu, 25 May 2023 13:58:42 INFO     Testcase selected: testcases/matpower/case14.xlsx
+Thu, 25 May 2023 13:58:42 INFO     Model selected: ACOPF_min_gen
+Thu, 25 May 2023 13:58:42 INFO     Given model file found and selected from the models library
+Thu, 25 May 2023 13:58:42 INFO     Given testcase file found and selected from the testcase library
+Thu, 25 May 2023 13:58:42 ERROR    Rule failed when generating expression for Constraint QGmaxC with index G1:
+ValueError: Error retrieving immutable Param value (QGmax[G1]):
+	The Param value is undefined and no default value is specified.
+Thu, 25 May 2023 13:58:42 ERROR    Constructing component 'QGmaxC' from data=None failed:
+    ValueError: Error retrieving immutable Param value (QGmax[G1]):
+	The Param value is undefined and no default value is specified.

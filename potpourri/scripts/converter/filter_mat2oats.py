@@ -19,7 +19,7 @@ shtcol    = ['busname','name','GL','BL','stat']
 zneNTCcol = ['interconnection_ID', 'from_zone', 'to_zone', 'TransferCapacityTo(MW)', 'TransferCapacityFr(MW)']
 znecol    = ['zone', 'reserve(MW)']
 gencol    = ['busname','name','stat','type','PG','QG','PGLB','PGUB','QGLB','QGUB','VS','RampDown(MW/hr)','RampUp(MW/hr)','MinDownTime(hr)','MinUpTime(hr)','FuelType','contingency','probability','startup','shutdown','costc2','costc1','costc0']
-
+#timecol = []
 
 dfbus    = pd.DataFrame(columns=buscol)
 dfdem    = pd.DataFrame(columns=demcol)
