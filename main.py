@@ -22,3 +22,4 @@ else:
 potpourri.acopf(tc=test_case, solver="ipopt", print_output=True, print_solver_output=True, print_model=False, objective="multiperiod")
 #potpourri.uc(tc=test_case, solver="glpk", print_output=True, print_solver_output=True, print_model=False)
 # potpourri.scopf(tc=test_case, solver="gurobi", print_output=True, print_solver_output=True, print_model=False)
+#

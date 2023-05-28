@@ -1,0 +1,11 @@
+Sun, 28 May 2023 14:08:37 INFO     OATS log file
+Sun, 28 May 2023 14:08:37 INFO     Program started
+Sun, 28 May 2023 14:08:37 INFO     Solver selected: ipopt
+Sun, 28 May 2023 14:08:37 INFO     Testcase selected: testcases/matpower/case14.xlsx
+Sun, 28 May 2023 14:08:37 INFO     Model selected: ACOPF_multiperiod
+Sun, 28 May 2023 14:08:37 INFO     Given model file found and selected from the models library
+Sun, 28 May 2023 14:08:37 INFO     Given testcase file found and selected from the testcase library
+Sun, 28 May 2023 14:08:37 ERROR    Rule failed when generating expression for Objective OBJ with index None:
+KeyError: "Index 'G1' is not valid for indexed component 'pG'"
+Sun, 28 May 2023 14:08:37 ERROR    Constructing component 'OBJ' from data=None failed:
+    KeyError: "Index 'G1' is not valid for indexed component 'pG'"

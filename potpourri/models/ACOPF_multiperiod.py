@@ -38,8 +38,6 @@ model.SHUNTbs = Set(within=model.B * model.SHUNT)# shunt-bus mapping
 model.A = Param(model.L*model.LE,within=Any)       # bus-line
 model.AT = Param(model.TRANSF*model.LE,within=Any) # bus-transformer
 
-print("_______________________________")
-model.T.pprint()
 # demands
 model.PD = Param(model.D, model.T, within=Reals)  # real power demand
 model.QD = Param(model.D, within=Reals)  # reactive power demand
@@ -141,9 +139,16 @@ model.v      = Var(model.B, model.T, domain= NonNegativeReals, initialize=1.0) #
 model.alpha  = Var(model.D, initialize=1.0, domain= NonNegativeReals)# proportion to supply of load d
 
 # --- cost function ---
+'''
 def objective(model):
     # obj = sum((model.baseMVA*model.pG[g,t])**2+model.baseMVA*model.pG[g,t] for g in model.G for t in model.T)
     obj = sum(model.baseMVA*model.pG[g,t] for g in model.G for t in model.T)
+    return obj
+model.OBJ = Objective(rule=objective, sense=minimize)
+'''
+def objective(model):
+    obj = sum(model.c2[g]*(model.baseMVA*model.pG[g,t])**2+model.c1[g]*model.baseMVA*model.pG[g,t]+ model.c0[g] for g in model.G for t in model.T)+\
+    sum(model.VOLL[d]*(1-model.alpha[d])*model.baseMVA*model.PD[d,t] for d in model.D for t in model.T)
     return obj
 model.OBJ = Objective(rule=objective, sense=minimize)
 

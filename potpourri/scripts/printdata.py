@@ -64,13 +64,15 @@ class printdata(object):
                 f.write(str(i)+"\n")
             f.write(';\n')
         #===parameters===
-        #---Real power demand---
+        #---Real power demand--- BURASINI MULTIPERIOD YAPMA DURUMUNDA DEVRE DISI BIRAKMAK GEREKIYOR MUTLAKA!!!!!!!!!!!!!!!!!
         '''
         f.write('param PD:=\n')
         for i in self.data["demand"].index.tolist():
             f.write(str(self.data["demand"]["name"][i])+" "+str(float(self.data["demand"]["real"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
         f.write(';\n')
         '''
+        ########################### BURAYA KADAR OLAN KISIM 
+
         # set of negative demands
         f.write('set DNeg:=\n')
         for i in self.data["demand"].index.tolist():

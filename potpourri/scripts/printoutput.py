@@ -39,8 +39,10 @@ class printoutput(object):
             sys.exit("Problem is infeasible!\nOats terminated. No output is written on the results file.")
         else:
             print (sys.exit("Problem is infeasible!\nOats terminated. No output is written on the results file."))
+
             
     def printsummary(self):
+        print("#####################################################")
         if 'LF' not in self.mod:
             print ("Cost of the objective function:", str(float(self.instance.OBJ())))
         endLine()
@@ -48,16 +50,150 @@ class printoutput(object):
         endLine()
         tab_summary = []
         tab_summary.append(['Time-Period','Conventional generation (MW)','Wind generation (MW)', 'Demand (MW)'])
-        print([d for d in self.instance.D])
-        print([self.instance.PD[d,0] for d in self.instance.D])
-        print(self.instance.PD["D2",0])
-        self.instance.PD.pprint()
+        #print([d for d in self.instance.D])
+        #print([self.instance.PD[d,0] for d in self.instance.D])
+        #print(self.instance.PD["D2",0])
+        self.instance.Gbs.pprint()
+        self.instance.B.pprint()
+        self.instance.G.pprint()
+        self.instance.pG.pprint()
         for t in self.instance.T:
             tab_summary.append([t,sum(self.instance.pG[g,t].value for g in self.instance.G)*self.instance.baseMVA,\
             sum(self.instance.pW[w].value for w in self.instance.WIND)*self.instance.baseMVA,sum(self.instance.PD[d,t] for d in self.instance.D)*self.instance.baseMVA])
 
         print (tabulate(tab_summary, headers="firstrow", tablefmt="grid"))
         endLine()
+
+      
+         
+
+    
+    ################################################### YENI EKLENEN KISIMLAR ###################################################
+    def printACOPF_multiperiod(self, testcase:str):
+        cols_summary    = ['Time Periods', 'Conventional generation (MW)', 'Wind generation (MW)', 'Demand (MW)','Objective function value']
+        cols_bus        = ['Time Periods','name', 'angle(degs)', 'Voltage(p.u.)']
+        cols_demand     = ['Time Periods','name', 'busname', 'PD(MW)', 'QD(MVar)', 'alpha' ] 
+        cols_branch     = ['Time Periods','name', 'from_busname', 'to_busname', 'pLto(MW)', 'pLfrom(MW)', 'loss(MW)']
+        cols_transf     = ['Time Periods','name', 'from_busname', 'to_busname', 'pLTto(MW)', 'pLTfrom(MW)', 'loss(MW)']
+        cols_generation = ['Time Periods','name', 'busname', 'PGLB(MW)', 'PG(MW)', 'pG(MW)','PGUB(MW)', 'QGLB(MVar)', 'qG(MVar)','QGUB(MVar)']
+        cols_wind       = ['Time Series','name', 'busname', 'PGLB(MW)', 'PG(MW)', 'pG(MW)','PGUB(MW)', 'QGLB(MVar)', 'qG(MVar)','QGUB(MVar)']
+
+        summary         = pd.DataFrame(columns=cols_summary)
+        bus             = pd.DataFrame(columns=cols_bus)
+        demand          = pd.DataFrame(columns=cols_demand)
+        wind            = pd.DataFrame(columns=cols_wind)
+        generation      = pd.DataFrame(columns=cols_generation)
+        branch          = pd.DataFrame(columns=cols_branch)
+        transformer     = pd.DataFrame(columns=cols_transf)
+
+        #-----write Data Frames
+        for t in self.instance.T:
+            summary.loc[t] = pd.Series({'Time Periods':t,\
+            'Conventional generation (MW)': sum(self.instance.pG[g,t].value for g in self.instance.G)*self.instance.baseMVA,\
+            'Wind generation (MW)':sum(self.instance.pW[w].value for w in self.instance.WIND)*self.instance.baseMVA,\
+            'Demand (MW)':sum(self.instance.PD[d,t] for d in self.instance.D)*self.instance.baseMVA,\
+            'Objective function value': self.instance.OBJ()})
+        
+        
+        #bus data
+        ind = 0
+    
+        for t in self.instance.T:
+            for b in self.instance.B:
+                bus.loc[ind] = pd.Series({'Time Periods':t,'name':b,'angle(degs)':self.instance.delta[b,t].value*180/math.pi,\
+                'Voltage(p.u.)':self.instance.v[b,t].value})
+                ind += 1
+        '''
+        with pd.option_context('display.max_rows', None, 'display.max_columns', None):  # more options can be specified also
+            print(bus)
+        '''   
+        
+        
+        #line data
+        ind = 0
+        for t in self.instance.T:
+            for l in self.instance.L:
+                branch.loc[ind] = pd.Series({'Time Periods':t, 'name': l, 'from_busname':self.instance.A[l,1], 'to_busname':self.instance.A[l,2],\
+                'pLto(MW)':self.instance.pLto[l,t].value*self.instance.baseMVA,\
+                'pLfrom(MW)':self.instance.pLfrom[l,t].value*self.instance.baseMVA,\
+                'loss(MW)':(self.instance.pLto[l,t].value+self.instance.pLfrom[l,t].value)*self.instance.baseMVA})
+                ind += 1
+        
+
+        ind = 0
+        #transformer data
+        for t in self.instance.T:
+            for l in self.instance.TRANSF:
+                transformer.loc[ind] = pd.Series({'Time Periods':t, 'name': l, 'from_busname':self.instance.AT[l,1],
+                'to_busname':self.instance.AT[l,2], 'pLTto(MW)':self.instance.pLtoT[l,t].value*self.instance.baseMVA,\
+                'pLTfrom(MW)':self.instance.pLfromT[l,t].value*self.instance.baseMVA,\
+                'loss(MW)':(self.instance.pLfromT[l,t].value+self.instance.pLtoT[l,t].value)*self.instance.baseMVA})
+                ind += 1
+        
+        
+        #demand data
+        ind = 0
+        for t in self.instance.T:
+            for d in self.instance.Dbs:
+                demand.loc[ind] = pd.Series({'Time Periods':t, 'name': d[1],'busname':d[0],\
+                'PD(MW)':self.instance.PD[d[1],t]*self.instance.baseMVA,\
+                'QD(MVar)':self.instance.QD[d[1]]*self.instance.baseMVA,\
+                'alpha':round(self.instance.alpha[d[1]].value,3)}) 
+                ind += 1
+        
+        
+        #generator data
+        ind=0
+        for t in self.instance.T:
+            for g in self.instance.Gbs:
+                generation.loc[ind] = pd.Series({'Time Periods':t, 'name':g[1], 'busname':g[0],\
+                'PGLB(MW)':self.instance.PGmin[g[1]]*self.instance.baseMVA,\
+                'pG(MW)':round(self.instance.pG[g[1],t].value*self.instance.baseMVA,3),\
+                'PGUB(MW)':self.instance.PGmax[g[1]]*self.instance.baseMVA,\
+                'QGLB(MVar)':self.instance.QGmin[g[1]]*self.instance.baseMVA,\
+                'qG(MVar)':round(self.instance.qG[g[1],t].value*self.instance.baseMVA,3),\
+                'QGUB(MVar)':self.instance.QGmax[g[1]]*self.instance.baseMVA})
+                ind += 1
+        
+        
+        #wind data
+        ind = 0
+        for t in self.instance.T:
+            for g in self.instance.Wbs:
+                wind.loc[ind] = pd.Series({'Time Series':t, 'name':g[1], 'busname':g[0],\
+               'PGLB(MW)':self.instance.WGmin[g[1]]*self.instance.baseMVA,\
+               'pG(MW)':round(self.instance.pW[g[1],t].value*self.instance.baseMVA,3),\
+               'PGUB(MW)':self.instance.WGmax[g[1]]*self.instance.baseMVA,\
+               'QGLB(MVar)':self.instance.WGQmin[g[1]]*self.instance.baseMVA,\
+               'qG(MVar)':round(self.instance.qW[g[1],t].value*self.instance.baseMVA,3),\
+               'QGUB(MVar)':self.instance.WGQmax[g[1]]*self.instance.baseMVA})
+                ind += 1
+
+            # TODO Add time series output
+           
+
+
+        #----------------------------------------------------------
+        #===write output on xlsx file===
+        #
+        #bus = bus.sort_values(['name'])
+        #generation = generation.sort_values(['name'])
+        #demand = demand.sort_values(['name'])
+        with pd.ExcelWriter(f'potpourri/results/results_multiperiod.xlsx') as writer:  
+            summary.to_excel(writer, sheet_name = 'summary',index=False)
+            bus_sorted = bus.sort_values(by=['Time Periods', 'name'])  #Buses were not sorted before
+            bus_sorted.to_excel(writer, sheet_name = 'bus',index=False)
+            demand_sorted = demand.sort_values(['Time Periods','name'])
+            demand_sorted.to_excel(writer, sheet_name = 'demand',index=False)
+            generation_sorted = generation.sort_values(['Time Periods','name'])
+            generation_sorted.to_excel(writer, sheet_name = 'generator',index=False)
+            #wind_sorted = wind.sort_values(by=['Time Series','name'])
+            wind.to_excel(writer, sheet_name = 'wind',index=False)
+            branch_sorted = branch.sort_values(by=['Time Periods','from_busname'])
+            branch_sorted.to_excel(writer, sheet_name = 'branch',index=False)
+            transformer_sorted = transformer.sort_values(by=['Time Periods', 'from_busname'])
+            transformer_sorted.to_excel(writer, sheet_name = 'transformer',index=False)        
+        
         
     def printoutputxls(self, testcase:str):
         #===initialise pandas dataframes
@@ -105,7 +241,8 @@ class printoutput(object):
         'Wind generation (MW)':sum(self.instance.pW[w].value for w in self.instance.WIND)*self.instance.baseMVA,\
         'Demand (MW)':sum(self.instance.PD[d] for d in self.instance.D)*self.instance.baseMVA,\
         'Objective function value': self.instance.OBJ()})
-        
+
+    
 
         if ('DC' in self.mod) or ('SC' in self.mod):
             #bus data

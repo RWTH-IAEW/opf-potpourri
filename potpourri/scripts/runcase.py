@@ -88,6 +88,7 @@ def runcase(testcase,mod,opt=None):
     #################################################
 
     ############Solve###################
+    
     instance = model.create_instance(datfile)
     instance.dual = Suffix(direction=Suffix.IMPORT)
 
@@ -103,17 +104,22 @@ def runcase(testcase,mod,opt=None):
     # ##################################
     #
     # ############Output###################
-    print("__________________________Ergebnis______________________________")
     #instance.PD.pprint()  
     
     o = printoutput(results, instance,mod)
     
     if (opt['print_output']):
         o.solutionstatus()
-        if (opt['print_model']):
-            instance.display()
+        #if (opt['print_model']):
+        instance.display()
         o.printsummary()
-        o.printoutputxls(testcase)
+        
+        if 'multiperiod' in mod:
+            print("_________________________________Multiperiod_________________________________")
+            o.printACOPF_multiperiod(testcase)
+        else:
+            o.printoutputxls(testcase)
+
     else:
         o.greet()
         o.solutionstatus()
