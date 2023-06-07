@@ -25,6 +25,7 @@ def selecttestcase(test):
     df_baseMVA     = xl.parse("baseMVA")
     df_zone        = xl.parse("zone")
     df_zonalNTC    = xl.parse("zonalNTC")
+    df_Battery     = xl.parse("Battery")
 
     data = {
     "bus": df_bus.dropna(how='all'),
@@ -36,6 +37,7 @@ def selecttestcase(test):
     "baseMVA": df_baseMVA.dropna(how='all'),
     "zone":df_zone.dropna(how='all'),
     "zonalNTC":df_zonalNTC.dropna(how='all'),
+    "Battery":df_Battery.dropna(how='all'),
     "flags":data_flags
     }
     try:

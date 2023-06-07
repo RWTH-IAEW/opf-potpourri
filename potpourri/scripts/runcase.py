@@ -73,6 +73,8 @@ def runcase(testcase,mod,opt=None):
             r.printACOPF()
             if 'multiperiod' in mod:
                 r.printACOPF_multiperiod()
+                if 'battery' in mod:
+                    r.printACOPF_multiperiod_battery()
         elif mod=='SCOPF' or mod=='SCOPF_BM':
             r.printSCdat()
         if mod=='ACOPF_BM':
@@ -104,19 +106,24 @@ def runcase(testcase,mod,opt=None):
     # ##################################
     #
     # ############Output###################
-    #instance.PD.pprint()  
+    print('________________________________________________________________________________________________')
+    instance.Bbs.pprint()  
+    print('________________________________________________________________________________________')
     
     o = printoutput(results, instance,mod)
     
     if (opt['print_output']):
         o.solutionstatus()
         #if (opt['print_model']):
-        instance.display()
+        #instance.display()
         o.printsummary()
         
         if 'multiperiod' in mod:
             print("_________________________________Multiperiod_________________________________")
             o.printACOPF_multiperiod(testcase)
+            #if 'battery' in mod:
+            #    print("---------------battery---------------")
+            #    o.print_Battery(testcase)    
         else:
             o.printoutputxls(testcase)
 

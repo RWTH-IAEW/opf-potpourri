@@ -1,6 +1,6 @@
 #This is Python generated data file for Pyomo model
 #_author_:W. Bukhsh
-#Time stamp: 2023-05-28 16:25:52.831928
+#Time stamp: 2023-06-07 10:56:52.946906
 set B:=
 1
 2
@@ -523,15 +523,15 @@ D1 6 0.0
 D1 7 0.0
 D1 8 0.0
 D1 9 0.0
-D2 0 0.217
-D2 1 0.217
-D2 2 0.217
-D2 3 0.217
-D2 4 0.217
-D2 5 0.217
+D2 0 0.01
+D2 1 0.02
+D2 2 0.03
+D2 3 0.0
+D2 4 0.2
+D2 5 0.3
 D2 6 0.217
-D2 7 0.217
-D2 8 0.217
+D2 7 0.0
+D2 8 0.7
 D2 9 0.217
 D3 0 0.9420000000000001
 D3 1 0.9420000000000001
@@ -653,4 +653,48 @@ D14 6 0.149
 D14 7 0.149
 D14 8 0.149
 D14 9 0.149
+;
+set BATTERY:=
+B1
+B2
+;
+set Bbs:=
+4 B1
+5 B2
+;
+param PCmax:=
+B1 0.1
+B2 0.2
+;
+param PCmin:=
+B1 0.0
+B2 0.0
+;
+param PDmax:=
+B1 0.1
+B2 0.2
+;
+param PDmin:=
+B1 0.0
+B2 0.0
+;
+param nchar:=
+B1 0.7
+B2 0.6
+;
+param ndis:=
+B1 0.8
+B2 0.7
+;
+param EMAX:=
+B1 0.02
+B2 0.015
+;
+param EMIN:=
+B1 0.006999999999999999
+B2 0.005
+;
+param E0:=
+B1 0.015
+B2 0.01
 ;

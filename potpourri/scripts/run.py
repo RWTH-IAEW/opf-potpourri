@@ -147,6 +147,8 @@ def acopf(tc:str = 'default',
         model = "ACOPF_max_cost"
     elif objective== "multiperiod":
         model = "ACOPF_multiperiod"    
+    elif objective == "multiperiod_battery":
+        model = "ACOPF_multiperiod_battery" ###burasi ne yapiyor
     # ==log==
     logging.info("Solver selected: "+opt['solver'])
     logging.info("Testcase selected: "+testcase)
