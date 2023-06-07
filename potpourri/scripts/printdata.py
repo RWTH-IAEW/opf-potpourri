@@ -30,6 +30,7 @@ class printdata(object):
         self.data["transformer"] = self.data["transformer"].drop(self.data["transformer"][self.data["transformer"]['stat'] == 0].index.tolist())
         self.data["wind"]        = self.data["wind"].drop(self.data["wind"][self.data["wind"]['stat'] == 0].index.tolist())
         self.data["generator"]   = self.data["generator"].drop(self.data["generator"][self.data["generator"]['stat'] == 0].index.tolist())
+        #self.data["Battery"]     = self.data["Battery"].drop(self.data["Battery"][self.data["Battery"]['stat'] == 0].index.tolist())
 
     def printheader(self):
         f = open(self.datfile, 'w')
@@ -64,14 +65,15 @@ class printdata(object):
                 f.write(str(i)+"\n")
             f.write(';\n')
         #===parameters===
-        #---Real power demand--- BURASINI MULTIPERIOD YAPMA DURUMUNDA DEVRE DISI BIRAKMAK GEREKIYOR MUTLAKA!!!!!!!!!!!!!!!!!
-        '''
-        f.write('param PD:=\n')
-        for i in self.data["demand"].index.tolist():
-            f.write(str(self.data["demand"]["name"][i])+" "+str(float(self.data["demand"]["real"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
-        f.write(';\n')
-        '''
-        ########################### BURAYA KADAR OLAN KISIM 
+        #---Real power demand--- 
+        ############## BURASI MULTIPERIOD YAPMA DURUMUNDA DEVRE DISI KALIYOR ###########################
+        if not 'multiperiod' in self.model:     
+            f.write('param PD:=\n')
+            for i in self.data["demand"].index.tolist():
+                f.write(str(self.data["demand"]["name"][i])+" "+str(float(self.data["demand"]["real"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
+            f.write(';\n')
+        
+        ########################### BURAYA KADAR OLAN KISIM #########################
 
         # set of negative demands
         f.write('set DNeg:=\n')
@@ -528,7 +530,7 @@ class printdata(object):
     # TODO: WRite multiperiod ############################################################################################
     def printACOPF_multiperiod(self):
 
-        f = open(self.datfile, 'r')
+        #f = open(self.datfile, 'r')
 
         # for l in lines:
             # if l startswith 'set PD:= \n'
@@ -537,7 +539,7 @@ class printdata(object):
                 # remove line
                 # break
 
-        f.close()
+        #f.close()
 
         f = open(self.datfile, 'a')
         #---set of time-periods---
@@ -565,6 +567,72 @@ class printdata(object):
             for j in self.data["timeseries"]["Demand"].index.tolist():
                 f.write(str(i)+" "+str(j)+" "+str(float(self.data["timeseries"]["Demand"][i][j])/self.data["baseMVA"]["baseMVA"][0])+"\n")
         f.write(';\n')
+
+
+    def printACOPF_multiperiod_battery(self):
+        f = open(self.datfile, 'a')
+        print(self.data)
+        #---set of batteries---
+        f.write('set BATTERY:=\n')
+        for i in self.data["Battery"]["name"].index.tolist():
+            f.write(str(self.data["Battery"]["name"][i])+"\n")
+        f.write(';\n')
+
+        #---set of battery-bus mapping ---
+        f.write('set Bbs:=\n')
+        for i in self.data["Battery"].index.tolist():
+            f.write(str(self.data["Battery"]["busname"][i]) + " "+str(self.data["Battery"]["name"][i])+"\n")
+        f.write(';\n')
+
+        #---Real power battery charging bounds---
+        f.write('param PCmax:=\n')
+        for i in self.data["Battery"].index.tolist():
+            f.write(str(self.data["Battery"]["name"][i])+" "+str(float(self.data["Battery"]["PCMAX"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
+        f.write(';\n')        
+        f.write('param PCmin:=\n')
+        for i in self.data["Battery"].index.tolist():
+            f.write(str(self.data["Battery"]["name"][i])+" "+str(float(self.data["Battery"]["PCMIN"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
+        f.write(';\n')
+    
+        #---Real power battery discharging bounds---
+        f.write('param PDmax:=\n')
+        for i in self.data["Battery"].index.tolist():
+            f.write(str(self.data["Battery"]["name"][i])+" "+str(float(self.data["Battery"]["PDMAX"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
+        f.write(';\n')        
+        f.write('param PDmin:=\n')
+        for i in self.data["Battery"].index.tolist():
+            f.write(str(self.data["Battery"]["name"][i])+" "+str(float(self.data["Battery"]["PDMIN"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
+        f.write(';\n')       
+  
+        #---Battery charge discharge efficiencies ---
+        f.write('param nchar:=\n')
+        for i in self.data["Battery"].index.tolist():
+            f.write(str(self.data["Battery"]["name"][i])+" "+str(float(self.data["Battery"]["nchar"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
+        f.write(';\n')        
+        f.write('param ndis:=\n')
+        for i in self.data["Battery"].index.tolist():
+            f.write(str(self.data["Battery"]["name"][i])+" "+str(float(self.data["Battery"]["ndis"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
+        f.write(';\n')   
+
+        #---Battery SoC bounds---
+        f.write('param EMAX:=\n')
+        for i in self.data["Battery"].index.tolist():
+            f.write(str(self.data["Battery"]["name"][i])+" "+str(float(self.data["Battery"]["EMAX"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
+        f.write(';\n')        
+        f.write('param EMIN:=\n')
+        for i in self.data["Battery"].index.tolist():
+            f.write(str(self.data["Battery"]["name"][i])+" "+str(float(self.data["Battery"]["EMIN"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
+        f.write(';\n')   
+        f.write('param E0:=\n')
+        for i in self.data["Battery"].index.tolist():
+            f.write(str(self.data["Battery"]["name"][i])+" "+str(float(self.data["Battery"]["E0"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
+        f.write(';\n')  
+
+
+
+
+
+
 
         f.close()
 
