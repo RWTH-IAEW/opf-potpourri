@@ -223,6 +223,7 @@ class printdata(object):
             f.write(str(self.data["generator"]["name"][i])+" "+str(float(self.data["generator"]["costc0"][i]))+"\n")
         f.write(';\n')
         f.close()
+
     def printDCOPF(self):
         f = open(self.datfile, 'a')
         #---Tranmission line chracteristics---
@@ -556,17 +557,19 @@ class printdata(object):
         f.write(str(self.data["timeseries"].index[0]) + "\n")
         f.write(';\n')
 
-        f.write('set Tend:= \n')
+        f.write('param Tend:= \n')
         f.write(str(self.data["timeseries"].index[-1]) + "\n")
         f.write(';\n')
 
-         #===parameters===
+        #===parameters===
         #---Real power demand---
         f.write('param PD:=\n')
         for i in self.data["timeseries"]["Demand"]:
             for j in self.data["timeseries"]["Demand"].index.tolist():
                 f.write(str(i)+" "+str(j)+" "+str(float(self.data["timeseries"]["Demand"][i][j])/self.data["baseMVA"]["baseMVA"][0])+"\n")
         f.write(';\n')
+
+        f.close()    
 
 
     def printACOPF_multiperiod_battery(self):
@@ -607,11 +610,11 @@ class printdata(object):
         #---Battery charge discharge efficiencies ---
         f.write('param nchar:=\n')
         for i in self.data["Battery"].index.tolist():
-            f.write(str(self.data["Battery"]["name"][i])+" "+str(float(self.data["Battery"]["nchar"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
+            f.write(str(self.data["Battery"]["name"][i])+" "+str(float(self.data["Battery"]["nchar"][i]))+"\n") #/self.data["baseMVA"]["baseMVA"][0])
         f.write(';\n')        
         f.write('param ndis:=\n')
         for i in self.data["Battery"].index.tolist():
-            f.write(str(self.data["Battery"]["name"][i])+" "+str(float(self.data["Battery"]["ndis"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
+            f.write(str(self.data["Battery"]["name"][i])+" "+str(float(self.data["Battery"]["ndis"][i]))+"\n") #/self.data["baseMVA"]["baseMVA"][0])
         f.write(';\n')   
 
         #---Battery SoC bounds---
@@ -629,6 +632,47 @@ class printdata(object):
         f.write(';\n')  
 
 
+        #---Battery Cost---
+        f.write('param c3:=\n')
+        for i in self.data["Battery"].index.tolist():
+            f.write(str(self.data["Battery"]["name"][i])+" "+str(float(self.data["Battery"]["c3"][i]))+"\n")
+        f.write(';\n')
+        
+        #---set of solar plant---
+        f.write('set S:=\n')
+        f.write(str(self.data["solar"]["name"][1])+"\n")
+        f.write(';\n')
+
+
+        #---Solar Cost---
+        f.write('param c4:=\n')
+        f.write(str(self.data["solar"]["name"][1])+" "+str(float(self.data["solar"]["c4"][1]))+"\n")
+        f.write(';\n')
+
+        #---set of solar-bus mapping ---
+        f.write('set Sbs:=\n')
+        f.write(str(self.data["solar"]["busname"][1]) + " "+str(self.data["solar"]["name"][1])+"\n")
+        f.write(';\n')
+
+        
+        #---Solar real power production---
+        f.write('param PS:=\n')
+        for i in self.data["solar"].index.tolist():
+            f.write(str(self.data["solar"]["name"][i])+" "+str(self.data["solar"]["timeperiod"][i])+" "+str(float(self.data["solar"]["PS"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
+        f.write(';\n')
+
+        #---Solar reactive power production---
+        f.write('param QS:=\n')
+        for i in self.data["solar"].index.tolist():
+            f.write(str(self.data["solar"]["name"][i])+" "+str(self.data["solar"]["timeperiod"][i])+" "+str(float(self.data["solar"]["QS"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
+        f.write(';\n')
+        
+        #---Real power demand---
+        f.write('param PD:=\n')
+        for i in self.data["timeseries"]["Demand"]:
+            for j in self.data["timeseries"]["Demand"].index.tolist():
+                f.write(str(i)+" "+str(j)+" "+str(float(self.data["timeseries"]["Demand"][i][j])/self.data["baseMVA"]["baseMVA"][0])+"\n")
+        f.write(';\n')
 
 
 

@@ -1,0 +1,10 @@
+Sat, 10 Jun 2023 19:07:41 INFO     OATS log file
+Sat, 10 Jun 2023 19:07:41 INFO     Program started
+Sat, 10 Jun 2023 19:07:41 INFO     Solver selected: ipopt
+Sat, 10 Jun 2023 19:07:41 INFO     Testcase selected: testcases/matpower/case14_battery.xlsx
+Sat, 10 Jun 2023 19:07:41 INFO     Model selected: ACOPF_multiperiod_battery
+Sat, 10 Jun 2023 19:07:41 INFO     Given model file found and selected from the models library
+Sat, 10 Jun 2023 19:07:41 INFO     Given testcase file found and selected from the testcase library
+Sat, 10 Jun 2023 19:07:41 ERROR    Constructing component 'PS' from data={(1, 0.0): 2, (0.0, 3): 0.0, (4, 0.5): 5, (1.0, 6): 4.0, (7, 4.0): 8, (0.5, 9): 0.0} failed:
+    RuntimeError: Failed to set value for param=PS, index=(1, 0.0), value=2.
+	source error message="Index '(1, 0.0)' is not valid for indexed component 'PS'"

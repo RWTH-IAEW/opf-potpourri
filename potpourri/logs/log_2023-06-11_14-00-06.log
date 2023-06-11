@@ -1,0 +1,16 @@
+Sun, 11 Jun 2023 14:00:06 INFO     OATS log file
+Sun, 11 Jun 2023 14:00:06 INFO     Program started
+Sun, 11 Jun 2023 14:00:06 INFO     Solver selected: ipopt
+Sun, 11 Jun 2023 14:00:06 INFO     Testcase selected: testcases/matpower/case14_battery.xlsx
+Sun, 11 Jun 2023 14:00:06 INFO     Model selected: ACOPF_multiperiod_battery
+Sun, 11 Jun 2023 14:00:06 INFO     Given model file found and selected from the models library
+Sun, 11 Jun 2023 14:00:06 INFO     Given testcase file found and selected from the testcase library
+Sun, 11 Jun 2023 14:00:08 WARNING  Loading a SolverResults object with a warning status into model.name="unknown";
+  - termination condition: infeasible
+  - message from solver: Ipopt 3.14.12\x3a Converged to a locally infeasible point. Problem may be infeasible.
+Sun, 11 Jun 2023 14:00:08 WARNING  Loading a SolverResults object with a warning status into model.name="unknown";
+  - termination condition: infeasible
+  - message from solver: Ipopt 3.14.12\x3a Converged to a locally infeasible point. Problem may be infeasible.
+Sun, 11 Jun 2023 14:00:08 WARNING  Loading a SolverResults object with a warning status into model.name="unknown";
+  - termination condition: infeasible
+  - message from solver: Ipopt 3.14.12\x3a Converged to a locally infeasible point. Problem may be infeasible.

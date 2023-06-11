@@ -49,13 +49,16 @@ class printoutput(object):
         newHeading(heading_text="Summary")
         endLine()
         tab_summary = []
-        tab_summary.append(['Time-Period','Conventional generation (MW)','Wind generation (MW)', 'Demand (MW)'])
+        tab_summary.append(['Time-Period','Conventional generation (MW)','Wind generation (MW)', 'Demand (MW)','PChar1','PDis1', 'e1', 'e2'])
         #print([d for d in self.instance.D])
         #print([self.instance.PD[d,0] for d in self.instance.D])
         #print(self.instance.PD["D2",0])
         for t in self.instance.T:
             tab_summary.append([t,sum(self.instance.pG[g,t].value for g in self.instance.G)*self.instance.baseMVA,\
-            sum(self.instance.pW[w].value for w in self.instance.WIND)*self.instance.baseMVA,sum(self.instance.PD[d,t] for d in self.instance.D)*self.instance.baseMVA])
+            sum(self.instance.pW[w].value for w in self.instance.WIND)*self.instance.baseMVA,sum(self.instance.PD[d,t] for d in self.instance.D)*self.instance.baseMVA,\
+            self.instance.pChar['B1',t].value*self.instance.baseMVA,\
+            self.instance.pDis['B1',t].value*self.instance.baseMVA,\
+            self.instance.e['B1',t].value*self.instance.baseMVA, self.instance.e['B2',t].value*self.instance.baseMVA])
 
         print (tabulate(tab_summary, headers="firstrow", tablefmt="grid"))
         endLine()
@@ -66,7 +69,7 @@ class printoutput(object):
     
     ################################################### YENI EKLENEN KISIMLAR ###################################################
     def printACOPF_multiperiod(self, testcase:str):
-        cols_summary    = ['Time Periods', 'Conventional generation (MW)', 'Wind generation (MW)', 'Demand (MW)','Objective function value']
+        cols_summary    = ['Time Periods', 'Solar Generation(MW)','Conventional generation (MW)', 'Wind generation (MW)', 'Demand (MW)','Objective function value']
         cols_bus        = ['Time Periods','name', 'angle(degs)', 'Voltage(p.u.)']
         cols_demand     = ['Time Periods','name', 'busname', 'PD(MW)', 'QD(MVar)', 'alpha' ] 
         cols_branch     = ['Time Periods','name', 'from_busname', 'to_busname', 'pLto(MW)', 'pLfrom(MW)', 'loss(MW)']
@@ -86,7 +89,7 @@ class printoutput(object):
 
         #-----write Data Frames
         for t in self.instance.T:
-            summary.loc[t] = pd.Series({'Time Periods':t,\
+            summary.loc[t] = pd.Series({'Time Periods':t, 'Solar Generation(MW)': sum(self.instance.PS[s,t] for s in self.instance.S)*self.instance.baseMVA,\
             'Conventional generation (MW)': sum(self.instance.pG[g,t].value for g in self.instance.G)*self.instance.baseMVA,\
             'Wind generation (MW)':sum(self.instance.pW[w].value for w in self.instance.WIND)*self.instance.baseMVA,\
             'Demand (MW)':sum(self.instance.PD[d,t] for d in self.instance.D)*self.instance.baseMVA,\
@@ -182,6 +185,8 @@ class printoutput(object):
                 #'pDis(MW)':self.instance.qDis[g[1],t].value*self.instance.baseMVA,\
                 'e(MW)':self.instance.e[g[1],t].value*self.instance.baseMVA})
                 ind += 1    
+
+
            
 
 

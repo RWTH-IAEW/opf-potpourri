@@ -29,13 +29,17 @@ model.b0     = Set(within=model.B)  # set of reference buses
 model.T      = Set() # set of time
 model.Tred   = Set()
 model.BATTERY = Set() # set of batteries
-
+model.Tend    = Param(within=NonNegativeReals) #number of periods
+model.S       = Set()  # Set of solar power plants 
+#Tend = 0
+#model.Tend = (Tend +1 for i in model.T)
 # generators, buses, loads linked to each bus b
 model.Gbs = Set(within=model.B * model.G)    # generator-bus mapping
 model.Dbs = Set(within=model.B * model.D)    # demand-bus mapping
 model.Wbs = Set(within=model.B * model.WIND) # wind-bus mapping
 model.SHUNTbs = Set(within=model.B * model.SHUNT)# shunt-bus mapping
 model.Bbs = Set(within=model.B * model.BATTERY) # battery-bus mapping
+model.Sbs = Set(within=model.B * model.S) #solar-bus mapping
 
 # --- parameters ---
 # line matrix
@@ -69,6 +73,12 @@ model.EMIN = Param(model.BATTERY, within=NonNegativeReals) # min SoC level
 model.E0 = Param(model.BATTERY, within=NonNegativeReals) # backlog energy
 model.nchar = Param(model.BATTERY, within=NonNegativeReals) # charging efficiency 
 model.ndis = Param(model.BATTERY, within=PositiveReals) #discharging efficiency
+#model.z = Var(within=Binary)
+#model.y = Var(within=Binary)
+
+#solar power plant
+model.PS = Param(model.S, model.T, within=NonNegativeReals)
+model.QS = Param(model.S, model.T, within=Reals)
 
 # lines
 model.SLmax = Param(model.L, within=NonNegativeReals) # max real power limit on flow in a line
@@ -123,7 +133,8 @@ model.BB = Param(model.SHUNT, within=Reals) #  shunt susceptance
 model.c2 = Param(model.G, within=NonNegativeReals)# generator cost coefficient c2 (*pG^2)
 model.c1 = Param(model.G, within=NonNegativeReals)# generator cost coefficient c1 (*pG)
 model.c0 = Param(model.G, within=NonNegativeReals)# generator cost coefficient c0
-#model.c3 = Param(model.BATTERY, within=NonNegativeReals) #battery cost coefficient 
+model.c3 = Param(model.BATTERY, within=NonNegativeReals) #battery cost coefficient 
+model.c4 = Param(model.S, within=NonNegativeReals)
 
 model.baseMVA = Param(within=NonNegativeReals)# base MVA
 
@@ -146,8 +157,8 @@ model.pLfromT  = Var(model.TRANSF, model.T, domain= Reals) # real power injected
 model.pLtoT    = Var(model.TRANSF, model.T, domain= Reals) # real power injected at b' onto transformer
 model.qLfromT  = Var(model.TRANSF, model.T, domain= Reals) # reactive power injected at b onto transformer
 model.qLtoT    = Var(model.TRANSF, model.T, domain= Reals) # reactive power injected at b' onto transformer
-model.pChar    = Var(model.BATTERY, model.T, domain = Reals) # real charging power of battery
-model.pDis     = Var(model.BATTERY, model.T, domain=Reals) # real discharging power of battery
+model.pChar    = Var(model.BATTERY, model.T, domain = NonNegativeReals) # real charging power of battery
+model.pDis     = Var(model.BATTERY, model.T, domain=NonNegativeReals) # real discharging power of battery
 model.qChar    = Var(model.BATTERY, model.T, domain= NonNegativeReals) # reactive charging power of battery
 model.qDis     = Var(model.BATTERY, model.T, domain=NonNegativeReals) # reactive discharging power of battery
 model.e        = Var(model.BATTERY, model.T, domain=NonNegativeReals) # state of charge in battery
@@ -168,20 +179,22 @@ def objective(model):
 model.OBJ = Objective(rule=objective, sense=minimize)
 '''
 def objective(model):
-        #TODO: sum(model.pChar[a,t] for a in model.BATTERY for t in model.T) +\
+    #TODO: sum(model.pChar[a,t] for a in model.BATTERY for t in model.T) +\
 
     obj = sum(model.c2[g]*(model.baseMVA*model.pG[g,t])**2+model.c1[g]*model.baseMVA*model.pG[g,t]+ model.c0[g] for g in model.G for t in model.T)+\
-    sum(model.VOLL[d]*(1-model.alpha[d])*model.baseMVA*model.PD[d,t] for d in model.D for t in model.T)
-    #sum(model.c3*model.pChar[a,t])
+    sum(model.VOLL[d]*(1-model.alpha[d])*model.baseMVA*model.PD[d,t] for d in model.D for t in model.T)+\
+    sum(model.c3[a]*model.pDis[a,t]*model.baseMVA for a in model.BATTERY for t in model.T) + sum(model.c4[s]*model.baseMVA*model.PS[s,t] for s in model.S for t in model.T)
     return obj
 model.OBJ = Objective(rule=objective, sense=minimize)
 
 # --- Kirchoff's current law at each bus b ---
 # TODO: Bengisu, make time-variant
 
+
 def KCL_real_def(model, b, t):
     return sum(model.pG[g, t] for g in model.G if (b,g) in model.Gbs) +\
     sum(model.pW[w,t] for w in model.WIND if (b,w) in model.Wbs)+\
+    sum(model.PS[s,t] for s in model.S if (b,s) in model.Sbs)+\
     sum(model.pDis[a,t] for a in model.BATTERY if (b,a) in model.Bbs)==\
     sum(model.pChar[a,t] for a in model.BATTERY if (b,a) in model.Bbs)+\
     sum(model.pD[d,t] for d in model.D if (b,d) in model.Dbs)+\
@@ -191,7 +204,8 @@ def KCL_real_def(model, b, t):
     sum(model.pLtoT[l,t] for l in model.TRANSF if model.AT[l,2]==b)+\
     sum(model.GB[s]*model.v[b,t]**2 for s in model.SHUNT if (b,s) in model.SHUNTbs) 
 def KCL_reactive_def(model, b, t):
-    return sum(model.qG[g,t] for g in model.G if (b,g) in model.Gbs) +\
+    return sum(model.qG[g,t] for g in model.G if (b,g) in model.Gbs) + \
+    sum(model.QS[s,t] for s in model.S if (b,s) in model.Sbs)+\
     sum(model.qW[w,t] for w in model.WIND if (b,w) in model.Wbs) == \
     sum(model.qD[d,t] for d in model.D if (b,d) in model.Dbs)+\
     sum(model.qLfrom[l,t] for l in model.L if model.A[l,1]==b)+ \
@@ -202,6 +216,28 @@ def KCL_reactive_def(model, b, t):
 model.KCL_real     = Constraint(model.B, model.T, rule=KCL_real_def)
 model.KCL_reactive = Constraint(model.B, model.T, rule=KCL_reactive_def)
 
+'''
+def KCL_real_def(model, b, t):
+    return sum(model.pG[g, t] for g in model.G if (b,g) in model.Gbs) +\
+    sum(model.pW[w,t] for w in model.WIND if (b,w) in model.Wbs)==\
+    sum(model.pD[d,t] for d in model.D if (b,d) in model.Dbs)+\
+    sum(model.pLfrom[l,t] for l in model.L if model.A[l,1]==b)+ \
+    sum(model.pLto[l,t] for l in model.L if model.A[l,2]==b)+\
+    sum(model.pLfromT[l,t] for l in model.TRANSF if model.AT[l,1]==b)+ \
+    sum(model.pLtoT[l,t] for l in model.TRANSF if model.AT[l,2]==b)+\
+    sum(model.GB[s]*model.v[b,t]**2 for s in model.SHUNT if (b,s) in model.SHUNTbs)
+def KCL_reactive_def(model, b, t):
+    return sum(model.qG[g,t] for g in model.G if (b,g) in model.Gbs) +\
+    sum(model.qW[w,t] for w in model.WIND if (b,w) in model.Wbs)== \
+    sum(model.qD[d,t] for d in model.D if (b,d) in model.Dbs)+\
+    sum(model.qLfrom[l,t] for l in model.L if model.A[l,1]==b)+ \
+    sum(model.qLto[l,t] for l in model.L if model.A[l,2]==b)+\
+    sum(model.qLfromT[l,t] for l in model.TRANSF if model.AT[l,1]==b)+ \
+    sum(model.qLtoT[l,t] for l in model.TRANSF if model.AT[l,2]==b)-\
+    sum(model.BB[s]*model.v[b,t]**2 for s in model.SHUNT if (b,s) in model.SHUNTbs)
+model.KCL_real     = Constraint(model.B, model.T, rule=KCL_real_def)
+model.KCL_reactive = Constraint(model.B, model.T, rule=KCL_reactive_def)
+'''
 # --- Kirchoff's voltage law on each line ---
 # TODO: Bengisu, make time-variant
 # battery systems in voltage law relevance?
@@ -337,7 +373,8 @@ def ref_bus_def(model,b,t):
 model.refbus = Constraint(model.b0, model.T, rule=ref_bus_def)
 
 
-# ---battery power and energy limits ---
+# ---battery power and energy limits
+# --- SIMPLIFIED FORMULATION---
 def Battery_Charge_Real_Power_Max(model, a, t):
     return model.pChar[a,t] <= model.PCmax[a]
 def Battery_Charge_Real_Power_Min(model, a, t):
@@ -346,26 +383,55 @@ def Battery_Discharge_Real_Power_Max(model, a, t):
     return model.pDis[a,t] <= model.PDmax[a]
 def Battery_Discharge_Real_Power_Min(model, a ,t):
     return model.pDis[a,t] >= model.PDmin[a]
+'''
+#--- EXACT FORMULATION ---
+def Battery_Charge_Real_Power_Max(model, a, t):
+    return model.pChar[a,t] <= model.PCmax[a]*model.z
+def Battery_Charge_Real_Power_Min(model, a, t):
+    return model.pChar[a,t] >= model.PCmin[a]*model.z
+def Battery_Discharge_Real_Power_Max(model, a, t):
+    return model.pDis[a,t] <= model.PDmax[a]*model.y
+def Battery_Discharge_Real_Power_Min(model, a ,t):
+    return model.pDis[a,t] >= model.PDmin[a]*model.y
+def complementary_rule(model):
+    return model.y + model.z == 1
+'''
 def Battery_Energy_Max(model, a ,t):
     return model.e[a,t] <= model.EMAX[a]
 def Battery_Energy_Min(model, a, t):
     return model.e[a,t] >= model.EMIN[a]
 
+   
 model.Battery_Charge_Max = Constraint(model.BATTERY, model.T, rule=Battery_Charge_Real_Power_Max)
 model.Battery_Charge_Min = Constraint(model.BATTERY, model.T, rule=Battery_Charge_Real_Power_Min)
 model.Battery_Discharge_Max = Constraint(model.BATTERY, model.T, rule=Battery_Discharge_Real_Power_Max)
-model.Battery_Discharge_Min = Constraint(model.BATTERY, model.T, rule=Battery_Discharge_Real_Power_Max)
+model.Battery_Discharge_Min = Constraint(model.BATTERY, model.T, rule=Battery_Discharge_Real_Power_Min)
 model.Battery_EMax = Constraint(model.BATTERY, model.T, rule=Battery_Energy_Max)
 model.Battery_Emin = Constraint(model.BATTERY, model.T, rule=Battery_Energy_Min)
+#model.complementary = Constraint(rule=complementary_rule)
+
 
 # --- battery energy level ---
 def energy_level_battery(model, a, t):
-    return model.e[a,t] == model.e[a,t-1] + model.nchar[a]*model.pChar[a,t-1] - model.pDis[a,t-1]/model.ndis[a]
-model.SoC = Constraint(model.BATTERY, model.Tred, rule=energy_level_battery)
+    if t==0:
+        return model.e[a,0] == model.E0[a]
+    #elif t==model.Tend.value:
+     #   return model.e[a, model.Tend.value] == model.e[a, 0]
+    else:
+        return model.e[a,t] == model.e[a,t-1] + model.nchar[a]*model.pChar[a,t-1] - model.pDis[a,t-1]/model.ndis[a]
+model.SoC = Constraint(model.BATTERY, model.T, rule=energy_level_battery)
+# burada t mi yoksa t-1 mi yapmam gerekiyor emin olamadim
 
-## battery starting
-## model.e[a,0] == model.E0[a]
-
+'''
+#battery starting
+def  battery_start(model, a):
+  return model.e[a,0] == model.E0[a]
+model.bt_start = Constraint(model.BATTERY, rule=battery_start)
+'''
+#start-end battery loop
+def battery_loop(model, a):
+   return model.e[a, model.Tend.value] == model.e[a, 0]
+model.loop = Constraint(model.BATTERY, rule=battery_loop)
 
 #todo anfangs endwert gleichung
 ## model.e[a,T-1] == model.E0[a]

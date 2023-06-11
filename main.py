@@ -23,5 +23,5 @@ else:
 #potpourri.uc(tc=test_case, solver="glpk", print_output=True, print_solver_output=True, print_model=False)
 # potpourri.scopf(tc=test_case, solver="gurobi", print_output=True, print_solver_output=True, print_model=False)
 potpourri.acopf(tc=test_case, solver="ipopt", print_output=True, print_solver_output=True, print_model=False, objective="multiperiod_battery")
-#/home/bengisu/potpourri/testcases/matpower/case14_battery.xlsx
-#/home/bengisu/potpourri/testcases/matpower/case14.xlsx
+#potpourri.acopf(tc=test_case, solver="mindtpy", print_output=True, print_solver_output=True, print_model=False, objective="multiperiod_battery")
+#

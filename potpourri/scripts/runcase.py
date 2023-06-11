@@ -93,8 +93,12 @@ def runcase(testcase,mod,opt=None):
     
     instance = model.create_instance(datfile)
     instance.dual = Suffix(direction=Suffix.IMPORT)
-
-    
+    print("_______________________________________________")
+    #instance.pprint(filename='model.lp')
+    #filename = os.path.join(os.path.dirname(__file__), 'model.lp')
+    #instance.write(filename, io_options={'symbolic_solver_labels': True})
+    with open("/home/bengisu/potpourri/testcases/matpower/doc", 'w') as output_file:    
+        instance.pprint(output_file)
 
     
     if not (opt['print_solver_output']):
@@ -106,8 +110,13 @@ def runcase(testcase,mod,opt=None):
     # ##################################
     #
     # ############Output###################
-    print('________________________________________________________________________________________________')
-    instance.Bbs.pprint()  
+    #print('_______________________________________Test_________________________________________________________')
+    #print(instance.pChar[g[1],t])
+    #for t in instance.T:
+    #   for g in instance.Bbs:
+    #       print(instance.e[g[1],t].value*instance.baseMVA)
+    #(print(g) for g in instance.Bbs)
+
     print('________________________________________________________________________________________')
     
     o = printoutput(results, instance,mod)
