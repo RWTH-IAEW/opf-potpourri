@@ -55,10 +55,10 @@ class printoutput(object):
         #print(self.instance.PD["D2",0])
         for t in self.instance.T:
             tab_summary.append([t,sum(self.instance.pG[g,t].value for g in self.instance.G)*self.instance.baseMVA,\
-            sum(self.instance.pW[w].value for w in self.instance.WIND)*self.instance.baseMVA,sum(self.instance.PD[d,t] for d in self.instance.D)*self.instance.baseMVA,\
-            self.instance.pChar['B1',t].value*self.instance.baseMVA,\
-            self.instance.pDis['B1',t].value*self.instance.baseMVA,\
-            self.instance.e['B1',t].value*self.instance.baseMVA, self.instance.e['B2',t].value*self.instance.baseMVA])
+            sum(self.instance.pW[w].value for w in self.instance.WIND)*self.instance.baseMVA,sum(self.instance.PD[d,t] for d in self.instance.D)*self.instance.baseMVA])
+            #self.instance.pChar['B1',t].value*self.instance.baseMVA,\
+            #self.instance.pDis['B1',t].value*self.instance.baseMVA,\
+            #self.instance.e['B1',t].value*self.instance.baseMVA, self.instance.e['B2',t].value*self.instance.baseMVA])
 
         print (tabulate(tab_summary, headers="firstrow", tablefmt="grid"))
         endLine()
@@ -196,7 +196,7 @@ class printoutput(object):
         #bus = bus.sort_values(['name'])
         #generation = generation.sort_values(['name'])
         #demand = demand.sort_values(['name'])
-        with pd.ExcelWriter(f'potpourri/results/results_multiperiod.xlsx') as writer:  
+        with pd.ExcelWriter(f'potpourri/results/results_multiperiod_exact.xlsx') as writer:  
             summary.to_excel(writer, sheet_name = 'summary',index=False)
             bus_sorted = bus.sort_values(by=['Time Periods', 'name'])  #Buses were not sorted before
             bus_sorted.to_excel(writer, sheet_name = 'bus',index=False)

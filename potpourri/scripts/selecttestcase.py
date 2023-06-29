@@ -26,7 +26,7 @@ def selecttestcase(test):
     df_zone        = xl.parse("zone")
     df_zonalNTC    = xl.parse("zonalNTC")
     df_Battery     = xl.parse("Battery")
-    df_solar       = xl.parse("solar")
+    df_solar       = xl.parse("solar",header=[0,1])
 
     data = {
     "bus": df_bus.dropna(how='all'),

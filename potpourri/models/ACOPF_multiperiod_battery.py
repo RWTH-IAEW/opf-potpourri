@@ -73,8 +73,8 @@ model.EMIN = Param(model.BATTERY, within=NonNegativeReals) # min SoC level
 model.E0 = Param(model.BATTERY, within=NonNegativeReals) # backlog energy
 model.nchar = Param(model.BATTERY, within=NonNegativeReals) # charging efficiency 
 model.ndis = Param(model.BATTERY, within=PositiveReals) #discharging efficiency
-#model.z = Var(within=Binary)
-#model.y = Var(within=Binary)
+model.z = Var(model.BATTERY, model.T, within=Binary)
+model.y = Var(model.BATTERY, model.T, within=Binary)
 
 #solar power plant
 model.PS = Param(model.S, model.T, within=NonNegativeReals)
@@ -183,7 +183,8 @@ def objective(model):
 
     obj = sum(model.c2[g]*(model.baseMVA*model.pG[g,t])**2+model.c1[g]*model.baseMVA*model.pG[g,t]+ model.c0[g] for g in model.G for t in model.T)+\
     sum(model.VOLL[d]*(1-model.alpha[d])*model.baseMVA*model.PD[d,t] for d in model.D for t in model.T)+\
-    sum(model.c3[a]*model.pDis[a,t]*model.baseMVA for a in model.BATTERY for t in model.T) + sum(model.c4[s]*model.baseMVA*model.PS[s,t] for s in model.S for t in model.T)
+    sum(model.c3[a]*model.pDis[a,t]*model.baseMVA for a in model.BATTERY for t in model.T) +\
+    sum(model.c4[s]*model.baseMVA*model.PS[s,t] for s in model.S for t in model.T)
     return obj
 model.OBJ = Objective(rule=objective, sense=minimize)
 
@@ -374,7 +375,25 @@ model.refbus = Constraint(model.b0, model.T, rule=ref_bus_def)
 
 
 # ---battery power and energy limits
-# --- SIMPLIFIED FORMULATION---
+
+#--- EXACT FORMULATION ---
+def Battery_Charge_Real_Power_Max(model, a, t):
+    return model.pChar[a,t] <= model.PCmax[a]*model.z[a,t]
+def Battery_Charge_Real_Power_Min(model, a, t):
+    return model.pChar[a,t] >= model.PCmin[a]*model.z[a,t]
+def Battery_Discharge_Real_Power_Max(model, a, t):
+    return model.pDis[a,t] <= model.PDmax[a]*model.y[a,t]
+def Battery_Discharge_Real_Power_Min(model, a ,t):
+    return model.pDis[a,t] >= model.PDmin[a]*model.y[a,t]
+def complementary_rule(model, a, t):
+    return model.y[a,t] + model.z[a,t] == 1
+def Battery_Energy_Max(model, a ,t):
+    return model.e[a,t] <= model.EMAX[a]
+def Battery_Energy_Min(model, a, t):
+    return model.e[a,t] >= model.EMIN[a]
+
+'''
+ # --- SIMPLIFIED FORMULATION---
 def Battery_Charge_Real_Power_Max(model, a, t):
     return model.pChar[a,t] <= model.PCmax[a]
 def Battery_Charge_Real_Power_Min(model, a, t):
@@ -383,40 +402,48 @@ def Battery_Discharge_Real_Power_Max(model, a, t):
     return model.pDis[a,t] <= model.PDmax[a]
 def Battery_Discharge_Real_Power_Min(model, a ,t):
     return model.pDis[a,t] >= model.PDmin[a]
-'''
-#--- EXACT FORMULATION ---
-def Battery_Charge_Real_Power_Max(model, a, t):
-    return model.pChar[a,t] <= model.PCmax[a]*model.z
-def Battery_Charge_Real_Power_Min(model, a, t):
-    return model.pChar[a,t] >= model.PCmin[a]*model.z
-def Battery_Discharge_Real_Power_Max(model, a, t):
-    return model.pDis[a,t] <= model.PDmax[a]*model.y
-def Battery_Discharge_Real_Power_Min(model, a ,t):
-    return model.pDis[a,t] >= model.PDmin[a]*model.y
-def complementary_rule(model):
-    return model.y + model.z == 1
-'''
 def Battery_Energy_Max(model, a ,t):
     return model.e[a,t] <= model.EMAX[a]
 def Battery_Energy_Min(model, a, t):
     return model.e[a,t] >= model.EMIN[a]
-
-   
+'''
+'''
+#---EXTENDED MODEL---
+def Battery_Charge_Real_Power_Max(model, a, t):
+    return model.pChar[a,t] <= model.PCmax[a]
+def Battery_Charge_Real_Power_Min(model, a, t):
+    return model.pChar[a,t] >= model.PCmin[a]
+def Battery_Discharge_Real_Power_Max(model, a, t):
+    return model.pDis[a,t] <= model.PDmax[a]
+def Battery_Discharge_Real_Power_Min(model, a ,t):
+    return model.pDis[a,t] >= model.PDmin[a]
+def Battery_Energy_Max(model, a ,t):
+    return model.e[a,t] <= model.EMAX[a]
+def Battery_Energy_Min(model, a, t):
+    return model.e[a,t] >= model.EMIN[a]
+def Charge_Constraint(model, a, t):
+    return model.pChar[a,t] <= ((model.EMAX[a]-model.E0[a]) / model.nchar[a])
+def Discharge_Constraint(model, a ,t):
+    return model.pDis[a,t] <= ((model.E0[a]-model.EMIN[a])*model.ndis[a])
+def Discharge_Charge_Constraint(model, a, t):
+    return model.pDis[a,t] <= (model.PDmax[a] - ((model.PDmax[a]/model.PCmax[a])*model.pChar[a,t]))
+'''
 model.Battery_Charge_Max = Constraint(model.BATTERY, model.T, rule=Battery_Charge_Real_Power_Max)
 model.Battery_Charge_Min = Constraint(model.BATTERY, model.T, rule=Battery_Charge_Real_Power_Min)
 model.Battery_Discharge_Max = Constraint(model.BATTERY, model.T, rule=Battery_Discharge_Real_Power_Max)
 model.Battery_Discharge_Min = Constraint(model.BATTERY, model.T, rule=Battery_Discharge_Real_Power_Min)
 model.Battery_EMax = Constraint(model.BATTERY, model.T, rule=Battery_Energy_Max)
 model.Battery_Emin = Constraint(model.BATTERY, model.T, rule=Battery_Energy_Min)
-#model.complementary = Constraint(rule=complementary_rule)
+model.complementary = Constraint(model.BATTERY, model.T, rule=complementary_rule)
+#model.Charge_Con = Constraint(model.BATTERY, model.T, rule=Charge_Constraint)
+#model.Discharge_Con = Constraint(model.BATTERY, model.T, rule=Discharge_Constraint)
+#model.Discharge_Charge = Constraint(model.BATTERY, model.T, rule=Discharge_Charge_Constraint)
 
 
 # --- battery energy level ---
 def energy_level_battery(model, a, t):
     if t==0:
         return model.e[a,0] == model.E0[a]
-    #elif t==model.Tend.value:
-     #   return model.e[a, model.Tend.value] == model.e[a, 0]
     else:
         return model.e[a,t] == model.e[a,t-1] + model.nchar[a]*model.pChar[a,t-1] - model.pDis[a,t-1]/model.ndis[a]
 model.SoC = Constraint(model.BATTERY, model.T, rule=energy_level_battery)
@@ -433,6 +460,4 @@ def battery_loop(model, a):
    return model.e[a, model.Tend.value] == model.e[a, 0]
 model.loop = Constraint(model.BATTERY, rule=battery_loop)
 
-#todo anfangs endwert gleichung
-## model.e[a,T-1] == model.E0[a]
 

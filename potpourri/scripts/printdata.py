@@ -637,13 +637,13 @@ class printdata(object):
         for i in self.data["Battery"].index.tolist():
             f.write(str(self.data["Battery"]["name"][i])+" "+str(float(self.data["Battery"]["c3"][i]))+"\n")
         f.write(';\n')
-        
+        '''
         #---set of solar plant---
         f.write('set S:=\n')
         f.write(str(self.data["solar"]["name"][1])+"\n")
         f.write(';\n')
 
-
+        
         #---Solar Cost---
         f.write('param c4:=\n')
         f.write(str(self.data["solar"]["name"][1])+" "+str(float(self.data["solar"]["c4"][1]))+"\n")
@@ -666,14 +666,49 @@ class printdata(object):
         for i in self.data["solar"].index.tolist():
             f.write(str(self.data["solar"]["name"][i])+" "+str(self.data["solar"]["timeperiod"][i])+" "+str(float(self.data["solar"]["QS"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
         f.write(';\n')
-        
+        '''
+        '''
         #---Real power demand---
         f.write('param PD:=\n')
         for i in self.data["timeseries"]["Demand"]:
             for j in self.data["timeseries"]["Demand"].index.tolist():
                 f.write(str(i)+" "+str(j)+" "+str(float(self.data["timeseries"]["Demand"][i][j])/self.data["baseMVA"]["baseMVA"][0])+"\n")
         f.write(';\n')
+        '''
 
+        #---set of solar plant---
+        f.write('set S:=\n') # 2 Sets mit S:=????
+        for i in self.data["solar"]["busname"]:
+            f.write(str(i)+"\n")
+        f.write(';\n')
+
+
+        #---set of solar-bus mapping ---
+        f.write('set Sbs:=\n')
+        for i in self.data["solar"]["busname"]:
+            f.write(str(self.data["solar"]["busname"][i][0])+" "+str(i)+"\n")
+        f.write(';\n')
+
+        #---Solar real power production---
+        f.write('param PS:=\n')
+        for i in self.data["solar"]["PS"]:
+            for j in self.data["solar"]["PS"].index.tolist():
+                f.write(str(i)+" "+str(j)+" "+str(float(self.data["solar"]["PS"][i][j])/self.data["baseMVA"]["baseMVA"][0])+"\n")
+        f.write(';\n')
+        
+        #---Solar reactive power production---
+        f.write('param QS:=\n')
+        for i in self.data["solar"]["QS"]:
+            for j in self.data["solar"]["QS"].index.tolist():
+                f.write(str(i)+" "+str(j)+" "+str(float(self.data["solar"]["QS"][i][j])/self.data["baseMVA"]["baseMVA"][0])+"\n")
+        f.write(';\n')
+        
+        #---Solar Cost---
+        f.write('param c4:=\n')
+        for i in self.data["solar"]["c4"]:
+            for j in self.data["solar"]["c4"].index.tolist():
+                f.write(str(i)+" "+str(self.data["solar"]["c4"][i][0])+"\n")
+        f.write(';\n')
 
 
 

@@ -3,7 +3,7 @@ import potpourri.scripts.run as potpourri
 from potpourri.scripts.utils import showParameter
 
 test_case_folder = "testcases/matpower/"
-test_case = "case14_battery.xlsx" #"case24_ieee_rts.xlsx"
+test_case = "case14_battery2.xlsx" # "case14_battery.xlsx" #"case24_ieee_rts.xlsx"
 test_case = os.path.join(test_case_folder, test_case)
 showParameter(testcase=test_case)
     
@@ -24,4 +24,5 @@ else:
 # potpourri.scopf(tc=test_case, solver="gurobi", print_output=True, print_solver_output=True, print_model=False)
 potpourri.acopf(tc=test_case, solver="ipopt", print_output=True, print_solver_output=True, print_model=False, objective="multiperiod_battery")
 #potpourri.acopf(tc=test_case, solver="mindtpy", print_output=True, print_solver_output=True, print_model=False, objective="multiperiod_battery")
+#potpourri.acopf(tc=test_case, solver="apopt.py", print_output=True, print_solver_output=True, print_model=False, objective="multiperiod_battery")
 #

@@ -164,7 +164,7 @@ def convert_pp_net(net: pp.pandapowerNet, value_of_lost_load: int = 100000) -> N
 
 if __name__ == "__main__":
     
-    sb_code1 = "1-MV-rural--0-sw"  # rural MV grid of scenario 0 with full switchs
+    sb_code1 = "1-MV-rural--1-sw"  # rural MV grid of scenario 0 with full switchs
     net = sb.get_simbench_net(sb_code1)
     pp.runpp(net)
     
