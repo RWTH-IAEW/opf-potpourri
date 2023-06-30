@@ -2,8 +2,8 @@ import os
 import potpourri.scripts.run as potpourri
 from potpourri.scripts.utils import showParameter
 
-test_case_folder = "testcases/matpower/"
-test_case = "test_simbench.xlsx" # "case14_battery.xlsx" #"case24_ieee_rts.xlsx" test_simbench
+test_case_folder = "testcases/simbench/"
+test_case = "1-LV-rural1--1-no_sw.xlsx" # "case14_battery.xlsx" #"case24_ieee_rts.xlsx" test_simbench
 test_case = os.path.join(test_case_folder, test_case)
 showParameter(testcase=test_case)
     
