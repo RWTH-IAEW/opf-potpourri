@@ -82,7 +82,7 @@ def runcase(testcase,mod,opt=None):
         if mod=='DCOPF_BM' or mod=='SCOPF_BM':
             r.printDCBM()
 
-
+    logging.info("Dat-file written, start optimisation")
 
     ###############Solver settings####################
     optimise = SolverFactory(opt['solver'])
@@ -95,9 +95,9 @@ def runcase(testcase,mod,opt=None):
     instance.dual = Suffix(direction=Suffix.IMPORT)
     print("_______________________________________________")
     #instance.pprint(filename='model.lp')
-    #filename = os.path.join(os.path.dirname(__file__), 'model.lp')
+    filename = os.path.join(os.path.dirname(__file__), 'model.lp')
     #instance.write(filename, io_options={'symbolic_solver_labels': True})
-    with open("/home/bengisu/potpourri/testcases/matpower/doc", 'w') as output_file:    
+    with open(os.getcwd() + "/testcases/matpower/doc", 'w') as output_file:    
         instance.pprint(output_file)
 
     

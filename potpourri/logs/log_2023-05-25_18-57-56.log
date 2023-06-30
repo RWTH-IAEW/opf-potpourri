@@ -1,0 +1,42 @@
+Thu, 25 May 2023 18:57:56 INFO     OATS log file
+Thu, 25 May 2023 18:57:56 INFO     Program started
+Thu, 25 May 2023 18:57:56 INFO     Set parameter WLSAccessID
+Thu, 25 May 2023 18:57:56 INFO     Set parameter WLSSecret
+Thu, 25 May 2023 18:57:56 INFO     Set parameter LicenseID to value 949857
+Thu, 25 May 2023 18:57:56 INFO     Academic license - for non-commercial use only - registered to steffen.kortmann@rwth-aachen.de
+Thu, 25 May 2023 18:57:56 INFO     Solver selected: glpk
+Thu, 25 May 2023 18:57:56 INFO     Testcase selected: /home/skortmann/potpourri/testcases/matpower/case24_ieee_rts.xlsx
+Thu, 25 May 2023 18:57:56 INFO     Model selected: DCOPF
+Thu, 25 May 2023 18:57:56 INFO     Given model file found and selected from the models library
+Thu, 25 May 2023 18:57:57 INFO     Given testcase file found and selected from the testcase library
+Thu, 25 May 2023 18:57:57 INFO     Done!
+Thu, 25 May 2023 18:57:57 INFO     Solver selected: gurobi
+Thu, 25 May 2023 18:57:57 INFO     Testcase selected: /home/skortmann/potpourri/testcases/matpower/case24_ieee_rts.xlsx
+Thu, 25 May 2023 18:57:57 INFO     Model selected: DCOPF_quadratic
+Thu, 25 May 2023 18:57:57 INFO     Given model file found and selected from the models library
+Thu, 25 May 2023 18:57:57 INFO     Given testcase file found and selected from the testcase library
+Thu, 25 May 2023 18:57:58 INFO     Done!
+Thu, 25 May 2023 18:57:58 INFO     Solver selected: ipopt
+Thu, 25 May 2023 18:57:58 INFO     Testcase selected: /home/skortmann/potpourri/testcases/matpower/case24_ieee_rts.xlsx
+Thu, 25 May 2023 18:57:58 INFO     Model selected: ACOPF
+Thu, 25 May 2023 18:57:58 INFO     Given model file found and selected from the models library
+Thu, 25 May 2023 18:57:58 INFO     Given testcase file found and selected from the testcase library
+Thu, 25 May 2023 18:57:59 INFO     Done!
+Thu, 25 May 2023 18:57:59 INFO     Solver selected: ipopt
+Thu, 25 May 2023 18:57:59 INFO     Testcase selected: /home/skortmann/potpourri/testcases/matpower/case24_ieee_rts.xlsx
+Thu, 25 May 2023 18:57:59 INFO     Model selected: ACOPF_min_gen
+Thu, 25 May 2023 18:57:59 INFO     Given model file found and selected from the models library
+Thu, 25 May 2023 18:57:59 INFO     Given testcase file found and selected from the testcase library
+Thu, 25 May 2023 18:58:00 INFO     Done!
+Thu, 25 May 2023 18:58:00 INFO     Solver selected: ipopt
+Thu, 25 May 2023 18:58:00 INFO     Testcase selected: /home/skortmann/potpourri/testcases/matpower/case24_ieee_rts.xlsx
+Thu, 25 May 2023 18:58:00 INFO     Model selected: ACOPF_max_cost
+Thu, 25 May 2023 18:58:00 INFO     Given model file found and selected from the models library
+Thu, 25 May 2023 18:58:00 INFO     Given testcase file found and selected from the testcase library
+Thu, 25 May 2023 18:58:00 INFO     Done!
+Thu, 25 May 2023 18:58:00 INFO     Solver selected: gurobi
+Thu, 25 May 2023 18:58:00 INFO     Testcase selected: /home/skortmann/potpourri/testcases/matpower/case24_ieee_rts.xlsx
+Thu, 25 May 2023 18:58:00 INFO     Model selected: SCOPF
+Thu, 25 May 2023 18:58:00 INFO     Given model file found and selected from the models library
+Thu, 25 May 2023 18:58:00 INFO     Given testcase file found and selected from the testcase library
+Thu, 25 May 2023 18:58:01 INFO     Done!

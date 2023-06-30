@@ -1,0 +1,79 @@
+Fri, 30 Jun 2023 01:11:13 INFO     OATS log file
+Fri, 30 Jun 2023 01:11:13 INFO     Program started
+Fri, 30 Jun 2023 01:11:13 INFO     Solver selected: ipopt
+Fri, 30 Jun 2023 01:11:13 INFO     Testcase selected: testcases/matpower/test_simbench.xlsx
+Fri, 30 Jun 2023 01:11:13 INFO     Model selected: ACOPF_multiperiod_battery_exact
+Fri, 30 Jun 2023 01:11:13 INFO     Given model file found and selected from the models library
+Fri, 30 Jun 2023 01:11:14 INFO     Given testcase file found and selected from the testcase library
+Fri, 30 Jun 2023 01:11:14 INFO     Start writing multi-period for demand
+Fri, 30 Jun 2023 01:11:14 INFO     Start writing battery model
+Fri, 30 Jun 2023 01:11:14 INFO     Dat-file written, start optimisation
+Fri, 30 Jun 2023 01:11:14 WARNING  Element GLV1.101 already exists in Set G; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element SGen already exists in Set G; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element GLV1.101 already exists in Set G; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element SGen already exists in Set G; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element GLV1.101 already exists in Set G; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element SGen already exists in Set G; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element GLV1.101 already exists in Set G; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element SGen already exists in Set G; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element GLV1.101 already exists in Set G; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element SGen already exists in Set G; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element GLV1.101 already exists in Set G; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element SGen already exists in Set G; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element GLV1.101 already exists in Set G; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element SGen already exists in Set G; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element DLV1.101 already exists in Set D; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element Load already exists in Set D; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element DLV1.101 already exists in Set D; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element Load already exists in Set D; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element DLV1.101 already exists in Set D; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element Load already exists in Set D; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element DLV1.101 already exists in Set D; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element Load already exists in Set D; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element DLV1.101 already exists in Set D; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element Load already exists in Set D; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element DLV1.101 already exists in Set D; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element Load already exists in Set D; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element DLV1.101 already exists in Set D; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element Load already exists in Set D; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element DLV1.101 already exists in Set D; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element Load already exists in Set D; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element DLV1.101 already exists in Set D; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element Load already exists in Set D; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element DLV1.101 already exists in Set D; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element Load already exists in Set D; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element DLV1.101 already exists in Set D; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element Load already exists in Set D; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element DLV1.101 already exists in Set D; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element Load already exists in Set D; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element DLV1.101 already exists in Set D; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element Load already exists in Set D; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element LV1.101 already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element Load already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element LV1.101 already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element Load already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element LV1.101 already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element Load already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element LV1.101 already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element Load already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element LV1.101 already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element Load already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element LV1.101 already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element Load already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element LV1.101 already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element Load already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element LV1.101 already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element Load already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element LV1.101 already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element Load already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element LV1.101 already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element Load already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element LV1.101 already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element Load already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element LV1.101 already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element Load already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element LV1.101 already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:11:14 WARNING  Element Load already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:11:14 ERROR    Constructing component 'Gbs' from data={None: [7, 'GLV1.101', 'SGen', 1, 11, 'GLV1.101', 'SGen', 2, 8, 'GLV1.101', 'SGen', 4, 13, 'GLV1.101', 'SGen', 3, 3, 'GLV1.101', 'SGen', 5, 1, 'GLV1.101', 'SGen', 6, 2, 'GLV1.101', 'SGen', 7, 5, 'GLV1.101', 'SGen', 8]} failed:
+    ValueError: Cannot add value ('SGen', 1) to Set Gbs.
+	The value is not in the domain Gbs_domain

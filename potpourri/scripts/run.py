@@ -18,16 +18,37 @@ current_datetime = datetime.datetime.now()
 # Format the datetime as desired
 datetime_str = current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
 
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s %(levelname)-8s %(message)s',
-                    datefmt='%a, %d %b %Y %H:%M:%S',
-                    filename=f'potpourri/logs/log_{datetime_str}.log',
-                    filemode='w')
-logging.info("OATS log file")
-logging.info("Program started")
+import logging
+
+# Configure the logger
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+# Create a file handler to write logs to a file
+log_file = f'potpourri/logs/log_{datetime_str}.log'
+file_handler = logging.FileHandler(log_file, mode='w')
+file_handler.setLevel(logging.INFO)
+
+# Create a console handler to display logs in the terminal/console
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+
+# Define the log format
+formatter = logging.Formatter('%(asctime)s %(levelname)-8s %(message)s', datefmt='%a, %d %b %Y %H:%M:%S')
+file_handler.setFormatter(formatter)
+console_handler.setFormatter(formatter)
+
+# Add the handlers to the logger
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
+
+# Log messages
+logger.info("OATS log file")
+logger.info("Program started")
 
 oats_dir = os.path.dirname(os.path.realpath(__file__))
-default_testcase = "/home/skortmann/potpourri/testcases/matpower/case24_ieee_rts.xlsx"
+current_path = os.getcwd()
+default_testcase = current_path + "/testcases/matpower/case24_ieee_rts.xlsx"
 
 #----------------------------------------------------------------------
 # DC Load flow
@@ -149,6 +170,8 @@ def acopf(tc:str = 'default',
         model = "ACOPF_multiperiod"    
     elif objective == "multiperiod_battery":
         model = "ACOPF_multiperiod_battery" ###burasi ne yapiyor
+    elif objective == "multiperiod_battery_exact":
+        model = "ACOPF_multiperiod_battery_exact"
     # ==log==
     logging.info("Solver selected: "+opt['solver'])
     logging.info("Testcase selected: "+testcase)

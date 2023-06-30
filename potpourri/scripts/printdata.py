@@ -8,6 +8,7 @@
 # Copyright (c) 2015 by W Bukhsh, Glasgow, Scotland
 # OATS is distributed under the GNU GENERAL PUBLIC LICENSE v3 (see LICENSE file for details).
 #==================================================================
+import logging
 import datetime
 import math
 import sys
@@ -530,6 +531,8 @@ class printdata(object):
 
     # TODO: WRite multiperiod ############################################################################################
     def printACOPF_multiperiod(self):
+        
+        logging.info("Start writing multi-period for demand")
 
         #f = open(self.datfile, 'r')
 
@@ -573,6 +576,9 @@ class printdata(object):
 
 
     def printACOPF_multiperiod_battery(self):
+        
+        logging.info("Start writing battery model")
+        
         f = open(self.datfile, 'a')
         print(self.data)
         #---set of batteries---
