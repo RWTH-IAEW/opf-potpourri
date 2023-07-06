@@ -73,8 +73,8 @@ model.EMIN = Param(model.BATTERY, within=NonNegativeReals) # min SoC level
 model.E0 = Param(model.BATTERY, within=NonNegativeReals) # backlog energy
 model.nchar = Param(model.BATTERY, within=NonNegativeReals) # charging efficiency 
 model.ndis = Param(model.BATTERY, within=PositiveReals) #discharging efficiency
-model.z = Var(model.BATTERY, model.T, within=Binary)
-model.y = Var(model.BATTERY, model.T, within=Binary)
+#model.z = Var(model.BATTERY, model.T, within=Binary)
+#model.y = Var(model.BATTERY, model.T, within=Binary)
 
 #solar power plant
 model.PS = Param(model.S, model.T, within=NonNegativeReals)
@@ -375,7 +375,7 @@ model.refbus = Constraint(model.b0, model.T, rule=ref_bus_def)
 
 
 # ---battery power and energy limits
-
+'''
 #--- EXACT FORMULATION ---
 def Battery_Charge_Real_Power_Max(model, a, t):
     return model.pChar[a,t] <= model.PCmax[a]*model.z[a,t]
@@ -391,8 +391,8 @@ def Battery_Energy_Max(model, a ,t):
     return model.e[a,t] <= model.EMAX[a]
 def Battery_Energy_Min(model, a, t):
     return model.e[a,t] >= model.EMIN[a]
-
 '''
+
  # --- SIMPLIFIED FORMULATION---
 def Battery_Charge_Real_Power_Max(model, a, t):
     return model.pChar[a,t] <= model.PCmax[a]
@@ -406,7 +406,7 @@ def Battery_Energy_Max(model, a ,t):
     return model.e[a,t] <= model.EMAX[a]
 def Battery_Energy_Min(model, a, t):
     return model.e[a,t] >= model.EMIN[a]
-'''
+
 '''
 #---EXTENDED MODEL---
 def Battery_Charge_Real_Power_Max(model, a, t):
@@ -434,7 +434,7 @@ model.Battery_Discharge_Max = Constraint(model.BATTERY, model.T, rule=Battery_Di
 model.Battery_Discharge_Min = Constraint(model.BATTERY, model.T, rule=Battery_Discharge_Real_Power_Min)
 model.Battery_EMax = Constraint(model.BATTERY, model.T, rule=Battery_Energy_Max)
 model.Battery_Emin = Constraint(model.BATTERY, model.T, rule=Battery_Energy_Min)
-model.complementary = Constraint(model.BATTERY, model.T, rule=complementary_rule)
+#model.complementary = Constraint(model.BATTERY, model.T, rule=complementary_rule)
 #model.Charge_Con = Constraint(model.BATTERY, model.T, rule=Charge_Constraint)
 #model.Discharge_Con = Constraint(model.BATTERY, model.T, rule=Discharge_Constraint)
 #model.Discharge_Charge = Constraint(model.BATTERY, model.T, rule=Discharge_Charge_Constraint)

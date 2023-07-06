@@ -196,7 +196,7 @@ class printoutput(object):
         #bus = bus.sort_values(['name'])
         #generation = generation.sort_values(['name'])
         #demand = demand.sort_values(['name'])
-        with pd.ExcelWriter(f'potpourri/results/results_multiperiod_exact.xlsx') as writer:  
+        with pd.ExcelWriter(f'potpourri/results/results_multiperiod_2.xlsx') as writer:  
             summary.to_excel(writer, sheet_name = 'summary',index=False)
             bus_sorted = bus.sort_values(by=['Time Periods', 'name'])  #Buses were not sorted before
             bus_sorted.to_excel(writer, sheet_name = 'bus',index=False)

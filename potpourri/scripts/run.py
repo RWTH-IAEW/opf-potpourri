@@ -172,6 +172,10 @@ def acopf(tc:str = 'default',
         model = "ACOPF_multiperiod_battery" ###burasi ne yapiyor
     elif objective == "multiperiod_battery_exact":
         model = "ACOPF_multiperiod_battery_exact"
+    elif objective == "multiperiod_battery_simplified":
+        model = "ACOPF_multiperiod_battery_simplified"
+    elif objective == "multiperiod_battery_relaxed":
+        model = "ACOPF_multiperiod_battery_relaxed"
     # ==log==
     logging.info("Solver selected: "+opt['solver'])
     logging.info("Testcase selected: "+testcase)

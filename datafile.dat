@@ -1,6 +1,6 @@
 #This is Python generated data file for Pyomo model
 #_author_:W. Bukhsh
-#Time stamp: 2023-06-30 02:13:00.006013
+#Time stamp: 2023-07-06 09:42:42.856390
 set B:=
 0
 1
@@ -185,34 +185,34 @@ param SLmaxT:=
 MV1.101-LV1.101-Trafo_1 99.99
 ;
 param c2:=
-LV1.101_SGen_1 98.0
-LV1.101_SGen_2 98.0
-LV1.101_SGen_4 98.0
-LV1.101_SGen_3 98.0
-LV1.101_SGen_5 98.0
-LV1.101_SGen_6 98.0
-LV1.101_SGen_7 98.0
-LV1.101_SGen_8 98.0
+LV1.101_SGen_1 65.0
+LV1.101_SGen_2 65.0
+LV1.101_SGen_4 65.0
+LV1.101_SGen_3 65.0
+LV1.101_SGen_5 65.0
+LV1.101_SGen_6 65.0
+LV1.101_SGen_7 65.0
+LV1.101_SGen_8 65.0
 ;
 param c1:=
-LV1.101_SGen_1 10.0
-LV1.101_SGen_2 10.0
-LV1.101_SGen_4 10.0
-LV1.101_SGen_3 10.0
-LV1.101_SGen_5 10.0
-LV1.101_SGen_6 10.0
-LV1.101_SGen_7 10.0
-LV1.101_SGen_8 10.0
+LV1.101_SGen_1 45.0
+LV1.101_SGen_2 45.0
+LV1.101_SGen_4 45.0
+LV1.101_SGen_3 45.0
+LV1.101_SGen_5 45.0
+LV1.101_SGen_6 45.0
+LV1.101_SGen_7 45.0
+LV1.101_SGen_8 45.0
 ;
 param c0:=
-LV1.101_SGen_1 5.0
-LV1.101_SGen_2 5.0
-LV1.101_SGen_4 5.0
-LV1.101_SGen_3 5.0
-LV1.101_SGen_5 5.0
-LV1.101_SGen_6 5.0
-LV1.101_SGen_7 5.0
-LV1.101_SGen_8 5.0
+LV1.101_SGen_1 94.0
+LV1.101_SGen_2 94.0
+LV1.101_SGen_4 94.0
+LV1.101_SGen_3 94.0
+LV1.101_SGen_5 94.0
+LV1.101_SGen_6 94.0
+LV1.101_SGen_7 94.0
+LV1.101_SGen_8 94.0
 ;
 param QD:=
 LV1.101_Load_1 0.024
@@ -303,7 +303,7 @@ LV1.101_Line_9 -11.90974498993984
 LV1.101_Line_10 -12.333823189568188
 LV1.101_Line_12 -100.86879274610021
 LV1.101_Line_13 -35.524089972130916
-LV1.101_Line_11 -633.0394997791329
+LV1.101_Line_11 -633.0444997791329
 ;
 param B12:=
 LV1.101_Line_1 29.316451104235952
@@ -348,7 +348,7 @@ LV1.101_Line_9 -11.90974498993984
 LV1.101_Line_10 -12.333823189568188
 LV1.101_Line_12 -100.86879274610021
 LV1.101_Line_13 -35.524089972130916
-LV1.101_Line_11 -633.0394997791329
+LV1.101_Line_11 -633.0444997791329
 ;
 param G11T:=
 MV1.101-LV1.101-Trafo_1 5.206164098292378
@@ -375,24 +375,24 @@ param B22T:=
 MV1.101-LV1.101-Trafo_1 -4.999999999999999
 ;
 param QGmin:=
-LV1.101_SGen_1 0.0
-LV1.101_SGen_2 0.0
-LV1.101_SGen_4 0.0
-LV1.101_SGen_3 0.0
-LV1.101_SGen_5 0.0
-LV1.101_SGen_6 0.0
-LV1.101_SGen_7 0.0
-LV1.101_SGen_8 0.0
+LV1.101_SGen_1 -0.2
+LV1.101_SGen_2 -0.2
+LV1.101_SGen_4 -0.2
+LV1.101_SGen_3 -0.2
+LV1.101_SGen_5 -0.2
+LV1.101_SGen_6 -0.2
+LV1.101_SGen_7 -0.2
+LV1.101_SGen_8 -0.2
 ;
 param QGmax:=
-LV1.101_SGen_1 0.0
-LV1.101_SGen_2 0.0
-LV1.101_SGen_4 0.0
-LV1.101_SGen_3 0.0
-LV1.101_SGen_5 0.0
-LV1.101_SGen_6 0.0
-LV1.101_SGen_7 0.0
-LV1.101_SGen_8 0.0
+LV1.101_SGen_1 0.2
+LV1.101_SGen_2 0.2
+LV1.101_SGen_4 0.2
+LV1.101_SGen_3 0.2
+LV1.101_SGen_5 0.2
+LV1.101_SGen_6 0.2
+LV1.101_SGen_7 0.2
+LV1.101_SGen_8 0.2
 ;
 param Vmin:=
 0 0.965
@@ -856,20 +856,20 @@ set Bbs:=
 13 LV1.101_Load_14_bat
 ;
 param PCmax:=
-LV1.101_Load_1_bat 0.2
-LV1.101_Load_2_bat 0.2
-LV1.101_Load_3_bat 0.2
-LV1.101_Load_4_bat 0.2
-LV1.101_Load_5_bat 0.2
-LV1.101_Load_6_bat 0.2
-LV1.101_Load_7_bat 0.2
-LV1.101_Load_8_bat 0.2
-LV1.101_Load_9_bat 0.2
-LV1.101_Load_10_bat 0.2
-LV1.101_Load_11_bat 0.2
-LV1.101_Load_12_bat 0.2
-LV1.101_Load_13_bat 0.2
-LV1.101_Load_14_bat 0.2
+LV1.101_Load_1_bat 0.0
+LV1.101_Load_2_bat 0.0
+LV1.101_Load_3_bat 0.0
+LV1.101_Load_4_bat 0.0
+LV1.101_Load_5_bat 0.0
+LV1.101_Load_6_bat 0.0
+LV1.101_Load_7_bat 0.0
+LV1.101_Load_8_bat 0.0
+LV1.101_Load_9_bat 0.0
+LV1.101_Load_10_bat 0.0
+LV1.101_Load_11_bat 0.0
+LV1.101_Load_12_bat 0.0
+LV1.101_Load_13_bat 0.0
+LV1.101_Load_14_bat 0.0
 ;
 param PCmin:=
 LV1.101_Load_1_bat 0.0
@@ -888,20 +888,20 @@ LV1.101_Load_13_bat 0.0
 LV1.101_Load_14_bat 0.0
 ;
 param PDmax:=
-LV1.101_Load_1_bat 0.2
-LV1.101_Load_2_bat 0.2
-LV1.101_Load_3_bat 0.2
-LV1.101_Load_4_bat 0.2
-LV1.101_Load_5_bat 0.2
-LV1.101_Load_6_bat 0.2
-LV1.101_Load_7_bat 0.2
-LV1.101_Load_8_bat 0.2
-LV1.101_Load_9_bat 0.2
-LV1.101_Load_10_bat 0.2
-LV1.101_Load_11_bat 0.2
-LV1.101_Load_12_bat 0.2
-LV1.101_Load_13_bat 0.2
-LV1.101_Load_14_bat 0.2
+LV1.101_Load_1_bat 0.0
+LV1.101_Load_2_bat 0.0
+LV1.101_Load_3_bat 0.0
+LV1.101_Load_4_bat 0.0
+LV1.101_Load_5_bat 0.0
+LV1.101_Load_6_bat 0.0
+LV1.101_Load_7_bat 0.0
+LV1.101_Load_8_bat 0.0
+LV1.101_Load_9_bat 0.0
+LV1.101_Load_10_bat 0.0
+LV1.101_Load_11_bat 0.0
+LV1.101_Load_12_bat 0.0
+LV1.101_Load_13_bat 0.0
+LV1.101_Load_14_bat 0.0
 ;
 param PDmin:=
 LV1.101_Load_1_bat 0.0
@@ -952,20 +952,20 @@ LV1.101_Load_13_bat 0.9
 LV1.101_Load_14_bat 0.9
 ;
 param EMAX:=
-LV1.101_Load_1_bat 2.0
-LV1.101_Load_2_bat 2.0
-LV1.101_Load_3_bat 2.0
-LV1.101_Load_4_bat 2.0
-LV1.101_Load_5_bat 2.0
-LV1.101_Load_6_bat 2.0
-LV1.101_Load_7_bat 2.0
-LV1.101_Load_8_bat 2.0
-LV1.101_Load_9_bat 2.0
-LV1.101_Load_10_bat 2.0
-LV1.101_Load_11_bat 2.0
-LV1.101_Load_12_bat 2.0
-LV1.101_Load_13_bat 2.0
-LV1.101_Load_14_bat 2.0
+LV1.101_Load_1_bat 0.0
+LV1.101_Load_2_bat 0.0
+LV1.101_Load_3_bat 0.0
+LV1.101_Load_4_bat 0.0
+LV1.101_Load_5_bat 0.0
+LV1.101_Load_6_bat 0.0
+LV1.101_Load_7_bat 0.0
+LV1.101_Load_8_bat 0.0
+LV1.101_Load_9_bat 0.0
+LV1.101_Load_10_bat 0.0
+LV1.101_Load_11_bat 0.0
+LV1.101_Load_12_bat 0.0
+LV1.101_Load_13_bat 0.0
+LV1.101_Load_14_bat 0.0
 ;
 param EMIN:=
 LV1.101_Load_1_bat 0.0
@@ -1029,20 +1029,20 @@ param PS:=
 1 2 0.0
 1 3 0.0
 1 4 0.0
-1 5 0.0
-1 6 0.0
-1 7 0.0
-1 8 0.0
-1 9 0.0
-1 10 0.0
-1 11 0.0
-1 12 0.0
-1 13 0.0
-1 14 0.0
-1 15 0.0
-1 16 0.0
-1 17 0.0
-1 18 0.0
+1 5 0.02
+1 6 0.02
+1 7 0.04
+1 8 0.04
+1 9 0.06
+1 10 0.06
+1 11 0.06
+1 12 0.06
+1 13 0.08
+1 14 0.08
+1 15 0.08
+1 16 0.07
+1 17 0.05
+1 18 0.05
 1 19 0.0
 1 20 0.0
 1 21 0.0
@@ -1053,19 +1053,19 @@ param PS:=
 2 2 0.0
 2 3 0.0
 2 4 0.0
-2 5 0.0
-2 6 0.0
-2 7 0.0
-2 8 0.0
-2 9 0.0
-2 10 0.0
-2 11 0.0
-2 12 0.0
-2 13 0.0
-2 14 0.0
-2 15 0.0
-2 16 0.0
-2 17 0.0
+2 5 0.01
+2 6 0.01
+2 7 0.04
+2 8 0.04
+2 9 0.05
+2 10 0.05
+2 11 0.05
+2 12 0.05
+2 13 0.05
+2 14 0.05
+2 15 0.04
+2 16 0.03
+2 17 0.02
 2 18 0.0
 2 19 0.0
 2 20 0.0

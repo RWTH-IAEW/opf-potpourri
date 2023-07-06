@@ -1,0 +1,11 @@
+Wed, 05 Jul 2023 21:02:05 INFO     OATS log file
+Wed, 05 Jul 2023 21:02:05 INFO     Program started
+Wed, 05 Jul 2023 21:02:05 INFO     Solver selected: ipopt
+Wed, 05 Jul 2023 21:02:05 INFO     Testcase selected: testcases/simbench/1-LV-rural1--1-no_sw_local_3.xlsx
+Wed, 05 Jul 2023 21:02:05 INFO     Model selected: ACOPF_multiperiod_battery_simplified
+Wed, 05 Jul 2023 21:02:05 INFO     Given model file found and selected from the models library
+Wed, 05 Jul 2023 21:02:05 INFO     Given testcase file found and selected from the testcase library
+Wed, 05 Jul 2023 21:02:05 INFO     Start writing multi-period for demand
+Wed, 05 Jul 2023 21:02:05 INFO     Start writing battery model
+Wed, 05 Jul 2023 21:02:06 INFO     Dat-file written, start optimisation
+Wed, 05 Jul 2023 21:02:09 INFO     Done!

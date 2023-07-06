@@ -20,8 +20,9 @@ import pandas as pd
 import pandapower as pp
 import simbench as sb
 import random
+import math
 
-def convert_pp_net(net: pp.pandapowerNet, value_of_lost_load: int = 100000) -> None:
+def convert_pp_net(net: pp.pandapowerNet, sb_code1:str, value_of_lost_load: int = 100000, time_period: int = 96) -> None:
     
     # Create ppc from net
     ppc = pp.converter.to_ppc(net)
@@ -45,8 +46,8 @@ def convert_pp_net(net: pp.pandapowerNet, value_of_lost_load: int = 100000) -> N
     # bugfix the type in ppc
     dfbus['type'] = ppc["bus"][:, 1][:len(dfbus)]
     dfbus['zone'] = net.bus.zone
-    dfbus['VM'] = net.bus.vn_kv
-    dfbus['VA'] = 0
+    dfbus['VM'] = 1.0 #net.res_bus.vm_pu
+    dfbus['VA'] = 0 #net.res_bus.va_degree
     dfbus['VNLB'] = net.bus.min_vm_pu
     dfbus['VNUB'] = net.bus.max_vm_pu
     dfbus['VELB'] = net.bus.min_vm_pu
@@ -77,7 +78,7 @@ def convert_pp_net(net: pp.pandapowerNet, value_of_lost_load: int = 100000) -> N
         # TODO
         # update 30.06.2023 : no idea about b :-D 
         # Check if b == c???
-    dfbrn['b'] = 0.01 #1/(net.line.c_nf_per_km*net.line.length_km)
+    dfbrn['b'] = 0.1 #-(net.line.x_ohm_per_km*net.line.length_km)/((net.line.x_ohm_per_km*net.line.length_km)**2 + (net.line.r_ohm_per_km*net.line.length_km)**2)
     dfbrn['ShortTermRating'] = str(9999)
     dfbrn['ContinousRating'] = str(9999)
     dfbrn['angLB'] = -360
@@ -96,8 +97,10 @@ def convert_pp_net(net: pp.pandapowerNet, value_of_lost_load: int = 100000) -> N
     # TODO
     # Calculate from given formulas:
     # https://pandapower.readthedocs.io/en/v2.13.1/elements/trafo.html
-    dftrn['r'] = 0.1
-    dftrn['x'] = 0.1
+    r_k = net.trafo.vkr_percent/100*(net.sn_mva/net.trafo.sn_mva)
+    dftrn['r'] = r_k # 0.1
+    z_k = net.trafo.vk_percent/100*(net.sn_mva/net.trafo.sn_mva)
+    dftrn['x'] = 0.1 #math.sqrt(z_k**2-r_k**2)
     dftrn['ShortTermRating'] = str(9999)
     dftrn['ContinousRating'] = str(9999)        
     dftrn['angLB'] = -360
@@ -165,7 +168,8 @@ def convert_pp_net(net: pp.pandapowerNet, value_of_lost_load: int = 100000) -> N
     dfts[(" ","timeperiod")] = list(range(len(profiles[("load", "p_mw")])))
     
     #reduce for first 24 time steps
-    dfts = dfts.head(24)
+    #dfts = dfts.resample("1H").sum()
+    dfts = dfts.head(time_period)
     
     print(dfts.columns)
     
@@ -192,17 +196,20 @@ def convert_pp_net(net: pp.pandapowerNet, value_of_lost_load: int = 100000) -> N
     
     dfsolar.columns = pd.MultiIndex.from_tuples(multi_index)
 
-    dfsolar[(" ","timeperiod")] = list(range(24))
+    dfsolar[(" ","timeperiod")] = list(range(time_period))
     dfsolar[("busname","1")] = 1
     dfsolar[("busname","2")] = 2
+    #T_----odo
     dfsolar[("PS","1")] = 0
     dfsolar[("PS","2")] = 0
     dfsolar[("QS","1")] = 0
     dfsolar[("QS","2")] = 0
     dfsolar[("c4","1")] = 11
     dfsolar[("c4","2")] = 12
+
+    name = sb_code1 + '.xlsx'
      
-    with pd.ExcelWriter('test_simbench.xlsx') as writer:  
+    with pd.ExcelWriter(name) as writer:  
         dfbus.to_excel(writer, sheet_name = 'bus',index=False , header=True)
         dfdem.to_excel(writer, sheet_name = 'demand',index=False, header=True)
         dfbrn.to_excel(writer, sheet_name = 'branch',index=False, header=True)
@@ -221,8 +228,8 @@ def convert_pp_net(net: pp.pandapowerNet, value_of_lost_load: int = 100000) -> N
 
 if __name__ == "__main__":
     
-    sb_code1 = "1-LV-rural1--1-no_sw"  # rural MV grid of scenario 0 with full switchs
+    sb_code1 = "1-LV-rural1--1-no_sw" #"1-LV-semiurb5--0-no_sw"  # rural MV grid of scenario 0 with full switchs
     net = sb.get_simbench_net(sb_code1)
     pp.runpp(net)
     
-    convert_pp_net(net)
+    convert_pp_net(net, sb_code1)

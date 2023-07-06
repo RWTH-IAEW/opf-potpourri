@@ -1,0 +1,10 @@
+Fri, 30 Jun 2023 10:28:55 INFO     OATS log file
+Fri, 30 Jun 2023 10:28:55 INFO     Program started
+Fri, 30 Jun 2023 10:28:55 INFO     Solver selected: mindtpy
+Fri, 30 Jun 2023 10:28:55 INFO     Testcase selected: testcases/simbench/1-LV-rural1--1-no_sw_local.xlsx
+Fri, 30 Jun 2023 10:28:55 INFO     Model selected: ACOPF_multiperiod_battery_exact
+Fri, 30 Jun 2023 10:28:55 INFO     Given model file found and selected from the models library
+Fri, 30 Jun 2023 10:28:55 INFO     Given testcase file found and selected from the testcase library
+Fri, 30 Jun 2023 10:28:55 INFO     Start writing multi-period for demand
+Fri, 30 Jun 2023 10:28:55 INFO     Start writing battery model
+Fri, 30 Jun 2023 10:28:55 INFO     Dat-file written, start optimisation
