@@ -100,11 +100,12 @@ def runcase(testcase,mod,opt=None):
     with open(os.getcwd() + "/testcases/matpower/doc", 'w') as output_file:    
         instance.pprint(output_file)
 
-    
-    if not (opt['print_solver_output']):
-        results = optimise.solve(instance,tee=False)
+    if opt["solver"] == "mindtpy":
+        results = optimise.solve(instance,tee=False, mip_solver="glpk", nlp_solver="ipopt", report_timing=True)
+    elif not (opt['print_solver_output']):
+        results = optimise.solve(instance,tee=False, report_timing=True)
     else:
-        results = optimise.solve(instance,tee=True)
+        results = optimise.solve(instance,tee=True, report_timing=True)
     instance.solutions.load_from(results)
     
     # ##################################
@@ -132,7 +133,7 @@ def runcase(testcase,mod,opt=None):
             o.printACOPF_multiperiod(testcase)
             #if 'battery' in mod:
             #    print("---------------battery---------------")
-            #    o.print_Battery(testcase)    
+            #    o.print_battery(testcase)    
         else:
             o.printoutputxls(testcase)
 

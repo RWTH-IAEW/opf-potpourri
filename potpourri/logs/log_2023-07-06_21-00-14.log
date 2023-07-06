@@ -1,0 +1,17 @@
+Thu, 06 Jul 2023 21:00:14 INFO     OATS log file
+Thu, 06 Jul 2023 21:00:14 INFO     Program started
+Thu, 06 Jul 2023 21:00:14 INFO     Set parameter WLSAccessID
+Thu, 06 Jul 2023 21:00:14 INFO     Set parameter WLSSecret
+Thu, 06 Jul 2023 21:00:14 INFO     Set parameter LicenseID to value 949857
+Thu, 06 Jul 2023 21:00:14 INFO     Set parameter WLSAccessID
+Thu, 06 Jul 2023 21:00:14 INFO     Set parameter WLSSecret
+Thu, 06 Jul 2023 21:00:14 INFO     Academic license - for non-commercial use only - registered to steffen.kortmann@rwth-aachen.de
+Thu, 06 Jul 2023 21:00:14 INFO     Solver selected: ipopt
+Thu, 06 Jul 2023 21:00:14 INFO     Testcase selected: testcases/simbench/1-LV-rural1--2-no_sw.xlsx
+Thu, 06 Jul 2023 21:00:14 INFO     Model selected: ACOPF_multiperiod_battery_simplified
+Thu, 06 Jul 2023 21:00:14 INFO     Given model file found and selected from the models library
+Thu, 06 Jul 2023 21:00:14 INFO     Given testcase file found and selected from the testcase library
+Thu, 06 Jul 2023 21:00:14 INFO     Start writing multi-period for demand
+Thu, 06 Jul 2023 21:00:16 INFO     Start writing battery model
+Thu, 06 Jul 2023 21:00:16 INFO     Dat-file written, start optimisation
+Thu, 06 Jul 2023 21:01:36 INFO     Done!

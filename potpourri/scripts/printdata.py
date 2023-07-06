@@ -31,7 +31,7 @@ class printdata(object):
         self.data["transformer"] = self.data["transformer"].drop(self.data["transformer"][self.data["transformer"]['stat'] == 0].index.tolist())
         self.data["wind"]        = self.data["wind"].drop(self.data["wind"][self.data["wind"]['stat'] == 0].index.tolist())
         self.data["generator"]   = self.data["generator"].drop(self.data["generator"][self.data["generator"]['stat'] == 0].index.tolist())
-        #self.data["Battery"]     = self.data["Battery"].drop(self.data["Battery"][self.data["Battery"]['stat'] == 0].index.tolist())
+        #self.data["battery"]     = self.data["battery"].drop(self.data["battery"][self.data["battery"]['stat'] == 0].index.tolist())
 
     def printheader(self):
         f = open(self.datfile, 'w')
@@ -580,68 +580,67 @@ class printdata(object):
         logging.info("Start writing battery model")
         
         f = open(self.datfile, 'a')
-        print(self.data)
         #---set of batteries---
         f.write('set BATTERY:=\n')
-        for i in self.data["Battery"]["name"].index.tolist():
-            f.write(str(self.data["Battery"]["name"][i])+"\n")
+        for i in self.data["battery"]["name"].index.tolist():
+            f.write(str(self.data["battery"]["name"][i])+"\n")
         f.write(';\n')
 
         #---set of battery-bus mapping ---
         f.write('set Bbs:=\n')
-        for i in self.data["Battery"].index.tolist():
-            f.write(str(self.data["Battery"]["busname"][i]) + " "+str(self.data["Battery"]["name"][i])+"\n")
+        for i in self.data["battery"].index.tolist():
+            f.write(str(self.data["battery"]["busname"][i]) + " "+str(self.data["battery"]["name"][i])+"\n")
         f.write(';\n')
 
         #---Real power battery charging bounds---
         f.write('param PCmax:=\n')
-        for i in self.data["Battery"].index.tolist():
-            f.write(str(self.data["Battery"]["name"][i])+" "+str(float(self.data["Battery"]["PCMAX"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
+        for i in self.data["battery"].index.tolist():
+            f.write(str(self.data["battery"]["name"][i])+" "+str(float(self.data["battery"]["PCMAX"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
         f.write(';\n')        
         f.write('param PCmin:=\n')
-        for i in self.data["Battery"].index.tolist():
-            f.write(str(self.data["Battery"]["name"][i])+" "+str(float(self.data["Battery"]["PCMIN"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
+        for i in self.data["battery"].index.tolist():
+            f.write(str(self.data["battery"]["name"][i])+" "+str(float(self.data["battery"]["PCMIN"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
         f.write(';\n')
     
         #---Real power battery discharging bounds---
         f.write('param PDmax:=\n')
-        for i in self.data["Battery"].index.tolist():
-            f.write(str(self.data["Battery"]["name"][i])+" "+str(float(self.data["Battery"]["PDMAX"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
+        for i in self.data["battery"].index.tolist():
+            f.write(str(self.data["battery"]["name"][i])+" "+str(float(self.data["battery"]["PDMAX"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
         f.write(';\n')        
         f.write('param PDmin:=\n')
-        for i in self.data["Battery"].index.tolist():
-            f.write(str(self.data["Battery"]["name"][i])+" "+str(float(self.data["Battery"]["PDMIN"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
+        for i in self.data["battery"].index.tolist():
+            f.write(str(self.data["battery"]["name"][i])+" "+str(float(self.data["battery"]["PDMIN"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
         f.write(';\n')       
   
-        #---Battery charge discharge efficiencies ---
+        #---battery charge discharge efficiencies ---
         f.write('param nchar:=\n')
-        for i in self.data["Battery"].index.tolist():
-            f.write(str(self.data["Battery"]["name"][i])+" "+str(float(self.data["Battery"]["nchar"][i]))+"\n") #/self.data["baseMVA"]["baseMVA"][0])
+        for i in self.data["battery"].index.tolist():
+            f.write(str(self.data["battery"]["name"][i])+" "+str(float(self.data["battery"]["nchar"][i]))+"\n") #/self.data["baseMVA"]["baseMVA"][0])
         f.write(';\n')        
         f.write('param ndis:=\n')
-        for i in self.data["Battery"].index.tolist():
-            f.write(str(self.data["Battery"]["name"][i])+" "+str(float(self.data["Battery"]["ndis"][i]))+"\n") #/self.data["baseMVA"]["baseMVA"][0])
+        for i in self.data["battery"].index.tolist():
+            f.write(str(self.data["battery"]["name"][i])+" "+str(float(self.data["battery"]["ndis"][i]))+"\n") #/self.data["baseMVA"]["baseMVA"][0])
         f.write(';\n')   
 
-        #---Battery SoC bounds---
+        #---battery SoC bounds---
         f.write('param EMAX:=\n')
-        for i in self.data["Battery"].index.tolist():
-            f.write(str(self.data["Battery"]["name"][i])+" "+str(float(self.data["Battery"]["EMAX"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
+        for i in self.data["battery"].index.tolist():
+            f.write(str(self.data["battery"]["name"][i])+" "+str(float(self.data["battery"]["EMAX"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
         f.write(';\n')        
         f.write('param EMIN:=\n')
-        for i in self.data["Battery"].index.tolist():
-            f.write(str(self.data["Battery"]["name"][i])+" "+str(float(self.data["Battery"]["EMIN"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
+        for i in self.data["battery"].index.tolist():
+            f.write(str(self.data["battery"]["name"][i])+" "+str(float(self.data["battery"]["EMIN"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
         f.write(';\n')   
         f.write('param E0:=\n')
-        for i in self.data["Battery"].index.tolist():
-            f.write(str(self.data["Battery"]["name"][i])+" "+str(float(self.data["Battery"]["E0"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
+        for i in self.data["battery"].index.tolist():
+            f.write(str(self.data["battery"]["name"][i])+" "+str(float(self.data["battery"]["E0"][i])/self.data["baseMVA"]["baseMVA"][0])+"\n")
         f.write(';\n')  
 
 
-        #---Battery Cost---
+        #---battery Cost---
         f.write('param c3:=\n')
-        for i in self.data["Battery"].index.tolist():
-            f.write(str(self.data["Battery"]["name"][i])+" "+str(float(self.data["Battery"]["c3"][i]))+"\n")
+        for i in self.data["battery"].index.tolist():
+            f.write(str(self.data["battery"]["name"][i])+" "+str(float(self.data["battery"]["c3"][i]))+"\n")
         f.write(';\n')
         '''
         #---set of solar plant---

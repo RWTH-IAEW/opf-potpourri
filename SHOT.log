@@ -11,17 +11,17 @@
 ╶ Modeling system ────────────────────────────────────────────────────────────────────────────────────────────────────╴
 
  Modeling system:            AMPL
- Problem read from file:     /tmp/tmpjrj9uzdm.pyomo.nl
+ Problem read from file:     /tmp/tmpc8vecyhq.pyomo.nl
 
 - Bound tightening ───────────────────────────────────────────────────────────────────────────────────────────────────╴
 
  Performing bound tightening on original problem.
-  - Bounds for 3782 variables tightened in 0.13 s and 2 passes.
-  - Objective bounds are: [-5.13173e+57, 1.8816e+108]
+  - Bounds for 15086 variables tightened in 1.11 s and 2 passes.
+  - Objective bounds are: [-3.26989e+58, 5.5296e+108]
 
  Performing bound tightening on reformulated problem.
-  - Bounds for 1320 variables tightened in 0.25 s and 2 passes.
-  - Objective bounds are: [-5.13173e+07, 9.20816e+07]
+  - Bounds for 5280 variables tightened in 0.77 s and 2 passes.
+  - Objective bounds are: [-3.26989e+08, 2.71003e+08]
 
 ╶ Problem instance ───────────────────────────────────────────────────────────────────────────────────────────────────╴
 
@@ -32,19 +32,19 @@
  Objective function direction:      minimize             minimize
  Objective function type:           quadratic, convex    linear
 
- Number of constraints:             8970                 10866
-  - linear:                         5610                 6282
-  - convex quadratic:               672                  0
-  - convex nonlinear:               0                    1896
-  - nonconvex nonlinear:            2688                 2688
+ Number of constraints:             35754                43338
+  - linear:                         22314                25002
+  - convex quadratic:               2688                 0
+  - convex nonlinear:               0                    7584
+  - nonconvex nonlinear:            10752                10752
 
- Number of variables:               4814                 6710
-  - real:                           4142                 6038
-  - binary:                         672                  672
-  - nonlinear:                      2256                 2256
+ Number of variables:               19214                26798
+  - real:                           16526                24110
+  - binary:                         2688                 2688
+  - nonlinear:                      9024                 9024
 
- Number of transformations performed:                    1896
-  - square terms partitioning:                           1896
+ Number of transformations performed:                    7584
+  - square terms partitioning:                           7584
 
 ╶ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╴
 
@@ -81,12 +81,11 @@
     Iteration     │  Time  │    Cuts     │     Objective value     │  Objective diff.   
      #: type      │  tot.  │   + | tot.  │    problem | line srch  │    abs. | rel.    
 ╶─────────────────┴────────┴─────────────┴─────────────────────────┴──────────────────╴
-     1: LP           0.94                      -1e+12 | -1e+12          inf. | inf.    
-     2: LP           1.17   1146 | 1146       -1373.7 | 147302       1.5e+05 | 1.1e+02 
-     3: LP           1.44   1146 | 2292      -799.769 | 108830       1.1e+05 | 1.4e+02 
-     4: LP           1.82   1146 | 3438      -97.4469 | 52703        5.3e+04 | 5.4e+02 
+     1: LP           3.95                      -1e+12 | -1e+12          inf. | inf.    
+     2: LP           8.51   4584 | 4584      -154.342 | 3.67428e+06  3.7e+06 | 2.4e+04 
+     3: LP          12.87   4584 | 9168      -123.467 | 2.17487e+06  2.2e+06 | 1.8e+04 
 
- Maximum deviation in interior point is too large: 52703.035
+ Maximum deviation in interior point is too large: 2174870.081
 
  No interior point found!                            
 
@@ -96,183 +95,5 @@
      #: type      │  tot.  │   + | tot.  │       dual | primal     │    abs. | rel.    │    obj.fn. | max.err.
 ╶─────────────────┴────────┴─────────────┴─────────────────────────┴───────────────────┴──────────────────────────────╴
 
-     1: MILP-O       2.07                         960 | inf.            inf. | 1.0e+00          960 | 9345: 4.13e+05   
-     1: NLPNEWDB-O  30.99                         960 | inf.            inf. | 1.0e+00              | inf.             
-     2: NLPNEWDB-O  56.36    200 | 200            960 | inf.            inf. | 1.0e+00              | inf.             
-     3: NLPNEWDB-O  81.94    200 | 400            960 | inf.            inf. | 1.0e+00              | inf.             
-     4: NLPNEWDB-O  108.15    80 | 480            960 | inf.            inf. | 1.0e+00              | inf.             
-     5: NLPNEWDB-O  134.38    50 | 530            960 | inf.            inf. | 1.0e+00              | inf.             
-     6: NLPNEWDB-O  160.19   190 | 720            960 | inf.            inf. | 1.0e+00              | inf.             
-     7: NLPNEWDB-O  186.41    60 | 780            960 | inf.            inf. | 1.0e+00              | inf.             
-     8: NLPNEWDB-O  212.44   200 | 980            960 | inf.            inf. | 1.0e+00              | inf.             
-     9: NLPNEWDB-O  238.10   106 | 1086           960 | inf.            inf. | 1.0e+00              | inf.             
-    10: NLPNEWDB-O  265.21   200 | 1286           960 | inf.            inf. | 1.0e+00              | inf.             
-    11: NLPNEWDB-O  291.57   200 | 1486           960 | inf.            inf. | 1.0e+00              | inf.             
-    12: NLPNEWDB-O  318.51   108 | 1594           960 | inf.            inf. | 1.0e+00              | inf.             
-    13: NLPNEWDB-O  345.34    96 | 1690           960 | inf.            inf. | 1.0e+00              | inf.             
-    14: NLPNEWDB-O  371.56   200 | 1890           960 | inf.            inf. | 1.0e+00              | inf.             
-    15: NLPNEWDB-O  398.66   200 | 2090           960 | inf.            inf. | 1.0e+00              | inf.             
-    16: NLPNEWDB-O  425.25    92 | 2182           960 | inf.            inf. | 1.0e+00              | inf.             
-    17: NLPNEWDB-O  450.95    99 | 2281           960 | inf.            inf. | 1.0e+00              | inf.             
-    18: NLPNEWDB-O  477.03   200 | 2481           960 | inf.            inf. | 1.0e+00              | inf.             
-    19: NLPNEWDB-O  503.36    80 | 2561           960 | inf.            inf. | 1.0e+00              | inf.             
-    20: NLPNEWDB-O  529.90   200 | 2761           960 | inf.            inf. | 1.0e+00              | inf.             
-    21: NLPNEWDB-O  555.40   200 | 2961           960 | inf.            inf. | 1.0e+00              | inf.             
-    22: NLPNEWDB-O  581.42   104 | 3065           960 | inf.            inf. | 1.0e+00              | inf.             
-    23: NLPNEWDB-O  606.72   200 | 3265           960 | inf.            inf. | 1.0e+00              | inf.             
-    24: NLPNEWDB-O  632.54     4 | 3269           960 | inf.            inf. | 1.0e+00              | inf.             
-    25: NLPNEWDB-O  658.23     4 | 3273           960 | inf.            inf. | 1.0e+00              | inf.             
-    26: NLPNEWDB-O  685.17     4 | 3277           960 | inf.            inf. | 1.0e+00              | inf.             
-    27: NLPNEWDB-O  711.12   106 | 3383           960 | inf.            inf. | 1.0e+00              | inf.             
-    28: NLPNEWDB-O  736.89   200 | 3583           960 | inf.            inf. | 1.0e+00              | inf.             
-    29: NLPNEWDB-O  762.92    70 | 3653           960 | inf.            inf. | 1.0e+00              | inf.             
-    30: NLPNEWDB-O  787.68   200 | 3853           960 | inf.            inf. | 1.0e+00              | inf.             
-    31: NLPNEWDB-O  813.60   200 | 4053           960 | inf.            inf. | 1.0e+00              | inf.             
-    32: NLPNEWDB-O  838.48   200 | 4253           960 | inf.            inf. | 1.0e+00              | inf.             
-    33: NLPNEWDB-O  865.28   200 | 4453           960 | inf.            inf. | 1.0e+00              | inf.             
-    34: NLPNEWDB-O  891.50    96 | 4549           960 | inf.            inf. | 1.0e+00              | inf.             
-    35: NLPNEWDB-O  916.98    96 | 4645           960 | inf.            inf. | 1.0e+00              | inf.             
-    36: NLPNEWDB-O  942.59   108 | 4753           960 | inf.            inf. | 1.0e+00              | inf.             
-    37: NLPNEWDB-O  968.11   200 | 4953           960 | inf.            inf. | 1.0e+00              | inf.             
-    38: NLPNEWDB-O  995.04   200 | 5153           960 | inf.            inf. | 1.0e+00              | inf.             
-    39: NLPNEWDB-O 1020.50    36 | 5189           960 | inf.            inf. | 1.0e+00              | inf.             
-    40: NLPNEWDB-O 1046.52    36 | 5225           960 | inf.            inf. | 1.0e+00              | inf.             
-    41: NLPNEWDB-O 1073.13   132 | 5357           960 | inf.            inf. | 1.0e+00              | inf.             
-    42: NLPNEWDB-O 1099.42   165 | 5522           960 | inf.            inf. | 1.0e+00              | inf.             
-    43: NLPNEWDB-O 1126.57   200 | 5722           960 | inf.            inf. | 1.0e+00              | inf.             
-    44: NLPNEWDB-O 1154.40   200 | 5922           960 | inf.            inf. | 1.0e+00              | inf.             
-    45: NLPNEWDB-O 1183.30    36 | 5958           960 | inf.            inf. | 1.0e+00              | inf.             
-    46: NLPNEWDB-O 1216.19   200 | 6158           960 | inf.            inf. | 1.0e+00              | inf.             
-    47: NLPNEWDB-O 1243.41   200 | 6358           960 | inf.            inf. | 1.0e+00              | inf.             
-    48: NLPNEWDB-O 1270.67   200 | 6558           960 | inf.            inf. | 1.0e+00              | inf.             
-    49: NLPNEWDB-O 1298.69   200 | 6758           960 | inf.            inf. | 1.0e+00              | inf.             
-    50: NLPNEWDB-O 1326.13    97 | 6855           960 | inf.            inf. | 1.0e+00              | inf.             
-    51: NLPNEWDB-O 1353.84   200 | 7055           960 | inf.            inf. | 1.0e+00              | inf.             
-    52: NLPNEWDB-O 1381.60   200 | 7255           960 | inf.            inf. | 1.0e+00              | inf.             
-    53: NLPNEWDB-O 1409.24   200 | 7455           960 | inf.            inf. | 1.0e+00              | inf.             
-    54: NLPNEWDB-O 1436.84   200 | 7655           960 | inf.            inf. | 1.0e+00              | inf.             
-    55: NLPNEWDB-O 1463.94    24 | 7679           960 | inf.            inf. | 1.0e+00              | inf.             
-    56: NLPNEWDB-O 1491.84    30 | 7709           960 | inf.            inf. | 1.0e+00              | inf.             
-    57: NLPNEWDB-O 1518.77    48 | 7757           960 | inf.            inf. | 1.0e+00              | inf.             
-    58: NLPNEWDB-O 1545.91    16 | 7773           960 | inf.            inf. | 1.0e+00              | inf.             
-    59: NLPNEWDB-O 1574.82    21 | 7794           960 | inf.            inf. | 1.0e+00              | inf.             
-    60: NLPNEWDB-O 1602.80    31 | 7825           960 | inf.            inf. | 1.0e+00              | inf.             
-    61: NLPNEWDB-O 1630.28   200 | 8025           960 | inf.            inf. | 1.0e+00              | inf.             
-    62: NLPNEWDB-O 1657.62    47 | 8072           960 | inf.            inf. | 1.0e+00              | inf.             
-    63: NLPNEWDB-O 1685.16   200 | 8272           960 | inf.            inf. | 1.0e+00              | inf.             
-    64: NLPNEWDB-O 1713.58    12 | 8284           960 | inf.            inf. | 1.0e+00              | inf.             
-    65: NLPNEWDB-O 1740.61    16 | 8300           960 | inf.            inf. | 1.0e+00              | inf.             
-    66: NLPNEWDB-O 1768.28    34 | 8334           960 | inf.            inf. | 1.0e+00              | inf.             
-    67: NLPNEWDB-O 1796.26     7 | 8341           960 | inf.            inf. | 1.0e+00              | inf.             
-    68: NLPNEWDB-O 1823.42     8 | 8349           960 | inf.            inf. | 1.0e+00              | inf.             
-    69: NLPNEWDB-O 1851.06    14 | 8363           960 | inf.            inf. | 1.0e+00              | inf.             
-    70: NLPNEWDB-O 1878.44    82 | 8445           960 | inf.            inf. | 1.0e+00              | inf.             
-    71: NLPNEWDB-O 1906.00   200 | 8645           960 | inf.            inf. | 1.0e+00              | inf.             
-    72: NLPNEWDB-O 1933.17   177 | 8822           960 | inf.            inf. | 1.0e+00              | inf.             
-    73: NLPNEWDB-O 1960.58   200 | 9022           960 | inf.            inf. | 1.0e+00              | inf.             
-    74: NLPNEWDB-O 1990.41   200 | 9222           960 | inf.            inf. | 1.0e+00              | inf.             
-    75: NLPNEWDB-O 2017.68     4 | 9226           960 | inf.            inf. | 1.0e+00              | inf.             
-
-    Iteration     │  Time  │  Dual cuts  │     Objective value     │   Objective gap   │     Current solution
-     #: type      │  tot.  │   + | tot.  │       dual | primal     │    abs. | rel.    │    obj.fn. | max.err.
-╶─────────────────┴────────┴─────────────┴─────────────────────────┴───────────────────┴──────────────────────────────╴
-
-    76: NLPNEWDB-O 2045.44     6 | 9232           960 | inf.            inf. | 1.0e+00              | inf.             
-    77: NLPNEWDB-O 2072.91     8 | 9240           960 | inf.            inf. | 1.0e+00              | inf.             
-    78: NLPNEWDB-O 2100.77     9 | 9249           960 | inf.            inf. | 1.0e+00              | inf.             
-    79: NLPNEWDB-O 2129.06    11 | 9260           960 | inf.            inf. | 1.0e+00              | inf.             
-    80: NLPNEWDB-O 2156.82   200 | 9460           960 | inf.            inf. | 1.0e+00              | inf.             
-    81: NLPNEWDB-O 2184.90   200 | 9660           960 | inf.            inf. | 1.0e+00              | inf.             
-    82: NLPNEWDB-O 2212.47   188 | 9848           960 | inf.            inf. | 1.0e+00              | inf.             
-    83: NLPNEWDB-O 2240.16   200 | 10048          960 | inf.            inf. | 1.0e+00              | inf.             
-    84: NLPNEWDB-O 2267.81   200 | 10248          960 | inf.            inf. | 1.0e+00              | inf.             
-    85: NLPNEWDB-O 2295.27   200 | 10448          960 | inf.            inf. | 1.0e+00              | inf.             
-    86: NLPNEWDB-O 2323.03    66 | 10514          960 | inf.            inf. | 1.0e+00              | inf.             
-   375: MILP-O     2325.28   200 | 10714          960 | inf.            inf. | 1.0e+00          960 | 10212: 6.25e+00  
-    87: NLPNEWDB-O 2350.89   200 | 10714          960 | inf.            inf. | 1.0e+00              | inf.             
-   382: MILP-O     2353.06   200 | 10914          960 | inf.            inf. | 1.0e+00          960 | 10212: 6.25e+00  
-    88: NLPNEWDB-O 2378.50   200 | 10914          960 | inf.            inf. | 1.0e+00              | inf.             
-   389: MILP-O     2380.61   200 | 11114          960 | inf.            inf. | 1.0e+00          960 | 10292: 7.84e+00  
-    89: NLPNEWDB-O 2406.56   200 | 11114          960 | inf.            inf. | 1.0e+00              | inf.             
-   396: MILP-O     2408.64   200 | 11314          960 | inf.            inf. | 1.0e+00          960 | 9384: 7.84e+00   
-    90: NLPNEWDB-O 2434.56   200 | 11314          960 | inf.            inf. | 1.0e+00              | inf.             
-   403: MILP-O     2436.64   152 | 11466          960 | inf.            inf. | 1.0e+00          960 | 9384: 1.76e+00   
-    91: NLPNEWDB-O 2461.99   152 | 11466          960 | inf.            inf. | 1.0e+00              | inf.             
-   410: MILP-O     2464.31   200 | 11666          960 | inf.            inf. | 1.0e+00          960 | 10242: 2.02e+01  
-    92: NLPNEWDB-O 2490.93   200 | 11666          960 | inf.            inf. | 1.0e+00              | inf.             
-   417: MILP-O     2493.03     2 | 11668          960 | inf.            inf. | 1.0e+00          960 | 10242: 5.04e+00  
-    93: NLPNEWDB-O 2518.47     2 | 11668          960 | inf.            inf. | 1.0e+00              | inf.             
-   424: MILP-O     2520.65   145 | 11813          960 | inf.            inf. | 1.0e+00          960 | 8195: 1.58e+00   
-    94: NLPNEWDB-O 2545.93   145 | 11813          960 | inf.            inf. | 1.0e+00              | inf.             
-   431: MILP-O     2548.28   200 | 12013          960 | inf.            inf. | 1.0e+00          960 | 9349: 7.40e+04   
-    95: NLPNEWDB-O 2574.15   200 | 12013          960 | inf.            inf. | 1.0e+00              | inf.             
-   438: MILP-O     2576.21     2 | 12015          960 | inf.            inf. | 1.0e+00          960 | 9349: 1.63e+04   
-    96: NLPNEWDB-O 2601.70     2 | 12015          960 | inf.            inf. | 1.0e+00              | inf.             
-   445: MILP-O     2603.78     4 | 12019          960 | inf.            inf. | 1.0e+00          960 | 9348: 2.04e+03   
-    97: NLPNEWDB-O 2629.61     4 | 12019          960 | inf.            inf. | 1.0e+00              | inf.             
-   452: MILP-O     2631.71     3 | 12022          960 | inf.            inf. | 1.0e+00          960 | 9348: 5.09e+02   
-    98: NLPNEWDB-O 2657.96     3 | 12022          960 | inf.            inf. | 1.0e+00              | inf.             
-   459: MILP-O     2660.00     3 | 12025          960 | inf.            inf. | 1.0e+00          960 | 9348: 1.27e+02   
-    99: NLPNEWDB-O 2685.87     3 | 12025          960 | inf.            inf. | 1.0e+00              | inf.             
-   466: MILP-O     2688.05    10 | 12035          960 | inf.            inf. | 1.0e+00          960 | 7861: 5.33e+01   
-   100: NLPNEWDB-O 2715.35    10 | 12035          960 | inf.            inf. | 1.0e+00              | inf.             
-   473: MILP-O     2717.47     5 | 12040          960 | inf.            inf. | 1.0e+00          960 | 7861: 5.33e+01   
-   101: NLPNEWDB-O 2743.20     5 | 12040          960 | inf.            inf. | 1.0e+00              | inf.             
-   480: MILP-O     2745.44     1 | 12041          960 | inf.            inf. | 1.0e+00          960 | 7861: 5.33e+01   
-   102: NLPNEWDB-O 2771.27     1 | 12041          960 | inf.            inf. | 1.0e+00              | inf.             
-   487: MILP-O     2773.36     2 | 12043          960*| inf.            inf. | 1.0e+00          960 | 7789: 1.34e+03   
-   103: NLPNEWDB-O 2799.33     2 | 12043          960*| inf.            inf. | 1.0e+00              | inf.             
-   494: MILP-I     2801.84     8 | 12051          960*| inf.            inf. | 1.0e+00              | inf.             
-     1: REP-SUCC   2802.21  Repairs: 36                                                                                
-   495: MILP-O     2802.51                        960*| inf.            inf. | 1.0e+00          960 | 8437: 1.21e+03   
-   104: NLPNEWDB-O 2828.02                        960*| inf.            inf. | 1.0e+00              | inf.             
-   501: MILP-I     2830.65    12 | 12063          960*| inf.            inf. | 1.0e+00              | inf.             
-     2: REP-SUCC   2830.98  Repairs: 41                                                                                
-   502: MILP-O     2831.28                        960*| inf.            inf. | 1.0e+00          960 | 10230: 2.04e+04  
-   105: NLPNEWDB-O 2857.08                        960*| inf.            inf. | 1.0e+00              | inf.             
-   508: MILP-I     2858.61     2 | 12065          960*| inf.            inf. | 1.0e+00              | inf.             
-     2: REP-LOOP   2858.61  Repairs: 0                                                                                 
-
-╶ Solution report ────────────────────────────────────────────────────────────────────────────────────────────────────╴
-
- Terminated since the dual problem is infeasible.
-
- Problem found to be infeasible, but globality could not be verified since the problem seems to be nonconvex.
-
- Objective bound (minimization) [dual, primal]:  [960, 1.79769e+308].
- Objective gap absolute / relative:              1.79769e+308 / 1.
-
- Fulfilled termination criteria: 
-
- Unfulfilled termination criteria:
-  - absolute objective gap tolerance             1.79769e+308 > 0.001
-  - relative objective gap tolerance             1 > 0.001
-  - maximal constraint tolerance                 1.79769e+308 > 1e-08
-  - iteration limit                              508 <= 200000
-  - solution time limit (s)                      2858.61 <= 1.79769e+308
-
- Dual problems solved in main step:              505
-  - MILP problems, optimal                       505
-
- Problems solved during interior point search:
- - LP problems:                                  5
-
- Fixed primal NLP problems solved:               105
-
- Total solution time:                            2858.61
- - problem initialization:                       0.317946
- - problem reformulation:                        0.406888
- - bound tightening:                             0.383894
-   - feasibility based (original problem):       0.131456
-   - feasibility based (reformulated problem):   0.252302
- - interior point search:                        1.1302
- - dual strategy:                                2851.33
-   - root search for constraint cuts:            4.91648
- - primal strategy:                              2856.53
-   - solving NLP problems:                       2731.47
-   - performing root searches:                   1.30131
-╶─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╴
-
- Results written to: /tmp/tmpjrj9uzdm.osrl
-                     /tmp/tmpjrj9uzdm.pyomo.sol
- Log written to:     /home/skortmann/potpourri/SHOT.log
+     1: MILP-O      15.60                       29969 | inf.            inf. | 1.0e+00        29969 | 42843: 1.08e+07  
+     1: NLPNEWDB-O  94.41                       29969 | inf.            inf. | 1.0e+00              | inf.             

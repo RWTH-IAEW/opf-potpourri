@@ -21,6 +21,48 @@ import pandapower as pp
 import simbench as sb
 import random
 import math
+import numpy as np
+import json
+from scipy.interpolate import interp1d
+
+import warnings
+
+warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
+
+def get_pv_profile() -> np.array:
+    """
+    Retrieves the PV profile data and performs linear interpolation to match a total of 35,040 time steps.
+
+    Returns:
+        np.array: Interpolated PV values with 35,040 time steps.
+    """
+
+    # Load the JSON data
+    with open('potpourri/data/Timeseries_50.763_6.081_SA2_1kWp_crystSi_14_41deg_-2deg_2020_2020.json', 'r') as f:
+        data = json.load(f)
+
+    # Extract the P values for each hour and divide by 1000 to receive kWp
+    hourly_data = data['outputs']['hourly']
+    P_values = np.array([hour['P'] for hour in hourly_data])
+
+    # Unfortunately, 2020 was a leap year :-(, so we need to remove the additional day, so find the index of February 29th in the array
+    feb_29_index = 24 * (31 + 28)  # Index of the last hour of Feb 28th
+
+    # Remove the data associated with February 29th from the array
+    P_values = np.delete(P_values, range(feb_29_index, feb_29_index + 24))
+
+    # Generate time indices for the original hourly data
+    original_indices = np.arange(len(P_values))
+
+    # Generate time indices for the desired total time steps (35,040)
+    desired_indices = np.linspace(0, len(P_values) - 1, len(P_values)*4)
+
+    # Perform linear interpolation
+    interp_func = interp1d(original_indices, P_values, kind='linear')
+    interpolated_values = interp_func(desired_indices)
+
+    return interpolated_values
+
 
 def convert_pp_net(net: pp.pandapowerNet, sb_code1:str, value_of_lost_load: int = 100000, time_period: int = 96) -> None:
     
@@ -46,8 +88,8 @@ def convert_pp_net(net: pp.pandapowerNet, sb_code1:str, value_of_lost_load: int 
     # bugfix the type in ppc
     dfbus['type'] = ppc["bus"][:, 1][:len(dfbus)]
     dfbus['zone'] = net.bus.zone
-    dfbus['VM'] = 1.0 #net.res_bus.vm_pu
-    dfbus['VA'] = 0 #net.res_bus.va_degree
+    dfbus['VM'] = net.res_bus.vm_pu
+    dfbus['VA'] = net.res_bus.va_degree
     dfbus['VNLB'] = net.bus.min_vm_pu
     dfbus['VNUB'] = net.bus.max_vm_pu
     dfbus['VELB'] = net.bus.min_vm_pu
@@ -78,7 +120,13 @@ def convert_pp_net(net: pp.pandapowerNet, sb_code1:str, value_of_lost_load: int 
         # TODO
         # update 30.06.2023 : no idea about b :-D 
         # Check if b == c???
-    dfbrn['b'] = 0.1 #-(net.line.x_ohm_per_km*net.line.length_km)/((net.line.x_ohm_per_km*net.line.length_km)**2 + (net.line.r_ohm_per_km*net.line.length_km)**2)
+    b = -(net.line.x_ohm_per_km*net.line.length_km)/((net.line.x_ohm_per_km*net.line.length_km)**2 + (net.line.r_ohm_per_km*net.line.length_km)**2)
+        # Create a new column 'new_b' in the DataFrame with default value 0.1
+    dfbrn['b'] = 0.1
+
+    # Check the condition for each value in the 'b' series and update 'new_b' accordingly
+    dfbrn['b'] = dfbrn['b'].apply(lambda b: b if abs(b) < 0.1 else 0.1)
+    
     dfbrn['ShortTermRating'] = str(9999)
     dfbrn['ContinousRating'] = str(9999)
     dfbrn['angLB'] = -360
@@ -100,7 +148,9 @@ def convert_pp_net(net: pp.pandapowerNet, sb_code1:str, value_of_lost_load: int 
     r_k = net.trafo.vkr_percent/100*(net.sn_mva/net.trafo.sn_mva)
     dftrn['r'] = r_k # 0.1
     z_k = net.trafo.vk_percent/100*(net.sn_mva/net.trafo.sn_mva)
-    dftrn['x'] = 0.1 #math.sqrt(z_k**2-r_k**2)
+    #x_k = math.sqrt(z_k**2-r_k**2)
+    dftrn['x'] = 0.1
+    #dftrn['x'] = dftrn['x'].apply(lambda x_k: x_k if x_k < 0.1 else 0.1)
     dftrn['ShortTermRating'] = str(9999)
     dftrn['ContinousRating'] = str(9999)        
     dftrn['angLB'] = -360
@@ -132,8 +182,12 @@ def convert_pp_net(net: pp.pandapowerNet, sb_code1:str, value_of_lost_load: int 
     dfgen['QG'] = net.sgen.q_mvar * 1000
     dfgen['PGLB'] = 0
     dfgen['PGUB'] = net.sgen.p_mw * 1000
-    dfgen['QGLB'] = -net.sgen.q_mvar * 1000
-    dfgen['QGUB'] = net.sgen.q_mvar * 1000
+    if net.sgen.q_mvar.sum() != 0:
+        dfgen['QGLB'] = -net.sgen.q_mvar * 1000
+        dfgen['QGUB'] = net.sgen.q_mvar * 1000
+    else:
+        dfgen['QGLB'] = -net.sgen.p_mw * 1000
+        dfgen['QGUB'] = net.sgen.p_mw * 1000
     dfgen['VS'] = str(1)
         # TODO
         # Look up ramping times
@@ -150,11 +204,11 @@ def convert_pp_net(net: pp.pandapowerNet, sb_code1:str, value_of_lost_load: int 
     dfgen['costc1'] = costdat['c1']
     dfgen['costc0'] = costdat['c0']
     
-    dfts     = pd.DataFrame(columns=["timeperiod"])
-    
     # calculate absolute profiles
     profiles = sb.get_absolute_values(net, profiles_instead_of_study_cases=True)
     
+    dfts     = pd.DataFrame(columns=["timeperiod"])
+        
     for (i, name) in enumerate(net.load.name):
         new_name = name.replace(" ", "_")
         dfts[f"{new_name}"] = profiles[("load", "p_mw")][i] * 1000
@@ -164,26 +218,20 @@ def convert_pp_net(net: pp.pandapowerNet, sb_code1:str, value_of_lost_load: int 
     # Create the MultiIndex
     new_columns = [("Demand", column) if column != "timeperiod" else (" ","timeperiod") for column in dfts.columns]
     dfts.columns = pd.MultiIndex.from_tuples(new_columns)
-    
     dfts[(" ","timeperiod")] = list(range(len(profiles[("load", "p_mw")])))
-    
-    #reduce for first 24 time steps
-    #dfts = dfts.resample("1H").sum()
-    dfts = dfts.head(time_period)
-    
-    print(dfts.columns)
+    dfts = dfts.head(time_period) #reduce for first 24 time steps
     
     dfbat     = pd.DataFrame(columns=["name", "busname", "PCMAX", "PCMIN", "PDMAX", "PDMIN", "nchar", "ndis", "EMAX", "EMIN", "E0", "c3"])
-    dfbat["name"] = net.load.name.str.replace(" ", "_") + "_bat"
-    dfbat["busname"] = net.load.index
-    dfbat["PCMAX"] = 20
+    dfbat["name"] = net.storage.name.str.replace(" ", "_") + "_bat"
+    dfbat["busname"] = net.storage.bus
+    dfbat["PCMAX"] = abs(net.storage.p_mw * 1000)
     dfbat["PCMIN"] = 0
-    dfbat["PDMAX"] = 20
+    dfbat["PDMAX"] = abs(net.storage.p_mw * 1000)
     dfbat["PDMIN"] = 0
-    dfbat["nchar"] = 0.8
-    dfbat["ndis"] = 0.9
-    dfbat["EMAX"] = 200
-    dfbat["EMIN"] = 0
+    dfbat["nchar"] = net.storage.efficiency_percent
+    dfbat["ndis"] = net.storage.efficiency_percent
+    dfbat["EMAX"] = net.storage.max_e_mwh * 1000
+    dfbat["EMIN"] = net.storage.min_e_mwh * 1000
     dfbat["E0"] = 0
     dfbat["c3"] = 1
 
@@ -193,15 +241,17 @@ def convert_pp_net(net: pp.pandapowerNet, sb_code1:str, value_of_lost_load: int 
 
     # Initialize the DataFrame with the MultiIndex
     dfsolar = pd.DataFrame(columns=multi_index)
-    
     dfsolar.columns = pd.MultiIndex.from_tuples(multi_index)
+    
+    # get interpolated values
+    # hourly pv data that was linearly interpolated to match 35040 time steps and then only the first 96 time steps are taken
+    interpolated_values = get_pv_profile()[:time_period]
 
     dfsolar[(" ","timeperiod")] = list(range(time_period))
     dfsolar[("busname","1")] = 1
     dfsolar[("busname","2")] = 2
-    #T_----odo
-    dfsolar[("PS","1")] = 0
-    dfsolar[("PS","2")] = 0
+    dfsolar[("PS","1")] = interpolated_values * net.sgen.p_mw[0]
+    dfsolar[("PS","2")] = interpolated_values * net.sgen.p_mw[1]
     dfsolar[("QS","1")] = 0
     dfsolar[("QS","2")] = 0
     dfsolar[("c4","1")] = 11
@@ -220,7 +270,7 @@ def convert_pp_net(net: pp.pandapowerNet, sb_code1:str, value_of_lost_load: int 
         dfzneNTC.to_excel(writer, sheet_name = 'zonalNTC',index=False, header=True)
         dfgen.to_excel(writer, sheet_name = 'generator',index=False, header=True)
         dfts.to_excel(writer, sheet_name = 'timeseries',index=True, header=True)
-        dfbat.to_excel(writer, sheet_name = 'Battery',index=False, header = True)
+        dfbat.to_excel(writer, sheet_name = 'battery',index=False, header = True)
         baseMVA.to_excel(writer, sheet_name = 'baseMVA',index=False, header=True)
         dfsolar.to_excel(writer, sheet_name = 'solar',index=True, header = True)
     
@@ -228,8 +278,12 @@ def convert_pp_net(net: pp.pandapowerNet, sb_code1:str, value_of_lost_load: int 
 
 if __name__ == "__main__":
     
-    sb_code1 = "1-LV-rural1--1-no_sw" #"1-LV-semiurb5--0-no_sw"  # rural MV grid of scenario 0 with full switchs
-    net = sb.get_simbench_net(sb_code1)
-    pp.runpp(net)
+    list_of_lv_networks = ["1-LV-rural1--2-no_sw", "1-LV-rural2--2-no_sw", "1-LV-rural3--2-no_sw", "1-LV-semiurb4--2-no_sw", "1-LV-semiurb5--2-no_sw", "1-LV-urban6--2-no_sw"]
+    list_of_mv_networks = ["1-MV-rural--2-no_sw", "1-MV-urban--2-no_sw", "1-MV-comm--2-no_sw"]
     
-    convert_pp_net(net, sb_code1)
+    for i in (list_of_lv_networks + list_of_mv_networks):
+        sb_code1 = i
+        net = sb.get_simbench_net(sb_code1)
+        pp.runpp(net)
+        convert_pp_net(net, sb_code1)
+        print("Finished network import of: ", i)

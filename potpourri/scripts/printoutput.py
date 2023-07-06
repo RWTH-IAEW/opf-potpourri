@@ -76,7 +76,7 @@ class printoutput(object):
         cols_transf     = ['Time Periods','name', 'from_busname', 'to_busname', 'pLTto(MW)', 'pLTfrom(MW)', 'loss(MW)']
         cols_generation = ['Time Periods','name', 'busname', 'PGLB(MW)', 'PG(MW)', 'pG(MW)','PGUB(MW)', 'QGLB(MVar)', 'qG(MVar)','QGUB(MVar)']
         cols_wind       = ['Time Series','name', 'busname', 'PGLB(MW)', 'PG(MW)', 'pG(MW)','PGUB(MW)', 'QGLB(MVar)', 'qG(MVar)','QGUB(MVar)']
-        cols_Battery    = ['Time Periods','name', 'busname', 'pChar(MW)', 'pDis(MW)', 'qChar(MW)', 'qDis(MW)', 'e(MW)']
+        cols_battery    = ['Time Periods','name', 'busname', 'pChar(MW)', 'pDis(MW)', 'qChar(MW)', 'qDis(MW)', 'e(MW)']
 
         summary         = pd.DataFrame(columns=cols_summary)
         bus             = pd.DataFrame(columns=cols_bus)
@@ -85,7 +85,7 @@ class printoutput(object):
         generation      = pd.DataFrame(columns=cols_generation)
         branch          = pd.DataFrame(columns=cols_branch)
         transformer     = pd.DataFrame(columns=cols_transf)
-        Battery         = pd.DataFrame(columns=cols_Battery)
+        battery         = pd.DataFrame(columns=cols_battery)
 
         #-----write Data Frames
         for t in self.instance.T:
@@ -178,7 +178,7 @@ class printoutput(object):
 
         for t in self.instance.T:
             for g in self.instance.Bbs:
-                Battery.loc[ind] = pd.Series({'Time Periods':t, 'name':g[1], 'busname':g[0], \
+                battery.loc[ind] = pd.Series({'Time Periods':t, 'name':g[1], 'busname':g[0], \
                 'pChar(MW)':self.instance.pChar[g[1],t].value*self.instance.baseMVA,\
                 'pDis(MW)':self.instance.pDis[g[1],t].value*self.instance.baseMVA,\
                 #'qChar(MW)':self.instance.qChar[g[1],t].value*self.instance.baseMVA,\
@@ -210,22 +210,22 @@ class printoutput(object):
             branch_sorted.to_excel(writer, sheet_name = 'branch',index=False)
             transformer_sorted = transformer.sort_values(by=['Time Periods', 'from_busname'])
             transformer_sorted.to_excel(writer, sheet_name = 'transformer',index=False)
-            battery_sorted = Battery.sort_values(by=['Time Periods', 'name'])
+            battery_sorted = battery.sort_values(by=['Time Periods', 'name'])
             battery_sorted.to_excel(writer, sheet_name = 'battery', index=False)        
 
 
 
     '''
-    def print_Battery(self, testcase:str):
-        cols_Battery    = ['Time Periods','name', 'busname', 'pChar(MW)', 'pDis(MW)', 'qChar(MW)', 'qDis(MW)', 'e(MW)']
-        Battery = pd.DataFrame(columns=cols_Battery)
+    def print_battery(self, testcase:str):
+        cols_battery    = ['Time Periods','name', 'busname', 'pChar(MW)', 'pDis(MW)', 'qChar(MW)', 'qDis(MW)', 'e(MW)']
+        battery = pd.DataFrame(columns=cols_battery)
 
         #battery data
         ind=0
 
         for t in self.instance.T:
             for g in self.instance.Bbs:
-                Battery.loc[ind] = pd.Series({'Time Periods':t, 'name':g[1], 'busname':g[0], \
+                battery.loc[ind] = pd.Series({'Time Periods':t, 'name':g[1], 'busname':g[0], \
                 'pChar(MW)':self.instance.pChar[g[1],t]*self.instance.baseMVA,\
                 'pDis(MW)':self.instance.pDis[g[1],t]*self.instance.baseMVA,\
                 'qChar(MW)':self.instance.qChar[g[1],t]*self.instance.baseMVA,\
@@ -236,7 +236,7 @@ class printoutput(object):
         
         
         with pd.ExcelWriter(f'potpourri/results/results_multiperiod.xlsx') as writer:
-            battery_sorted = Battery.sort_values(by=['Time Periods', 'name'])
+            battery_sorted = battery.sort_values(by=['Time Periods', 'name'])
             battery_sorted.to_excel(writer, sheet_name = 'battery', index=False)
 
     '''
