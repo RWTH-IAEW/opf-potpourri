@@ -27,6 +27,7 @@ class ACOPF(AC, OPF):
             return obj
 
         self.model.OBJ = Objective(rule=objective, sense=minimize)
+
         # --- Kirchoff's voltage law on each transformer line ---
         def KVL_real_fromendTransf(model, l):
             return model.pLfromT[l] == model.GiiT[l] * (model.v[model.AT[l, 1]] ** 2) + \

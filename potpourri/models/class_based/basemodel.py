@@ -133,6 +133,10 @@ class Basemodel:
         self.model.pD = Var(self.model.D, domain=Reals)  # real power demand delivered
         self.model.pG = Var(self.model.G, domain=Reals)  # real generator power
         self.model.peG = Var(self.model.eG, domain=Reals)  # real power injection from external grids
+        self.model.pLfrom = Var(self.model.L, domain=Reals)  # real power injected at b onto line
+        self.model.pLto = Var(self.model.L, domain=Reals)  # real power injected at b' onto line
+        self.model.pLfromT = Var(self.model.TRANSF, domain=Reals)  # real power injected at b onto transformer
+        self.model.pLtoT = Var(self.model.TRANSF, domain=Reals)  # real power injected at b' onto transformer
 
         # --- generator power limits ---
         def real_power_bounds(model, g):

@@ -116,11 +116,6 @@ class AC(Basemodel):
 
         self.model.qD = Var(self.model.D, domain=Reals)  # reactive power absorbed by demand
 
-        self.model.pLfrom = Var(self.model.L, domain=Reals)  # real power injected at b onto line
-        self.model.pLto = Var(self.model.L, domain=Reals)  # real power injected at b' onto line
-        self.model.pLfromT = Var(self.model.TRANSF, domain=Reals)  # real power injected at b onto transformer
-        self.model.pLtoT = Var(self.model.TRANSF, domain=Reals)  # real power injected at b' onto transformer
-
         self.model.qLfrom = Var(self.model.L, domain=Reals)  # reactive power injected at b onto line
         self.model.qLto = Var(self.model.L, domain=Reals)  # reactive power injected at b' onto line
         self.model.qLfromT = Var(self.model.TRANSF, domain=Reals)  # reactive power injected at b onto transformer
@@ -128,7 +123,7 @@ class AC(Basemodel):
 
         self.model.v = Var(self.model.B, domain=NonNegativeReals, initialize=1.0)  # voltage magnitude at bus b, rad
 
-        self.model.qb0 = Var(self.model.eG, domain=Reals)
+        self.model.qeG = Var(self.model.eG, domain=Reals)
 
         # --- Kirchoff's current law at each bus b ---
         def KCL_real_def(model, b):
@@ -143,7 +138,7 @@ class AC(Basemodel):
 
         def KCL_reactive_def(model, b):
             return sum(model.qG[g] for g in model.G if (b, g) in model.Gbs) + \
-                sum(model.qb0[g] for g in model.eG if g == b) == \
+                sum(model.qeG[g] for g in model.eG if (b, g) in model.eGbs) == \
                 sum(model.qD[d] for d in model.D if (b, d) in model.Dbs) + \
                 sum(model.qLfrom[l] for l in model.L if model.A[l, 1] == b) + \
                 sum(model.qLto[l] for l in model.L if model.A[l, 2] == b) + \

@@ -29,31 +29,28 @@ class DC(Basemodel):
         # --- Variables ---
         self.model.deltaL = Var(self.model.L, domain=Reals)  # angle difference across lines
         self.model.deltaLT = Var(self.model.TRANSF, domain=Reals)  # angle difference across transformers
-        self.model.pL = Var(self.model.L, domain=Reals)  # real power injected at b onto line l, p.u.
-        self.model.pLT = Var(self.model.TRANSF, domain=Reals)  # real power injected at b onto transformer line l, p.u.
 
         # --- Kirchoff's current law at each bus b ---
         def KCL_def(model, b):
             return (sum(model.pG[g] for g in model.G if (b, g) in model.Gbs) +
                     sum(model.peG[g] for g in model.eG if (b, g) in model.eGbs) ==
                     sum(model.pD[d] for d in model.D if (b, d) in model.Dbs) +
-                    sum(model.pL[l] for l in model.L if model.A[l, 1] == b) -
-                    sum(model.pL[l] for l in model.L if model.A[l, 2] == b) +
-                    sum(model.pLT[l] for l in model.TRANSF if model.AT[l, 1] == b) -
-                    sum(model.pLT[l] for l in model.TRANSF if model.AT[l, 2] == b) +
+                    sum(model.pLfrom[l] for l in model.L if model.A[l, 1] == b) +
+                    sum(model.pLto[l] for l in model.L if model.A[l, 2] == b) +
+                    sum(model.pLfromT[l] for l in model.TRANSF if model.AT[l, 1] == b) +
+                    sum(model.pLtoT[l] for l in model.TRANSF if model.AT[l, 2] == b) +
                     sum(model.GB[s] for s in model.SHUNT if (b, s) in model.SHUNTbs))
 
         self.model.KCL_const = Constraint(self.model.B, rule=KCL_def)
 
-        # --- Kirchoff's voltage law on each line and transformer---
-        def KVL_line_def(model, l):
-            return model.pL[l] == (-model.BL[l]) * model.deltaL[l]
+        def KVL_real_fromend(model, l):
+            return model.pLfrom[l] == (-model.BL[l]) * model.deltaL[l]
 
-        def KVL_trans_def(model, l):
-            return model.pLT[l] == (-model.BLT[l]) * model.deltaLT[l]
+        def KVL_real_toend(model, l):
+            return model.pLto[l] == (model.BL[l]) * model.deltaL[l]
 
-        self.model.KVL_line_const = Constraint(self.model.L, rule=KVL_line_def)
-        self.model.KVL_trans_const = Constraint(self.model.TRANSF, rule=KVL_trans_def)
+        self.model.KVL_real_from = Constraint(self.model.L, rule=KVL_real_fromend)
+        self.model.KVL_real_to = Constraint(self.model.L, rule=KVL_real_toend)
 
         # --- phase angle constraints ---
         def phase_angle_diff1(model, l):
