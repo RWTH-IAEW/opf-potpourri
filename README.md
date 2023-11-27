@@ -22,3 +22,4 @@ In case you have already created an environment and just want to update it, repl
 ## Author
 - Steffen Kortmann, Institute for High Voltage Equipment and Grids, Digitalisation and Energy Economics (IAEW) at RWTH Aachen University
 - Andreas Bong, Institute for High Voltage Equipment and Grids, Digitalisation and Energy Economics (IAEW) at RWTH Aachen University
+- Simon Braun, Institute for High Voltage Equipment and Grids, Digitalisation and Energy Economics (IAEW) at RWTH Aachen University
