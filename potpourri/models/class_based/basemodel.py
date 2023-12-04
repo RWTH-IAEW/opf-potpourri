@@ -1,5 +1,6 @@
 import pandas as pd
 from pyomo.environ import *
+from math import pi
 
 
 class Basemodel:
@@ -57,8 +58,6 @@ class Basemodel:
         self.PGmax_data = self.net.sgen.max_p_mw.fillna(self.net.sgen.p_mw) / self.baseMVA
         self.PGmin_data = self.net.sgen.min_p_mw.fillna(0) / self.baseMVA
 
-
-
     def get_demand_active_data(self):
         # active power demand
         self.PD_data = self.net.load.p_mw / self.baseMVA
@@ -84,16 +83,15 @@ class Basemodel:
 
         # --- SETS ---
         self.model.B = Set(initialize=self.bus_set)
-        self.model.eG = Set(within=self.model.B, initialize=self.ext_grid_set)     # external grids
+        self.model.eG = Set(within=self.model.B, initialize=self.ext_grid_set)  # external grids
         self.model.G = Set(initialize=self.sgen_set)
         self.model.Gc = Set(within=self.model.G, initialize=self.sgen_controllable_set)     # controllable static generators
         self.model.D = Set(initialize=self.demand_set)
-        self.model.Dc = Set(within=self.model.D, initialize=self.demand_controllable_set)     # controllable loads
+        self.model.Dc = Set(within=self.model.D, initialize=self.demand_controllable_set)  # controllable loads
         self.model.L = Set(initialize=self.line_set)
         self.model.SHUNT = Set(initialize=self.shunt_set)
         self.model.LE = Set(initialize=[1, 2])
         self.model.TRANSF = Set(initialize=self.trafo_set)
-        self.model.WIND = Set()  # set of wind generators
 
         # generators, buses, loads linked to each bus b
         self.model.Gbs = Set(within=self.model.B * self.model.G,
@@ -102,7 +100,8 @@ class Basemodel:
                              initialize=self.bus_demand_set)  # set of demand-bus mapping
         self.model.SHUNTbs = Set(within=self.model.B * self.model.SHUNT,
                                  initialize=self.bus_shunt_set)  # set of shunt-bus mapping
-        self.model.eGbs = Set(within=self.model.B * self.model.eG, initialize=self.bus_ext_grid_set) # set of external grid-bus mapping
+        self.model.eGbs = Set(within=self.model.B * self.model.eG,
+                              initialize=self.bus_ext_grid_set)  # set of external grid-bus mapping
 
         # --- parameters ---
         # line matrix
@@ -129,9 +128,10 @@ class Basemodel:
         self.model.baseMVA = Param(within=NonNegativeReals, initialize=self.baseMVA)
 
         # --- variables ---
-        self.model.delta = Var(self.model.B, domain=Reals, initialize=0.0)  # voltage phase angle at bus b, rad
+        self.model.delta = Var(self.model.B, domain=Reals, initialize=0.0,
+                               bounds=(-pi, pi))  # voltage phase angle at bus b, rad
         self.model.pD = Var(self.model.D, domain=Reals)  # real power demand delivered
-        self.model.pG = Var(self.model.G, domain=Reals)  # real generator power
+        self.model.pG = Var(self.model.G, domain=NonNegativeReals)  # real generator power
         self.model.peG = Var(self.model.eG, domain=Reals)  # real power injection from external grids
         self.model.pLfrom = Var(self.model.L, domain=Reals)  # real power injected at b onto line
         self.model.pLto = Var(self.model.L, domain=Reals)  # real power injected at b' onto line
@@ -159,13 +159,18 @@ class Basemodel:
         self.model.PD_Constraint = Constraint(self.model.D, rule=real_demand_bounds)
 
         # --- reference bus constraint ---
-        def ref_bus_def(model, b):
+        def ref_bus_def(model, b, g):
             return model.delta[b] == 0
 
-        self.model.refbus_delta = Constraint(self.model.eG, rule=ref_bus_def)
+        self.model.refbus_delta = Constraint(self.model.eGbs, rule=ref_bus_def)
 
-    def solve(self):
-        solver = SolverFactory('ipopt')
-        self.results = solver.solve(self.model, load_solutions=True)
+    def solve(self, print_solver_output: bool = False, solver='ipopt', load_solutions:bool = True, mip_solver=None):
+        optimizer = SolverFactory(solver)
 
-
+        if solver == 'mindtpy':
+            if mip_solver == 'gurobi':
+                self.results = optimizer.solve(self.model, mip_solver='gurobi_persistent', nlp_solver='ipopt', tee=print_solver_output)
+            else:
+                self.results = optimizer.solve(self.model, mip_solver='glpk', nlp_solver='ipopt', tee=print_solver_output)
+        else:
+            self.results = optimizer.solve(self.model, load_solutions=load_solutions, tee=print_solver_output)

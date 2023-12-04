@@ -31,7 +31,10 @@ class AC(Basemodel):
         bt_ik = -x_k / z_k ** 2
         yt_m = net.trafo.i0_percent / 100  # magnetising addmittance
         gt_m = net.trafo.pfe_kw / (net.trafo.sn_mva * 1000) * net.sn_mva / net.trafo.sn_mva
-        bt_m = np.sqrt(yt_m ** 2 - gt_m ** 2)
+
+        # TODO: calculation of magnetising addmittance trafo
+        # bt_m = np.sqrt(yt_m ** 2 - gt_m ** 2)
+        bt_m = 0
         Zt_ref = net.trafo.vn_lv_kv ** 2 * net.sn_mva / net.trafo.sn_mva
 
         self.BiiT_data = (bt_ik + 0.5 * bt_m) * ZN[net.trafo.lv_bus].values / Zt_ref
@@ -199,8 +202,8 @@ class AC(Basemodel):
         self.model.QD_Constraint = Constraint(self.model.D, rule=reactive_demand_bounds)
 
         # --- reference bus voltage constraint ---
-        def ref_bus_def(model, b):
+        def ref_bus_def(model, b, g):
             return model.v[b] == 1
 
-        self.model.refbus_v = Constraint(self.model.eG, rule=ref_bus_def)
+        self.model.refbus_v = Constraint(self.model.eGbs, rule=ref_bus_def)
 
