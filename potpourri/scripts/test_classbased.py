@@ -4,6 +4,9 @@ import pandapower as pp
 import matplotlib.pyplot as plt
 import pyomo.environ as pe
 from potpourri.models.class_based.HC_ACOPF import HC_ACOPF
+from potpourri.models.class_based.DCLF import DCLF
+from potpourri.models.class_based.ACLF import ACLF
+
 from potpourri.scripts.pyo_to_net import pyo_sol_to_net_res
 
 
@@ -11,12 +14,12 @@ def create_testnet():
     net = pp.create_empty_network()
 
     pp.create_buses(net, 3, name=["b1", "b2", "b3"], vn_kv=110, max_vm_pu=1.118, min_vm_pu=0.9)
-    pp.create_lines(net, [0, 0, 1], [1, 2, 2], name=["l1", "l2", "l3"], length_km=[3, 10, 17],
+    pp.create_lines(net, [0, 0, 1], [1, 2, 2], name=["l1", "l2", "l3"], length_km=[3, 3, 3],
                     std_type='305-AL1/39-ST1A 110.0')
     pp.create_sgens(net, [0, 1, 2], p_mw=[10, 10, 10])
     pp.create_ext_grid(net, 0)
     pp.create_loads(net, [0, 1, 2], name=["load1", "load2", "load3"], p_mw=[10, 10, 10])
-    # pp.create_sgen(net, 0, p_mw=1, controllable=True)
+    # pp.createsgen(net, 0, p_mw=1, controllable=True)
     # pp.create_sgen(net, 0, p_mw=1, controllable=True, max_p_mw=10)
     # pp.create_load(net, 1, p_mw=1, controllable=True)
     # pp.create_load(net, 2, p_mw=2, controllable=True, max_p_mw=5)
@@ -150,9 +153,10 @@ def vary_slack_and_SLmax(values=None, key=None, hc=None, SL_percent=[100], SWmax
             obj.append(pe.value(hc_act.model.OBJ))
             x.append(i)
             model.append(hc_act)
-            limits['peGmax'].append(hc_act.model.peGmax[0].value)
-            limits['SWmax'].append(hc_act.model.SWmax[3].value)
-            limits['SLmax'].append(hc_act.model.SLmax[0].value)
+            baseMVA = hc_act.model.baseMVA.value
+            limits['peGmax'].append(hc_act.model.peGmax[0].value * baseMVA)
+            limits['SWmax'].append(hc_act.model.SWmax[3].value * baseMVA)
+            limits['SLmax'].append(hc_act.model.SLmax[0].value * baseMVA)
 
             if save_net:
                 pp.to_excel(hc_act.net, folder + key + '_' + str(val) + '_SWmax_' + str(SWmax) + '_SLmax_' + str(
@@ -278,11 +282,11 @@ def plt_pq_wind_from_res(res, save: bool = False, folder=None):
                     value = dict['varied']['val']
                     color = clrs[key + 1]
 
-                ax.plot(p / SWmax, q / SWmax, label=str(bus) + ' - ' + dict['varied']['key'] + ' ' + str(value),
-                        marker=markers[bus - 3], color=color, markersize=10)
+                ax.plot(p / p, q / p, label=str(bus) + ' - ' + dict['varied']['key'] + ' ' + str(value),
+                        marker='.', color=color, markersize=10)
 
-    plt.xlabel('P_wind / S_wind_max')
-    plt.ylabel('Q_wind / S_wind_max')
+    plt.xlabel('P_wind / P_wind_inst')
+    plt.ylabel('Q_wind / P_wind_inst')
     if save:
         plt.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
         plt.savefig(folder + 'pq_' + dict['varied']['key'] + '.png', bbox_inches="tight")
@@ -331,14 +335,18 @@ if __name__ == '__main__':
     #    aclf = ACLF(net)
     #    acopf = ACOPF(net)
     #    base = Basemodel(net)
-    hc = HC_ACOPF(net)
 
-    hc.solve()
-    model = hc.model
+    net = pp.networks.simple_four_bus_system()
+#    dc = DCLF(net)
 
-    pyo_sol_to_net_res(net, model)
-    #    pp.plotting.pf_res_plotly(net)
-    pp.to_excel(net, 'test_net_pyo.xlsx')
+    # hc = HC_ACOPF(net)
+    #
+    # hc.solve()
+    # model = hc.model
+    #
+    # pyo_sol_to_net_res(net, model)
+    # #    pp.plotting.pf_res_plotly(net)
+    # pp.to_excel(net, 'test_net_pyo.xlsx')
 
     # models = [dclf, aclf, dcopf, hc]
     # o = []
@@ -355,3 +363,33 @@ if __name__ == '__main__':
     # pp.runpp(net)
     # pp.plotting.pf_res_plotly(net)
     # pp.to_excel(net, 'test_net.xlsx')
+
+
+def test_lf(net, mode, save: bool = False, folder='../hc_test_results/'):
+    pp.clear_result_tables(net)
+    if mode == 'ac':
+        pp.runpp(net)
+        lf = ACLF(net)
+    elif mode == 'dc':
+        pp.rundcpp(net)
+        lf = DCLF(net)
+
+    lf.solve()
+    pyo_sol_to_net_res(lf.net, lf.model)
+
+    if save:
+        pp.to_excel(lf.net, folder + mode + '_pyo.xlsx')
+        pp.to_excel(net, folder + mode + '.xlsx')
+
+    return net, lf, pp.nets_equal(net, lf.net, True)
+
+
+def get_limiting_constraints(model, tolerance=1e-3):
+    lim_constr = []
+    for c in model.component_objects(pe.Constraint, active=True):
+        for index in c:
+            if c[index].equality:
+                continue
+            if c[index].slack() < tolerance:
+                lim_constr.append(c[index])
+    return lim_constr

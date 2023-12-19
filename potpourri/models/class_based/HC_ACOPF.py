@@ -1,10 +1,15 @@
 from pyomo.environ import *
 from potpourri.models.class_based.ACOPF_base import ACOPF
-from potpourri.models.class_based.basemodel import Basemodel
-
+import pandapower as pp
 
 class HC_ACOPF(ACOPF):
     def __init__(self, net, SWmax=150, SWmin=10, peGmax=10000):
+        if 'wind_hc' not in net.sgen:
+            buses_excl_extGrids = net.bus.loc[~net.bus.index.isin(net.ext_grid.bus)].index
+
+            pp.create_sgens(net, buses_excl_extGrids, p_mw=0, wind_hc=True)
+        net.sgen.wind_hc.fillna(False, inplace=True)
+
         super().__init__(net)
 
         net.sgen.wind_hc.fillna(False, inplace=True)
@@ -19,8 +24,8 @@ class HC_ACOPF(ACOPF):
 
         self.create_model()
 
-    def create_model(self):
-        super().create_model()
+    def add_OPF(self):
+        super().add_OPF()
 
         self.model.name = "HC_ACOPF"
 
@@ -39,10 +44,10 @@ class HC_ACOPF(ACOPF):
 
         self.model.OBJ = Objective(rule=objective, sense=maximize)
 
-        def slack_bounds(model, b):
+        def slack_p_bounds(model, b):
             return -model.peGmax[b], model.peG[b], model.peGmax[b]
 
-        self.model.slack_constraint = Constraint(self.model.eG, rule=slack_bounds)
+        self.model.slack_p_min_max_constr = Constraint(self.model.eG, rule=slack_p_bounds)
 
         # def SW_bounds(model, w):
         #     return model.SWmin[w] ** 2, model.pG[w] ** 2 + model.qG[w] ** 2, model.SWmax[w] ** 2
@@ -82,11 +87,25 @@ class HC_ACOPF(ACOPF):
         def QW_min_max(model, w):
             return -model.SWmax[w] * 0.23, model.qG[w], model.SWmax[w] * 0.48
 
-        self.model.PW_min_max_constraint = Constraint(self.model.WIND, rule=PW_min_max)
-        self.model.QW_pos_constraint = Constraint(self.model.WIND, rule=QW_pos)
-        self.model.QW_neg_constraint = Constraint(self.model.WIND, rule=QW_neg)
-        self.model.QW_min_max_constraint = Constraint(self.model.WIND, rule=QW_min_max)
+        def QW_min(model, w):
+            return model.qG[w] >= -0.23 * model.pG[w]
+
+        def QW_max(model, w):
+            return model.qG[w] <= 0.48 * model.pG[w]
+
+#        self.model.PW_min_max_constraint = Constraint(self.model.WIND, rule=PW_min_max)
+#        self.model.QW_pos_constraint = Constraint(self.model.WIND, rule=QW_pos)
+#        self.model.QW_neg_constraint = Constraint(self.model.WIND, rule=QW_neg)
+#        self.model.QW_min_max_constraint = Constraint(self.model.WIND, rule=QW_min_max)
+        self.model.QW_min_constraint = Constraint(self.model.WIND, rule=QW_min)
+        self.model.QW_max_constraint = Constraint(self.model.WIND, rule=QW_max)
 
     def fix_y(self, value=1.):
         for w in self.model.WIND:
             self.model.y[w].fix(value)
+
+    def unfix_y(self, value=1.):
+        for w in self.model.WIND:
+            self.model.y[w].unfix()
+            self.model.y[w] = value
+
