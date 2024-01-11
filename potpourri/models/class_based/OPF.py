@@ -75,19 +75,19 @@ class OPF(Basemodel):
     def add_OPF(self):
         # controllable generation
         self.model.Gc = Set(within=self.model.G, initialize=self.gen_controllable_set)  # controllable generators
-        self.model.PGmax = Param(self.model.G, initialize=self.PGmax_data)
-        self.model.PGmin = Param(self.model.G, initialize=self.PGmin_data)
+        self.model.PGmax = Param(self.model.G, initialize=self.PGmax_data[self.model.G])
+        self.model.PGmin = Param(self.model.G, initialize=self.PGmin_data[self.model.G])
 
         # controllable loads
         self.model.Dc = Set(within=self.model.D, initialize=self.demand_controllable_set)  # controllable loads
-        self.model.PDmax = Param(self.model.D, initialize=self.PDmax_data)
-        self.model.PDmin = Param(self.model.D, initialize=self.PDmin_data)
+        self.model.PDmax = Param(self.model.D, initialize=self.PDmax_data[self.model.D])
+        self.model.PDmin = Param(self.model.D, initialize=self.PDmin_data[self.model.D])
 
         # lines and transformer chracteristics and ratings
         self.model.SLmax = Param(self.model.L, within=NonNegativeReals,
-                                 initialize=self.SLmax_data, mutable=True)  # real power line limit
+                                 initialize=self.SLmax_data[self.model.L], mutable=True)  # real power line limit
         self.model.SLmaxT = Param(self.model.TRANSF, within=NonNegativeReals,
-                                  initialize=self.SLmaxT_data)  # real power transformer limit
+                                  initialize=self.SLmaxT_data[self.model.TRANSF])  # real power transformer limit
 
         # cost data
         self.model.c2 = Param(self.model.G, within=NonNegativeReals,
@@ -96,6 +96,8 @@ class OPF(Basemodel):
                               initialize=self.c1_data)  # generator cost coefficient c1 (*pG)
         self.model.c0 = Param(self.model.G, within=NonNegativeReals,
                               initialize=self.c0_data)  # generator cost coefficient c0
+
+        self.model.VOLL = Param(self.model.D, within=Reals, initialize=10000)  # value of lost load
 
         # --- generator power limits ---
         def real_power_bounds(model, g):

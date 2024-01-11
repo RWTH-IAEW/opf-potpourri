@@ -29,8 +29,8 @@ class DCOPF(DC, OPF):
         def line_lim2_def(model, l):
             return model.pL[l] >= -model.SLmax[l]
 
-        self.model.line_lim1 = Constraint(self.model.L, rule=line_lim1_def)
-        self.model.line_lim2 = Constraint(self.model.L, rule=line_lim2_def)
+        self.model.line_lim_from = Constraint(self.model.L, rule=line_lim1_def)
+        self.model.line_lim_to = Constraint(self.model.L, rule=line_lim2_def)
 
         # --- power flow limits on transformer lines---
         def transf_lim1_def(model, l):

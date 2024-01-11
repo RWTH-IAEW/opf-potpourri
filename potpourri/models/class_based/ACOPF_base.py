@@ -8,12 +8,12 @@ class ACOPF(AC, OPF):
     def __init__(self, net):
         super().__init__(net)
 
-        if 'max_vm_pu' not in net.bus:
-            net.bus.max_vm_pu = 1.1
+        if 'max_vm_pu' not in self.net.bus:
+            self.net.bus['max_vm_pu'] = 1.1
         if 'min_vm_pu' not in net.bus:
-            net.bus.min_vm_pu = 0.9
-        self.Vmax_data = net.bus.max_vm_pu
-        self.Vmin_data = net.bus.min_vm_pu
+            self.net.bus['min_vm_pu'] = 0.9
+        self.vmax_data = pd.Series(self.net.bus.max_vm_pu[self.bus_set], self.bus_set)
+        self.vmin_data = pd.Series(self.net.bus.min_vm_pu[self.bus_set], self.bus_set)
 
         self.get_generator_reactive_data()
         self.get_demand_reactive_data()
@@ -21,9 +21,6 @@ class ACOPF(AC, OPF):
 
 
     def get_generator_reactive_data(self):
-        # generation set points
-        self.QG_data = self.generators.q_mvar * self.generators.scaling / self.baseMVA
-
         # use active power for reactive power limits, if no reactive power given for any sgen
         if self.generators.q_mvar.sum() == 0:
             lim_q = self.generators.p_mw
@@ -54,8 +51,8 @@ class ACOPF(AC, OPF):
                 else:
                     self.v_min_data = self.net.gen.min_vm_pu.fillna(pd.Series(self.net.bus.min_vm_pu[self.net.gen.bus].values, self.net.gen.index))
         else:
-            self.v_max_data = None
-            self.v_min_data = None
+            self.v_max_data = pd.Series()
+            self.v_min_data = pd.Series()
 
     def get_demand_reactive_data(self):
         # reactive power demand
@@ -81,20 +78,20 @@ class ACOPF(AC, OPF):
 
         self.model.name = "ACOPF"
 
-        self.model.Vmax = Param(self.model.B, within=NonNegativeReals, initialize=self.Vmax_data)  # max voltage angle
-        self.model.Vmin = Param(self.model.B, within=NonNegativeReals, initialize=self.Vmin_data)  # min voltage angle
+        self.model.Vmax = Param(self.model.B, within=NonNegativeReals, initialize=self.vmax_data[self.model.B])  # max voltage (p.u.)
+        self.model.Vmin = Param(self.model.B, within=NonNegativeReals, initialize=self.vmin_data[self.model.B])  # min voltage (p.u.)
 
         # reactive generation
-#        self.model.QG = Param(self.model.G, within=Reals, initialize=self.QG_data)
-        self.model.QGmax = Param(self.model.G, initialize=self.QGmax_data)
-        self.model.QGmin = Param(self.model.G, initialize=self.QGmin_data)
+        self.model.QGmax = Param(self.model.G, initialize=self.QGmax_data[self.model.G])
+        self.model.QGmin = Param(self.model.G, initialize=self.QGmin_data[self.model.G])
 
         # reactive demand
-        self.model.QDmax = Param(self.model.D, initialize=self.QDmax_data)
-        self.model.QDmin = Param(self.model.D, initialize=self.QDmin_data)
+        self.model.QDmax = Param(self.model.D, initialize=self.QDmax_data[self.model.D])
+        self.model.QDmin = Param(self.model.D, initialize=self.QDmin_data[self.model.D])
 
-        self.model.v_gG_max = Param(self.model.Gc, within=NonNegativeReals, initialize=self.v_max_data)
-        self.model.v_gG_min = Param(self.model.Gc, within=NonNegativeReals, initialize=self.v_min_data)
+        # TODO: combine with model.Vmax and model.Vmin
+        self.model.v_gG_max = Param(self.model.Gc, within=NonNegativeReals, initialize=self.v_max_data[self.model.Gc])
+        self.model.v_gG_min = Param(self.model.Gc, within=NonNegativeReals, initialize=self.v_min_data[self.model.Gc])
 
         # --- cost function ---
         def objective(model):
@@ -107,14 +104,14 @@ class ACOPF(AC, OPF):
         self.model.OBJ = Objective(rule=objective, sense=minimize)
 
         # --- line power limits ---
-        def line_lim1_def(model, l):
+        def line_lim_from_def(model, l):
             return model.pLfrom[l] ** 2 + model.qLfrom[l] ** 2 <= model.SLmax[l] ** 2
 
-        def line_lim2_def(model, l):
+        def line_lim_to_def(model, l):
             return model.pLto[l] ** 2 + model.qLto[l] ** 2 <= model.SLmax[l] ** 2
 
-        self.model.line_lim1 = Constraint(self.model.L, rule=line_lim1_def)
-        self.model.line_lim2 = Constraint(self.model.L, rule=line_lim2_def)
+        self.model.line_lim_from = Constraint(self.model.L, rule=line_lim_from_def)
+        self.model.line_lim_to = Constraint(self.model.L, rule=line_lim_to_def)
 
         # --- power flow limits on transformer lines---
         def transf_lim1_def(model, l):
@@ -132,16 +129,6 @@ class ACOPF(AC, OPF):
             return model.QGmin[g], model.qG[g], model.QGmax[g]
 
         self.model.QGc_Constraint = Constraint(self.model.Gc, rule=reactive_power_bounds)
-
-        # controllable generator voltage limits
-        # def v_limits(model, g, b, gc):
-        #     if gc in model.gG:
-        #         model.v[b].unfix()
-        #         return model.v_gG_min[gc], model.v[b], model.v_gG_max[gc]
-        #     else:
-        #         return Constraint.Skip
-        #
-        # self.model.v_gG_constraint = Constraint(self.model.Gbs * self.model.Gc, rule=v_limits)
 
         # --- reactive demand limits ---
         def reactive_demand_bounds(model, d):

@@ -1,3 +1,4 @@
+import pandas as pd
 from pyomo.environ import *
 from potpourri.models.class_based.ACOPF_base import ACOPF
 import pandapower as pp
@@ -12,15 +13,17 @@ class HC_ACOPF(ACOPF):
 
         super().__init__(net)
 
-        net.sgen.wind_hc.fillna(False, inplace=True)
+        self.wind_hc_set = self.generators.index[self.generators.wind_hc & self.generators.in_service]
+        self.bus_whc_set = list(zip(self.generators.bus[self.wind_hc_set], self.wind_hc_set))
 
-        self.SWmax_data = SWmax / self.baseMVA
-        self.SWmin_data = SWmin / self.baseMVA
+        self.SWmax_data = pd.Series(SWmax / self.baseMVA, self.wind_hc_set)
+        self.SWmin_data = pd.Series(SWmin / self.baseMVA, self.wind_hc_set)
 
-        self.peGmax_data = peGmax / self.baseMVA
+        self.peGmax_data = pd.Series(peGmax / self.baseMVA, self.ext_grid_set)
 
-        self.wind_hc_set = net.sgen.index[net.sgen.wind_hc]
-        self.bus_whc_set = list(zip(net.sgen.bus[net.sgen.wind_hc], self.wind_hc_set))
+        self.m_qu = (0.48+0.23)/(96-103)*110
+        self.qu_min = -self.m_qu*96/110+0.48
+        self.qu_max = -self.m_qu*120/110+0.48
 
         self.create_model()
 
@@ -32,12 +35,13 @@ class HC_ACOPF(ACOPF):
         self.model.WIND = Set(within=self.model.G, initialize=self.wind_hc_set)
         self.model.Wbs = Set(within=self.model.B * self.model.G, initialize=self.bus_whc_set)
 
-        self.model.SWmax = Param(self.model.WIND, initialize=self.SWmax_data, mutable=True)
-        self.model.SWmin = Param(self.model.WIND, initialize=self.SWmin_data, mutable=True)
+        self.model.SWmax = Param(self.model.WIND, initialize=self.SWmax_data[self.model.WIND], mutable=True)
+        self.model.SWmin = Param(self.model.WIND, initialize=self.SWmin_data[self.model.WIND], mutable=True)
 
-        self.model.peGmax = Param(self.model.eG, initialize=self.peGmax_data, mutable=True)
+        # TODO: include ext grid limits from net.ext_grid in OPF
+        self.model.peGmax = Param(self.model.eG, initialize=self.peGmax_data[self.model.eG], mutable=True)
 
-        self.model.y = Var(self.model.WIND, within=Binary)
+        self.model.y = Var(self.model.WIND, within=Binary, initialize=1.)
 
         def objective(model):
             return sum(model.pG[w] for w in model.WIND)
@@ -99,6 +103,28 @@ class HC_ACOPF(ACOPF):
 #        self.model.QW_min_max_constraint = Constraint(self.model.WIND, rule=QW_min_max)
         self.model.QW_min_constraint = Constraint(self.model.WIND, rule=QW_min)
         self.model.QW_max_constraint = Constraint(self.model.WIND, rule=QW_max)
+
+        def QU_min(model, w):
+            for (b, g) in model.Gbs:
+                if g == w:
+                    return model.qG[w] >= (self.m_qu * model.v[b] + self.qu_min) * model.pG[w]
+        self.model.QU_min_constraint = Constraint(self.model.WIND, rule=QU_min)
+
+        def QU_max(model, w):
+            for (b, g) in model.Gbs:
+                if g == w:
+                    return model.qG[w] <= (self.m_qu * model.v[b] + self.qu_max) * model.pG[w]
+        self.model.QU_max_constraint = Constraint(self.model.WIND, rule=QU_max)
+
+    def add_loss_obj(self):
+        self.model.eps = Param(domain=Reals, initialize=1., mutable=True)
+
+        def objective_pwind_loss(model):
+            return model.eps * sum(model.pG[w] for w in model.WIND) + (1-model.eps)*(- sum(model.pLfrom[l] + model.pLto[l] for l in model.L))
+
+        self.model.OBJ.deactivate()
+        self.model.OBJ_with_loss = Objective(rule=objective_pwind_loss, sense=maximize)
+
 
     def fix_y(self, value=1.):
         for w in self.model.WIND:

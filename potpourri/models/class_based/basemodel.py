@@ -3,6 +3,7 @@ from pyomo.environ import *
 from math import pi
 import copy
 import numpy as np
+from potpourri.models.class_based.pyo_to_net import pyo_sol_to_net_res
 
 
 class Basemodel:
@@ -11,41 +12,43 @@ class Basemodel:
         self.net = copy.deepcopy(net)
         self.net.gen.index += len(self.net.sgen.index)
 
-        self.gen_set = self.net.gen.index
-        self.sgen_set = self.net.sgen.index
         self.generators = pd.concat([self.net.sgen, self.net.gen])
-        self.gen_all_set = self.generators.index
 
-        # --- Set indices ---
-        self.bus_set = net.bus.index
-        self.demand_set = net.load.index
-        self.line_set = net.line.index
-        self.shunt_set = net.shunt.index
-        self.trafo_set = net.trafo.index
-        self.ext_grid_set = net.ext_grid.index
-        self.slack_set = net.ext_grid.bus
+        # --- Sets ---
+        self.gen_set = self.net.gen.index[self.net.gen.in_service]
+        self.sgen_set = self.net.sgen.index[self.net.sgen.in_service]
+        self.gen_all_set = self.generators.index[self.generators.in_service]
 
-        self.bus_gen_set = list(zip(self.generators.bus, self.gen_all_set))
-        self.bus_demand_set = list(zip(net.load.bus, self.demand_set))
-        self.bus_shunt_set = list(zip(net.shunt.bus, self.shunt_set))
-        self.bus_ext_grid_set = list(zip(net.ext_grid.bus, self.ext_grid_set))
+        self.bus_set = self.net.bus.index[self.net.bus.in_service]
+        self.demand_set = self.net.load.index[self.net.load.in_service]
+        self.line_set = self.net.line.index[self.net.line.in_service]
+        self.shunt_set = self.net.shunt.index[self.net.shunt.in_service]
+        self.trafo_set = self.net.trafo.index[self.net.trafo.in_service]
+        self.ext_grid_set = self.net.ext_grid.index[self.net.ext_grid.in_service]
 
+        self.bus_gen_set = list(zip(self.generators.bus[self.gen_all_set], self.gen_all_set))
+        self.bus_demand_set = list(zip(self.net.load.bus[self.demand_set], self.demand_set))
+        self.bus_shunt_set = list(zip(self.net.shunt.bus[self.shunt_set], self.shunt_set))
+        self.bus_ext_grid_set = list(zip(self.net.ext_grid.bus[self.ext_grid_set], self.ext_grid_set))
+
+        # line and trafo matrizes
         self.bus_line_dict = dict(
             zip(list(zip(self.line_set, [1] * len(self.line_set))) + list(zip(self.line_set, [2] * len(self.line_set))),
-                pd.concat([net.line.from_bus, net.line.to_bus])))
+                pd.concat([self.net.line.from_bus[self.line_set], self.net.line.to_bus[self.line_set]])))
         self.bus_trafo_dict = dict(zip(list(zip(self.trafo_set, [1] * len(self.trafo_set))) + list(
-            zip(self.trafo_set, [2] * len(self.trafo_set))), pd.concat([net.trafo.hv_bus, net.trafo.lv_bus])))
+            zip(self.trafo_set, [2] * len(self.trafo_set))), pd.concat(
+            [self.net.trafo.hv_bus[self.trafo_set], self.net.trafo.lv_bus[self.trafo_set]])))
 
         # --- Param Data ---
         self.baseMVA = net.sn_mva
 
-        self.PG_data = self.generators.p_mw * self.generators.scaling / self.baseMVA    # active power generation set points
+        self.PG_data = self.generators.p_mw * self.generators.scaling / self.baseMVA  # active power generation set points
 
         self.PD_data = self.net.load.p_mw * self.net.load.scaling / self.baseMVA
 
-        self.GB_data = net.shunt.p_mw * net.shunt.step / self.baseMVA
+        self.GB_data = self.net.shunt.p_mw * self.net.shunt.step / self.baseMVA
 
-        self.delta_eG_data = self.net.ext_grid.va_degree * pi/180
+        self.delta_eG_data = self.net.ext_grid.va_degree * pi / 180
 
         # --- transformer ---
         self._calc_trafo_values()
@@ -54,7 +57,7 @@ class Basemodel:
 
     def _calc_trafo_values(self):
         vn_trafo_hv, vn_trafo_lv, shift = self._calc_tap_shift()
-        shift_rad = shift * pi/180
+        shift_rad = shift * pi / 180
         ratio = self._calc_nominal_ratio_from_dataframe(vn_trafo_hv, vn_trafo_lv)
         r, x, y = self._calc_r_x_y_from_dataframe(vn_trafo_lv, self.net.bus.vn_kv[self.net.trafo.lv_bus].values)
 
@@ -117,7 +120,7 @@ class Basemodel:
                 trafo_shift[phase_shifters] += np.where(
                     (degree_is_set),
                     (direction * tap_diff[phase_shifters] * tap_step_degree[phase_shifters]),
-                    (direction * 2 * np.rad2deg(np.arcsin(tap_diff[phase_shifters] * \
+                    (direction * 2 * np.rad2deg(np.arcsin(tap_diff[phase_shifters] *
                                                           tap_step_percent[phase_shifters] / 100 / 2)))
                 )
 
@@ -139,7 +142,7 @@ class Basemodel:
         OUTPUT:
             **tab** (1d array, float) - The off-nominal tap ratio
         """
-        # Calculating tab (trasformer off nominal turns ratio)
+        # Calculating tab (transformer off nominal turns ratio)
         tap_rat = vn_hv_kv / vn_lv_kv
         hv_bus = self.net.trafo.hv_bus
         lv_bus = self.net.trafo.lv_bus
@@ -147,7 +150,10 @@ class Basemodel:
         return tap_rat / nom_rat
 
     def _calc_r_x_y_from_dataframe(self, vn_trafo_lv, vn_lv):
-        trafo_model = self.net["_options"]["trafo_model"]
+        if '_options' in self.net:
+            trafo_model = self.net["_options"]["trafo_model"]
+        else:
+            trafo_model = 't'
 
         r, x = self._calc_r_x_from_dataframe(vn_lv, vn_trafo_lv)
 
@@ -258,29 +264,28 @@ class Basemodel:
                               initialize=self.bus_ext_grid_set)  # set of external grid-bus mapping
 
         # --- parameters ---
-        # line matrix
+        # line and trafo matrix
         self.model.A = Param(self.model.L * self.model.LE, initialize=self.bus_line_dict)  # bus-line matrix
         self.model.AT = Param(self.model.TRANSF * self.model.LE,
                               initialize=self.bus_trafo_dict)  # bus-transformer matrix
 
         # generation
-        self.model.PG = Param(self.model.G, initialize=self.PG_data)
+        self.model.PG = Param(self.model.G, initialize=self.PG_data[self.model.G])
 
         # demand
-        self.model.PD = Param(self.model.D, initialize=self.PD_data)
-
-        self.model.VOLL = Param(self.model.D, within=Reals, initialize=10000)  # value of lost load
+        self.model.PD = Param(self.model.D, initialize=self.PD_data[self.model.D])
 
         # shunt
-        self.model.GB = Param(self.model.SHUNT, within=Reals, initialize=self.GB_data)  # shunt conductance
+        self.model.GB = Param(self.model.SHUNT, within=Reals,
+                              initialize=self.GB_data[self.model.SHUNT])  # shunt conductance
 
         # trafo
         self.model.shift = Param(self.model.TRANSF, within=Reals,
-                                 initialize=self.shift_rad_data)  # transformer phase shift in rad
-        self.model.Tap = Param(self.model.TRANSF, within=Reals, initialize=self.tap_data)
+                                 initialize=self.shift_rad_data[self.model.TRANSF])  # transformer phase shift in rad
+        self.model.Tap = Param(self.model.TRANSF, within=Reals, initialize=self.tap_data[self.model.TRANSF])
 
         # external grid voltage angle
-        self.model.delta_eG = Param(self.model.eG, within=Reals, initialize=self.delta_eG_data)
+        self.model.delta_eG = Param(self.model.eG, within=Reals, initialize=self.delta_eG_data[self.model.eG])
 
         # baseMVA of the net
         self.model.baseMVA = Param(within=NonNegativeReals, initialize=self.baseMVA)
@@ -312,10 +317,11 @@ class Basemodel:
         #
         # self.model.refbus_delta = Constraint(self.model.eGbs, rule=ref_bus_def)
 
-    def solve(self, print_solver_output: bool = False, solver='ipopt', load_solutions: bool = True, mip_solver=None):
+    def solve(self, to_net: bool = True, print_solver_output: bool = False, solver='ipopt', load_solutions: bool = True, mip_solver=None, ):
         optimizer = SolverFactory(solver)
 
         if solver == 'mindtpy':
+            print('solving with mindtpy')
             if mip_solver == 'gurobi':
                 self.results = optimizer.solve(self.model, mip_solver='gurobi_persistent', nlp_solver='ipopt',
                                                tee=print_solver_output)
@@ -323,4 +329,46 @@ class Basemodel:
                 self.results = optimizer.solve(self.model, mip_solver='glpk', nlp_solver='ipopt',
                                                tee=print_solver_output)
         else:
+            print('solving with ipopt')
             self.results = optimizer.solve(self.model, load_solutions=load_solutions, tee=print_solver_output)
+
+        if check_optimal_termination(self.results) & to_net:
+            pyo_sol_to_net_res(self.net, self.model)
+
+    def change_vals(self, key, value):
+        component = self.model.component(key)
+        if not component:
+            print("Model " + self.model.name + " has no component " + key)
+            return
+        try:
+            for index in component:
+                component[index] = value
+        except TypeError as err:
+            print(err)
+
+    def fix_vars(self, key, value=None):
+        component = self.model.component(key)
+        if not component:
+            print("Model " + self.model.name + " has no component " + key)
+            return
+        try:
+            for index in component:
+                if value:
+                    component[index].fix(value)
+                else:
+                    component[index].fix()
+        except AttributeError as err:
+            print(err)
+
+    def unfix_vars(self, key, value=None):
+        component = self.model.component(key)
+        if not component:
+            print("Model " + self.model.name + " has no component " + key)
+            return
+        try:
+            for index in component:
+                component[index].unfix()
+                if value:
+                    component[index] = value
+        except AttributeError as err:
+            print(err)

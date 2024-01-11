@@ -25,75 +25,6 @@ class AC(Basemodel):
         self.Gii_data = g_ik_data
         self.Gik_data = -g_ik_data
 
-        # r_k = net.trafo.vkr_percent / 100 * (net.sn_mva / net.trafo.sn_mva)
-        # z_k = net.trafo.vk_percent / 100 * (net.sn_mva / net.trafo.sn_mva)
-        # x_k = np.sqrt(z_k ** 2 - r_k ** 2)
-        # gt_ik = r_k / z_k ** 2
-        # bt_ik = -x_k / z_k ** 2
-        # yt_m = net.trafo.i0_percent / 100  # magnetising addmittance
-        # gt_m = net.trafo.pfe_kw / (net.trafo.sn_mva * 1000) * net.sn_mva / net.trafo.sn_mva
-
-        # bt_m = np.sqrt(yt_m ** 2 - gt_m ** 2)
-        # bt_m = 0
-        # Zt_ref = net.trafo.vn_lv_kv ** 2 * net.sn_mva / net.trafo.sn_mva
-
-        # self.BiiT_data = (bt_ik + 0.5 * bt_m) * ZN[net.trafo.lv_bus].values / Zt_ref
-        # self.BikT_data = -bt_ik * ZN[net.trafo.lv_bus].values / Zt_ref
-        # self.GiiT_data = gt_ik * ZN[net.trafo.lv_bus].values / Zt_ref
-        # self.GikT_data = -gt_ik * ZN[net.trafo.lv_bus].values / Zt_ref
-
-        # gt_m = 0.0006
-
-        # self.BiiT_data = (bt_ik + 0.5 * bt_m)
-        # self.BikT_data = -bt_ik
-        # self.GiiT_data = gt_ik + 0.5 * gt_m
-        # self.GikT_data = -gt_ik
-
-        # tap_lv = np.sqrt(self.net.trafo.vn_lv_kv / self.net.bus.vn_kv[
-        #     self.net.trafo.lv_bus].values) * net.sn_mva  # from pandapower build_branch.py _calc_r_x_from_dataframe()
-        # z_k = self.net.trafo.vk_percent / 100. / self.net.trafo.sn_mva * tap_lv
-        # r_k = self.net.trafo.vkr_percent / 100. / self.net.trafo.sn_mva * tap_lv
-        # x_k = np.sign(z_k) * np.sqrt(z_k ** 2 - r_k ** 2)
-        #
-        # gt_ik = r_k / z_k ** 2
-        # bt_ik = -x_k / z_k ** 2
-        # Z_N = self.net.bus.vn_kv[self.net.trafo.lv_bus] ** 2 / self.net.sn_mva
-        # gt_m = self.net.trafo.pfe_kw * 1e-3 / self.net.trafo.vn_lv_kv ** 2 * Z_N.values  # *1/sn_trafo? (nach pandapower doku) hier wie in calc_y_from_df
-        # bt_m = (self.net.trafo.i0_percent / 100. * self.net.trafo.sn_mva) ** 2 - (self.net.trafo.pfe_kw * 1e-3) ** 2
-        # bt_m[bt_m < 0] = 0
-        # bt_m = np.sqrt(bt_m) * Z_N.values / self.net.trafo.vn_lv_kv ** 2
-        #
-        # # vnh = [485.0, 489.0, 521.5, 345.0, 345.0, 167.92299999999997, 155.687, 336.375, 219.65, 131.79, 124.2, 128.34,
-        # #        123.51, 220.34, 220.34, 225.4, 151.33999999999997]
-        # # tap_rat = vnh / self.net.trafo.vn_lv_kv
-        # # ---
-        #
-        # tap_rat = self.net.trafo.vn_hv_kv / self.net.trafo.vn_lv_kv
-        # nom_rat = self.net.bus.vn_kv[self.net.trafo.hv_bus].values / self.net.bus.vn_kv[self.net.trafo.lv_bus].values
-        # tap_ratio = tap_rat / nom_rat
-        # self.BiiT_data = (bt_ik + 0.5 * bt_m) / tap_ratio ** 2
-        # self.BikT_data = -bt_ik / tap_ratio
-        # self.GiiT_data = (gt_ik + 0.5 * gt_m) / tap_ratio
-        # self.GikT_data = -gt_ik / tap_ratio
-
-        # ---- trafo ----
-        # vn_trafo_hv, vn_trafo_lv, shift = self._calc_tap_shift()
-        # ratio = self._calc_nominal_ratio_from_dataframe(vn_trafo_hv, vn_trafo_lv)
-        # r, x, y = self._calc_r_x_y_from_dataframe(vn_trafo_lv, self.net.bus.vn_kv[self.net.trafo.lv_bus].values)
-        #
-        # r, x, y, shift, ratio = self._calc_trafo_values()
-        #
-        # gt_ik = r / (x ** 2 + r ** 2)
-        # bt_ik = -x / (x ** 2 + r ** 2)
-
-        # self.tap_data = ratio
-        # self.shift_rad_data = shift
-
-        # self.BiiT_data = (bt_ik + y.imag / 2)
-        # self.BikT_data = -bt_ik
-        # self.GiiT_data = (gt_ik + y.real / 2)
-        # self.GikT_data = -gt_ik
-
         gt_ik = self.trafo_parameters["r"] / (self.trafo_parameters["r"] ** 2 + self.trafo_parameters["x"] ** 2)
         bt_ik = -self.trafo_parameters["x"] / (self.trafo_parameters["r"] ** 2 + self.trafo_parameters["x"] ** 2)
 
@@ -111,82 +42,38 @@ class AC(Basemodel):
 
         self.v_eG_data = self.net.ext_grid.vm_pu
 
-    # def get_branch_addmittance_data(self):
-    #     pp.runpp(self.net)
-    #
-    #     Yf = self.net._ppc["internal"]["Yf"]
-    #
-    #     gii = []
-    #     bii = []
-    #     gik = []
-    #     bik = []
-    #
-    #     for l in self.line_set:
-    #         yii = Yf[l, self.bus_line_dict[l, 1]]
-    #         yik = Yf[l, self.bus_line_dict[l, 2]]
-    #
-    #         gii.append(yii.real)
-    #         bii.append(yii.imag)
-    #
-    #         gik.append(yik.real)
-    #         bik.append(yik.imag)
-    #
-    #     # self.Bii_data = bii
-    #     # self.Bik_data = bik
-    #     # self.Gii_data = gii
-    #     # self.Gik_data = gik
-    #
-    #     trafo_offset = len(self.line_set)
-    #
-    #     giiT = []
-    #     biiT = []
-    #     gikT = []
-    #     bikT = []
-    #
-    #     for t in self.trafo_set:
-    #         t_ind = t + trafo_offset
-    #         yii = Yf[t_ind, self.bus_trafo_dict[t, 1]]
-    #         yik = Yf[t_ind, self.bus_trafo_dict[t, 2]]
-    #
-    #         giiT.append(yii.real)
-    #         biiT.append(yii.imag)
-    #
-    #         gikT.append(yik.real)
-    #         bikT.append(yik.imag)
-    #
-    #     self.GiiT_data = giiT
-    #     self.GikT_data = gikT
-    #     self.BiiT_data = biiT
-    #     self.BikT_data = bikT
+        self.create_model()
 
     def create_model(self):
         super().create_model()
 
+        self.model.name = "AC"
+
         # shunt
-        self.model.BB = Param(self.model.SHUNT, within=Reals, initialize=self.BB_data)  # shunt susceptance
+        self.model.BB = Param(self.model.SHUNT, within=Reals, initialize=self.BB_data[self.model.SHUNT])  # shunt susceptance
 
         # derived line parameters
-        self.model.Bii = Param(self.model.L, within=Reals, initialize=self.Bii_data)
-        self.model.Bik = Param(self.model.L, within=Reals, initialize=self.Bik_data)
-        self.model.Gii = Param(self.model.L, within=Reals, initialize=self.Gii_data)
-        self.model.Gik = Param(self.model.L, within=Reals, initialize=self.Gik_data)
+        self.model.Bii = Param(self.model.L, within=Reals, initialize=self.Bii_data[self.model.L])
+        self.model.Bik = Param(self.model.L, within=Reals, initialize=self.Bik_data[self.model.L])
+        self.model.Gii = Param(self.model.L, within=Reals, initialize=self.Gii_data[self.model.L])
+        self.model.Gik = Param(self.model.L, within=Reals, initialize=self.Gik_data[self.model.L])
 
         ## derived transformer parameters
-        self.model.BiiT = Param(self.model.TRANSF, within=Reals, initialize=self.BiiT_data)
-        self.model.BikT = Param(self.model.TRANSF, within=Reals, initialize=self.BikT_data)
-        self.model.GiiT = Param(self.model.TRANSF, within=Reals, initialize=self.GiiT_data)
-        self.model.GikT = Param(self.model.TRANSF, within=Reals, initialize=self.GikT_data)
+        self.model.BiiT = Param(self.model.TRANSF, within=Reals, initialize=self.BiiT_data[self.model.TRANSF])
+        self.model.BikT = Param(self.model.TRANSF, within=Reals, initialize=self.BikT_data[self.model.TRANSF])
+        self.model.GiiT = Param(self.model.TRANSF, within=Reals, initialize=self.GiiT_data[self.model.TRANSF])
+        self.model.GikT = Param(self.model.TRANSF, within=Reals, initialize=self.GikT_data[self.model.TRANSF])
 
         # reactive generation
-        self.model.QsG = Param(self.model.sG, initialize=self.QsG_data)
+        self.model.QsG = Param(self.model.sG, initialize=self.QsG_data[self.model.sG])
 
-        self.model.v_gG = Param(self.model.gG, initialize=self.v_gG_data)
+        self.model.v_gG = Param(self.model.gG, initialize=self.v_gG_data[self.model.gG])
 
         # reactive demand
-        self.model.QD = Param(self.model.D, initialize=self.QD_data)
+        self.model.QD = Param(self.model.D, initialize=self.QD_data[self.model.D])
 
         # external grid voltage
-        self.model.v_eG = Param(self.model.eG, within=NonNegativeReals, initialize=self.v_eG_data)
+        self.model.v_eG = Param(self.model.eG, within=NonNegativeReals, initialize=self.v_eG_data[self.model.eG])
 
         # --- control variables ---
         self.model.qG = Var(self.model.G, domain=Reals)  # reactive generator power
@@ -270,6 +157,12 @@ class AC(Basemodel):
             #             (model.GikT[l] * cos(model.shift[l]) - model.BikT[l] * sin(model.shift[l])) * cos(model.delta[model.AT[l, 1]] - model.delta[model.AT[l, 2]]) +
             #             (model.GikT[l] * sin(model.shift[l]) + model.BikT[l] * cos(model.shift[l])) * sin(model.delta[model.AT[l, 1]] - model.delta[model.AT[l, 2]]))
 
+            if model.shift[l]:
+                return model.pThv[l] == model.GiiT[l] / model.Tap[l] ** 2 * (model.v[model.AT[l, 1]] ** 2) + \
+                model.v[model.AT[l, 1]] * model.v[model.AT[l, 2]] / model.Tap[l] * (
+                        model.GikT[l] * cos(model.delta[model.AT[l, 1]] - model.delta[model.AT[l, 2]] - model.shift[l]) +
+                        model.BikT[l] * sin(model.delta[model.AT[l, 1]] - model.delta[model.AT[l, 2]] - model.shift[l]))
+
             return model.pThv[l] == model.GiiT[l] / model.Tap[l] ** 2 * (model.v[model.AT[l, 1]] ** 2) + \
                 model.v[model.AT[l, 1]] * model.v[model.AT[l, 2]] / model.Tap[l] * (
                         model.GikT[l] * cos(model.delta[model.AT[l, 1]] - model.delta[model.AT[l, 2]]) +
@@ -282,6 +175,12 @@ class AC(Basemodel):
             #             (model.GikT[l] * cos(model.shift[l]) + model.BikT[l] * sin(model.shift[l])) * cos(model.delta[model.AT[l, 2]] - model.delta[model.AT[l, 1]]) +
             #             (-model.GikT[l] * sin(model.shift[l]) + model.BikT[l] * cos(model.shift[l])) * sin(model.delta[model.AT[l, 2]] - model.delta[model.AT[l, 1]]))
 
+            if model.shift[l]:
+                return model.pTlv[l] == model.GiiT[l] * (model.v[model.AT[l, 2]] ** 2) + \
+                model.v[model.AT[l, 1]] * model.v[model.AT[l, 2]] / model.Tap[l] * (
+                        model.BikT[l] * sin(model.delta[model.AT[l, 2]] - model.delta[model.AT[l, 1]] + model.shift[l]) +
+                        model.GikT[l] * cos(model.delta[model.AT[l, 2]] - model.delta[model.AT[l, 1]] + model.shift[l]))
+
             return model.pTlv[l] == model.GiiT[l] * (model.v[model.AT[l, 2]] ** 2) + \
                 model.v[model.AT[l, 1]] * model.v[model.AT[l, 2]] / model.Tap[l] * (
                         model.BikT[l] * sin(model.delta[model.AT[l, 2]] - model.delta[model.AT[l, 1]]) +
@@ -293,6 +192,13 @@ class AC(Basemodel):
             #             model.v[model.AT[l, 1]] * model.v[model.AT[l, 2]] / model.Tap[l] * (
             #             -(model.GikT[l] * sin(model.shift[l]) + model.BikT[l] * cos(model.shift[l])) * cos(model.delta[model.AT[l, 1]] - model.delta[model.AT[l, 2]]) +
             #             (model.GikT[l] * cos(model.shift[l]) - model.BikT[l] * sin(model.shift[l])) * sin(model.delta[model.AT[l, 1]] - model.delta[model.AT[l, 2]]))
+
+            if model.shift[l]:
+                return model.qThv[l] == -model.BiiT[l] / model.Tap[l] ** 2 * (model.v[model.AT[l, 1]] ** 2) + \
+                model.v[model.AT[l, 1]] * model.v[model.AT[l, 2]] / model.Tap[l] * (
+                        - model.BikT[l] * cos(model.delta[model.AT[l, 1]] - model.delta[model.AT[l, 2]] - model.shift[l]) +
+                        model.GikT[l] * sin(model.delta[model.AT[l, 1]] - model.delta[model.AT[l, 2]] - model.shift[l]))
+
 
             return model.qThv[l] == -model.BiiT[l] / model.Tap[l] ** 2 * (model.v[model.AT[l, 1]] ** 2) + \
                 model.v[model.AT[l, 1]] * model.v[model.AT[l, 2]] / model.Tap[l] * (
@@ -307,6 +213,12 @@ class AC(Basemodel):
             #             model.delta[model.AT[l, 2]] - model.delta[model.AT[l, 1]]) +
             #                 (model.GikT[l] * cos(model.shift[l]) + model.BikT[l] * sin(model.shift[l])) * sin(
             #             model.delta[model.AT[l, 2]] - model.delta[model.AT[l, 1]]))
+
+            if model.shift[l]:
+                return model.qTlv[l] == -model.BiiT[l] * (model.v[model.AT[l, 2]] ** 2) + \
+                model.v[model.AT[l, 1]] * model.v[model.AT[l, 2]] / model.Tap[l] * (
+                        - model.BikT[l] * cos(model.delta[model.AT[l, 2]] - model.delta[model.AT[l, 1]] + model.shift[l]) +
+                        model.GikT[l] * sin(model.delta[model.AT[l, 2]] - model.delta[model.AT[l, 1]] + model.shift[l]))
 
             return model.qTlv[l] == -model.BiiT[l] * (model.v[model.AT[l, 2]] ** 2) + \
                 model.v[model.AT[l, 1]] * model.v[model.AT[l, 2]] / model.Tap[l] * (

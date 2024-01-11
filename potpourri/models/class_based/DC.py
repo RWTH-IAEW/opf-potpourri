@@ -8,32 +8,23 @@ class DC(Basemodel):
         super().__init__(net)
 
         ZN = self.net.bus.vn_kv ** 2 / self.baseMVA
-        # bik = - self.net.line.x_ohm_per_km / (
-        #             (self.net.line.x_ohm_per_km ** 2 + self.net.line.r_ohm_per_km ** 2) * self.net.line.length_km)
         y_s = - 1 / (self.net.line.x_ohm_per_km * self.net.line.length_km)      # according to matpower manual dc modeling
 
         self.BL_data = y_s * ZN[self.net.line.from_bus].values
 
-        # r_k = self.net.trafo.vkr_percent / 100 * (self.net.sn_mva / self.net.trafo.sn_mva)
-        # z_k = self.net.trafo.vk_percent / 100 * (self.net.sn_mva / self.net.trafo.sn_mva)
-        # x_k = np.sqrt(z_k ** 2 - r_k ** 2)
-
-        tap_lv = np.sqrt(self.net.trafo.vn_lv_kv / self.net.bus.vn_kv[self.net.trafo.lv_bus].values) * net.sn_mva   # from pandapower build_branch.py _calc_r_x_from_dataframe()
-        z_k = self.net.trafo.vk_percent / 100. / self.net.trafo.sn_mva * tap_lv
-        r_k = self.net.trafo.vkr_percent / 100. / self.net.trafo.sn_mva * tap_lv
-        x_k = np.sign(z_k) * np.sqrt(z_k ** 2 - r_k ** 2)
-
-        # self.BLT_data = - 1/x_k
-
         self.BLT_data = pd.Series(-1 / self.trafo_parameters["x"] / self.trafo_parameters["ratio"], self.trafo_set)
+
+        self.create_model()
 
     def create_model(self):
         super().create_model()
 
+        self.model.name = "DC"
+
         # lines and transformer chracteristics
-        self.model.BL = Param(self.model.L, within=Reals, initialize=self.BL_data)  # susceptance of a line
+        self.model.BL = Param(self.model.L, within=Reals, initialize=self.BL_data[self.model.L])  # susceptance of a line
         self.model.BLT = Param(self.model.TRANSF, within=Reals,
-                               initialize=self.BLT_data)  # susceptance of a transformer
+                               initialize=self.BLT_data[self.model.TRANSF])  # susceptance of a transformer
 
         # --- Variables ---
         self.model.deltaL = Var(self.model.L, domain=Reals)  # angle difference across lines
@@ -75,8 +66,7 @@ class DC(Basemodel):
 
         # --- phase angle constraints ---
         def phase_angle_diff1(model, l):
-            return model.deltaL[l] == model.delta[model.A[l, 1]] - \
-                model.delta[model.A[l, 2]]
+            return model.deltaL[l] == model.delta[model.A[l, 1]] - model.delta[model.A[l, 2]]
 
         self.model.phase_diff1 = Constraint(self.model.L, rule=phase_angle_diff1)
 
