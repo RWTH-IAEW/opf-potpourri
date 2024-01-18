@@ -2,6 +2,7 @@ import numpy as np
 import pandapower as pp
 import pandas as pd
 
+
 def pyo_sol_to_net_res(net, model):
     if 'HC' in model.name:
         for w in model.WIND:
@@ -28,7 +29,7 @@ def _bus_results_to_net(net, model):
         net.res_bus.vm_pu[net.ext_grid.bus] = net.ext_grid.vm_pu
 
     else:
-        net.res_bus.vm_pu = model.v.get_values()
+        net.res_bus.vm_pu = pd.Series(model.v.get_values(), index=net.bus.index)
 
         # bus reactive power
         for b in model.B:
@@ -49,10 +50,11 @@ def _bus_results_to_net(net, model):
     net.res_bus.va_degree = model.delta.get_values()
     net.res_bus.va_degree *= 180 / np.pi
 
+
 def _line_results_to_net(net, model):
     # --- lines ---
     # voltage on lines
-    net.res_line.vm_from_pu = net.res_bus.vm_pu[net.line.from_bus].values
+    net.res_line.vm_from_pu = pd.Series(net.res_bus.vm_pu[net.line.from_bus].values, index=net.line.index)
     net.res_line.vm_to_pu = net.res_bus.vm_pu[net.line.to_bus].values
 
     # voltage angle
@@ -89,23 +91,26 @@ def _line_results_to_net(net, model):
 
     net.res_line.fillna(0, inplace=True)
 
+
 def _ext_grid_results_to_net(net, model):
     # --- external grid ---
-    net.res_ext_grid.p_mw = model.peG.get_values()
+    net.res_ext_grid.p_mw = pd.Series(model.peG.get_values(), index=net.ext_grid.index)
     net.res_ext_grid.p_mw *= model.baseMVA.value
     if 'AC' in model.name:
         # external grid
         net.res_ext_grid.q_mvar = model.qeG.get_values()
         net.res_ext_grid.q_mvar *= model.baseMVA.value
 
+
 def _load_results_to_net(net, model):
     # --- load ---
-    net.res_load.p_mw = model.pD.get_values()
+    net.res_load.p_mw = pd.Series(model.pD.get_values(), index=net.load.index)
     net.res_load.p_mw *= model.baseMVA.value
     if 'AC' in model.name:
         # load
         net.res_load.q_mvar = model.qD.get_values()
         net.res_load.q_mvar *= model.baseMVA.value
+
 
 def _sgen_results_to_net(net, model):
     # --- sgen ---
@@ -117,9 +122,9 @@ def _sgen_results_to_net(net, model):
         for g in model.sG:
             net.res_sgen.loc[g, 'q_mvar'] = model.qG[g].value * model.baseMVA.value
 
+
 def _gen_results_to_net(net, model):
     # --- gen ---
-
 
     for g in model.gG:
         net.res_gen.loc[g, 'p_mw'] = model.pG[g].value * model.baseMVA.value
@@ -132,8 +137,9 @@ def _gen_results_to_net(net, model):
         for g in model.gG:
             net.res_gen.loc[g, 'q_mvar'] = model.qG[g].value * model.baseMVA.value
 
+
 def _trafo_results_to_net(net, model):
-    net.res_trafo.p_hv_mw = model.pThv.get_values()
+    net.res_trafo.p_hv_mw = pd.Series(model.pThv.get_values(), index=net.trafo.index)
     net.res_trafo.p_hv_mw *= model.baseMVA.value
     net.res_trafo.p_lv_mw = model.pTlv.get_values()
     net.res_trafo.p_lv_mw *= model.baseMVA.value
@@ -168,7 +174,6 @@ def _trafo_results_to_net(net, model):
     # voltage angle
     net.res_trafo.va_hv_degree = net.res_bus.va_degree[net.trafo.hv_bus].values
     net.res_trafo.va_lv_degree = net.res_bus.va_degree[net.trafo.lv_bus].values
-
 
 
 def _shunt_results_to_net(net, model):

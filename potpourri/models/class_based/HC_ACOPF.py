@@ -1,10 +1,11 @@
+import numpy as np
 import pandas as pd
 from pyomo.environ import *
 from potpourri.models.class_based.ACOPF_base import ACOPF
 import pandapower as pp
 
 class HC_ACOPF(ACOPF):
-    def __init__(self, net, SWmax=150, SWmin=10, peGmax=10000):
+    def __init__(self, net, SWmax=10000, SWmin=0, peGmax=10000):
         if 'wind_hc' not in net.sgen:
             buses_excl_extGrids = net.bus.loc[~net.bus.index.isin(net.ext_grid.bus)].index
 
@@ -124,14 +125,4 @@ class HC_ACOPF(ACOPF):
 
         self.model.OBJ.deactivate()
         self.model.OBJ_with_loss = Objective(rule=objective_pwind_loss, sense=maximize)
-
-
-    def fix_y(self, value=1.):
-        for w in self.model.WIND:
-            self.model.y[w].fix(value)
-
-    def unfix_y(self, value=1.):
-        for w in self.model.WIND:
-            self.model.y[w].unfix()
-            self.model.y[w] = value
 

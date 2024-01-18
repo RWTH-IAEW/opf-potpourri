@@ -53,17 +53,22 @@ class Basemodel:
         # --- transformer ---
         self._calc_trafo_values()
         self.shift_rad_data = pd.Series(self.trafo_parameters["shift_rad"], self.trafo_set)
-        self.tap_data = pd.Series(self.trafo_parameters["ratio"], self.trafo_set)
+        self.tap_data = pd.Series(self.trafo_parameters["ratio"][0], self.trafo_set)
 
     def _calc_trafo_values(self):
+        vn_trafo_hv_min, vn_trafo_lv_min, shift_min = self._calc_tap_shift(tap_pos=self.net.trafo.tap_min)
+        vn_trafo_hv_max, vn_trafo_lv_max, shift_max = self._calc_tap_shift(tap_pos=self.net.trafo.tap_max)
+        ratio_min = self._calc_nominal_ratio_from_dataframe(vn_trafo_hv_min, vn_trafo_lv_min)
+        ratio_max = self._calc_nominal_ratio_from_dataframe(vn_trafo_hv_max, vn_trafo_lv_max)
+
         vn_trafo_hv, vn_trafo_lv, shift = self._calc_tap_shift()
-        shift_rad = shift * pi / 180
         ratio = self._calc_nominal_ratio_from_dataframe(vn_trafo_hv, vn_trafo_lv)
+        shift_rad = shift * pi / 180
         r, x, y = self._calc_r_x_y_from_dataframe(vn_trafo_lv, self.net.bus.vn_kv[self.net.trafo.lv_bus].values)
 
-        self.trafo_parameters = {'r': r, 'x': x, 'y': y, 'shift_rad': shift_rad, 'ratio': ratio}
+        self.trafo_parameters = {'r': r, 'x': x, 'y': y, 'shift_rad': shift_rad, 'ratio': [ratio, ratio_min, ratio_max]}
 
-    def _calc_tap_shift(self):
+    def _calc_tap_shift(self, tap_pos=None):
         """
         Adjust the nominal voltage vnh and vnl to the active tab position "tap_pos".
         If "side" is 1 (high-voltage side) the high voltage vnh is adjusted.
@@ -87,7 +92,8 @@ class Basemodel:
         vnl = copy.deepcopy(self.net.trafo.vn_lv_kv.values)
         trafo_shift = self.net.trafo.shift_degree.values
 
-        tap_pos = self.net.trafo.tap_pos
+        if tap_pos is None:
+            tap_pos = self.net.trafo.tap_pos
         tap_neutral = self.net.trafo.tap_neutral
         tap_diff = tap_pos - tap_neutral
         tap_phase_shifter = self.net.trafo.tap_phase_shifter
@@ -282,7 +288,6 @@ class Basemodel:
         # trafo
         self.model.shift = Param(self.model.TRANSF, within=Reals,
                                  initialize=self.shift_rad_data[self.model.TRANSF])  # transformer phase shift in rad
-        self.model.Tap = Param(self.model.TRANSF, within=Reals, initialize=self.tap_data[self.model.TRANSF])
 
         # external grid voltage angle
         self.model.delta_eG = Param(self.model.eG, within=Reals, initialize=self.delta_eG_data[self.model.eG])
@@ -300,6 +305,11 @@ class Basemodel:
         self.model.pLto = Var(self.model.L, domain=Reals)  # real power injected at b' onto line
         self.model.pThv = Var(self.model.TRANSF, domain=Reals)  # real power injected at b onto transformer
         self.model.pTlv = Var(self.model.TRANSF, domain=Reals)  # real power injected at b' onto transformer
+        self.model.Tap = Var(self.model.TRANSF, domain=Reals, initialize=self.tap_data[self.model.TRANSF])  # transformer tap ratio
+
+        # transformer tap ratio
+        for t in self.model.TRANSF:
+            self.model.Tap[t].fix(self.tap_data[t])
 
         # --- generator power ---
         for g in self.model.G:
@@ -317,7 +327,8 @@ class Basemodel:
         #
         # self.model.refbus_delta = Constraint(self.model.eGbs, rule=ref_bus_def)
 
-    def solve(self, to_net: bool = True, print_solver_output: bool = False, solver='ipopt', load_solutions: bool = True, mip_solver=None, ):
+    def solve(self, to_net: bool = True, print_solver_output: bool = False, solver='ipopt', load_solutions: bool = True,
+              mip_solver=None, ):
         optimizer = SolverFactory(solver)
 
         if solver == 'mindtpy':
