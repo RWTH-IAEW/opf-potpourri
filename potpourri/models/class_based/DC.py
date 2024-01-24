@@ -12,7 +12,7 @@ class DC(Basemodel):
 
         self.BL_data = y_s * ZN[self.net.line.from_bus].values
 
-        self.BLT_data = pd.Series(-1 / self.trafo_parameters["x"] / self.trafo_parameters["ratio"], self.trafo_set)
+        self.BLT_data = pd.Series(-1 / self.trafo_parameters["x"] / self.trafo_parameters["ratio"][0], self.trafo_set)
 
         self.create_model()
 

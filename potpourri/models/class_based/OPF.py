@@ -11,7 +11,8 @@ class OPF(Basemodel):
         max_load = net.line.max_loading_percent.values if "max_loading_percent" in net.line else 100.
         self.SLmax_data = self.__calc_SLmax(max_load)
 
-        max_load_T = self.net.trafo.max_loading_percent.fillna(100.) / 100. if "max_loading_percent" in net.trafo else 1.
+        max_load_T = self.net.trafo.max_loading_percent.fillna(
+            100.) / 100. if "max_loading_percent" in net.trafo else 1.
         sn_mva = self.net.trafo.sn_mva
         df_T = self.net.trafo.df
         self.SLmaxT_data = max_load_T * sn_mva * df_T * self.net.trafo.parallel / self.baseMVA
@@ -23,14 +24,15 @@ class OPF(Basemodel):
         self.get_generator_real_power_data()
         self.get_demand_real_power_data()
 
-        self.tap_min_data = pd.Series(self.trafo_parameters["ratio"][1], self.trafo_set)
-        self.tap_max_data = pd.Series(self.trafo_parameters["ratio"][2], self.trafo_set)
+        self.tap_min_data = pd.Series(self.trafo_parameters["ratio"][1].round(15), self.trafo_set)
+        self.tap_max_data = pd.Series(self.trafo_parameters["ratio"][2].round(15), self.trafo_set)
 
         self.tap_neutral = self.net.trafo.tap_neutral
         self.tap_step = self.net.trafo.tap_step_percent / 100.
         self.tap_pos_max = self.net.trafo.tap_max
         self.tap_pos_min = self.net.trafo.tap_min
-        self.tap_side_data = pd.Series(np.where(self.net.trafo.tap_side == 'lv', 1, 0), self.trafo_set)    # tap side data = 1 if tap side is lv, 0 if tap side is hv
+        self.tap_side_data = pd.Series(np.where(self.net.trafo.tap_side == 'lv', 1, 0),
+                                       self.trafo_set)  # tap side data = 1 if tap side is lv, 0 if tap side is hv
 
     def get_generator_real_power_data(self):
         if 'controllable' not in self.generators:
@@ -129,16 +131,6 @@ class OPF(Basemodel):
                                   initialize=self.SLmaxT_data[self.model.TRANSF],
                                   mutable=True)  # real power transformer limit
 
-        # transformer tap position variable and tap ratio parameters
-        self.model.Tap_pos = Var(self.model.TRANSF, within=Integers, initialize=0.)  # transformer tap position
-        self.model.Tap_pos_min = Param(self.model.TRANSF, within=Integers, initialize=self.tap_pos_min)
-        self.model.Tap_pos_max = Param(self.model.TRANSF, within=Integers, initialize=self.tap_pos_max)
-        self.model.Tap_neutral = Param(self.model.TRANSF, within=Integers, initialize=self.tap_neutral)  # transformer tap neutral position
-        self.model.Tap_step = Param(self.model.TRANSF, within=Reals, initialize=self.tap_step)  # transformer tap step size
-        self.model.Tap_min = Param(self.model.TRANSF, within=Reals, initialize=self.tap_min_data[self.model.TRANSF])
-        self.model.Tap_max = Param(self.model.TRANSF, within=Reals, initialize=self.tap_max_data[self.model.TRANSF])
-        self.model.Tap_side = Param(self.model.TRANSF, initialize=self.tap_side_data[self.model.TRANSF])
-
         # cost data
         self.model.c2 = Param(self.model.G, within=NonNegativeReals,
                               initialize=self.c2_data)  # generator cost coefficient c2 (*pG^2)
@@ -162,10 +154,28 @@ class OPF(Basemodel):
         self.model.PD_Constraint = Constraint(self.model.Dc, rule=real_demand_bounds)
 
         # --- transformer tap ratio limits ---
+
+
+    def add_tap_changer_linear(self):
+        self.model.Tap_min = Param(self.model.TRANSF, within=Reals, initialize=self.tap_min_data[self.model.TRANSF])
+        self.model.Tap_max = Param(self.model.TRANSF, within=Reals, initialize=self.tap_max_data[self.model.TRANSF])
+
         def trafo_tap_linear_bounds(model, t):
             return model.Tap_min[t], model.Tap[t], model.Tap_max[t]
 
         self.model.Tap_linear_constr = Constraint(self.model.TRANSF, rule=trafo_tap_linear_bounds)
+
+        self.unfix_vars('Tap')
+
+    def add_tap_changer_discrete(self):
+        self.model.Tap_pos = Var(self.model.TRANSF, within=Integers, initialize=0.)  # transformer tap position
+        self.model.Tap_pos_min = Param(self.model.TRANSF, within=Integers, initialize=self.tap_pos_min)
+        self.model.Tap_pos_max = Param(self.model.TRANSF, within=Integers, initialize=self.tap_pos_max)
+        self.model.Tap_neutral = Param(self.model.TRANSF, within=Integers,
+                                       initialize=self.tap_neutral)  # transformer tap neutral position
+        self.model.Tap_step = Param(self.model.TRANSF, within=Reals,
+                                    initialize=self.tap_step)  # transformer tap step size
+        self.model.Tap_side = Param(self.model.TRANSF, initialize=self.tap_side_data[self.model.TRANSF])
 
         def trafo_tap_pos_min_max(model, t):
             return model.Tap_pos_min[t], model.Tap_pos[t], model.Tap_pos_max[t]
@@ -180,3 +190,5 @@ class OPF(Basemodel):
             return model.Tap[t] == 1. + (model.Tap_pos[t] - model.Tap_neutral[t]) * model.Tap_step[t]
 
         self.model.Tap_discrete_constr = Constraint(self.model.TRANSF, rule=trafo_tap_discrete)
+
+        self.unfix_vars('Tap')
