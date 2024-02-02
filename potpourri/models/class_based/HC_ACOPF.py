@@ -15,7 +15,7 @@ class HC_ACOPF(ACOPF):
         super().__init__(net)
 
         self.wind_hc_set = self.generators.index[self.generators.wind_hc & self.generators.in_service]
-        self.bus_whc_set = list(zip(self.generators.bus[self.wind_hc_set], self.wind_hc_set))
+        self.bus_whc_set = list(zip(self.bus_lookup[self.generators.bus[self.wind_hc_set].values], self.wind_hc_set))
 
         self.SWmax_data = pd.Series(SWmax / self.baseMVA, self.wind_hc_set)
         self.SWmin_data = pd.Series(SWmin / self.baseMVA, self.wind_hc_set)
@@ -76,7 +76,6 @@ class HC_ACOPF(ACOPF):
         # --- generator power ---
         for w in self.model.WIND:
             self.model.pG[w].unfix()
-            self.model.pG[w] = 10.
             self.model.qG[w].unfix()
 
         # --- PQ VED Variante 1 ---

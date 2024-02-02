@@ -3,12 +3,14 @@ from pyomo.environ import *
 from math import pi
 import copy
 import numpy as np
+import pandapower as pp
+
 from potpourri.models.class_based.pyo_to_net import pyo_sol_to_net_res
 
 
 class Basemodel:
     def __init__(self, net):
-
+        pp.runpp(net)
         self.net = copy.deepcopy(net)
         self.net.gen.index += len(self.net.sgen.index)
 
@@ -19,25 +21,33 @@ class Basemodel:
         self.sgen_set = self.net.sgen.index[self.net.sgen.in_service]
         self.gen_all_set = self.generators.index[self.generators.in_service]
 
-        self.bus_set = self.net.bus.index[self.net.bus.in_service]
+        # self.bus_set = self.net.bus.index[self.net.bus.in_service]
+        self.bus_lookup = self.net._pd2ppc_lookups["bus"]
+        self.bus_set = self.net._ppc['bus'][:, 0].astype(int)
         self.demand_set = self.net.load.index[self.net.load.in_service]
         self.line_set = self.net.line.index[self.net.line.in_service]
         self.shunt_set = self.net.shunt.index[self.net.shunt.in_service]
         self.trafo_set = self.net.trafo.index[self.net.trafo.in_service]
         self.ext_grid_set = self.net.ext_grid.index[self.net.ext_grid.in_service]
 
-        self.bus_gen_set = list(zip(self.generators.bus[self.gen_all_set], self.gen_all_set))
-        self.bus_demand_set = list(zip(self.net.load.bus[self.demand_set], self.demand_set))
-        self.bus_shunt_set = list(zip(self.net.shunt.bus[self.shunt_set], self.shunt_set))
-        self.bus_ext_grid_set = list(zip(self.net.ext_grid.bus[self.ext_grid_set], self.ext_grid_set))
+        self.bus_gen_set = list(zip(self.bus_lookup[self.generators.bus[self.gen_all_set].values], self.gen_all_set))
+        self.bus_demand_set = list(zip(self.bus_lookup[self.net.load.bus[self.demand_set].values], self.demand_set))
+        self.bus_shunt_set = list(zip(self.bus_lookup[self.net.shunt.bus[self.shunt_set].values], self.shunt_set))
+        self.bus_ext_grid_set = list(zip(self.bus_lookup[self.net.ext_grid.bus[self.ext_grid_set]], self.ext_grid_set))
 
         # line and trafo matrizes
+        # self.bus_line_dict = dict(
+        #     zip(list(zip(self.line_set, [1] * len(self.line_set))) + list(zip(self.line_set, [2] * len(self.line_set))),
+        #         pd.concat([self.net.line.from_bus[self.line_set], self.net.line.to_bus[self.line_set]])))
         self.bus_line_dict = dict(
             zip(list(zip(self.line_set, [1] * len(self.line_set))) + list(zip(self.line_set, [2] * len(self.line_set))),
-                pd.concat([self.net.line.from_bus[self.line_set], self.net.line.to_bus[self.line_set]])))
+                np.concatenate([self.bus_lookup[self.net.line.from_bus[self.line_set].values],
+                                self.bus_lookup[self.net.line.to_bus[self.line_set].values]])))
+
         self.bus_trafo_dict = dict(zip(list(zip(self.trafo_set, [1] * len(self.trafo_set))) + list(
-            zip(self.trafo_set, [2] * len(self.trafo_set))), pd.concat(
-            [self.net.trafo.hv_bus[self.trafo_set], self.net.trafo.lv_bus[self.trafo_set]])))
+            zip(self.trafo_set, [2] * len(self.trafo_set))), np.concatenate(
+            [self.bus_lookup[self.net.trafo.hv_bus[self.trafo_set].values],
+             self.bus_lookup[self.net.trafo.lv_bus[self.trafo_set].values]])))
 
         # --- Param Data ---
         self.baseMVA = net.sn_mva
@@ -305,7 +315,8 @@ class Basemodel:
         self.model.pLto = Var(self.model.L, domain=Reals)  # real power injected at b' onto line
         self.model.pThv = Var(self.model.TRANSF, domain=Reals)  # real power injected at b onto transformer
         self.model.pTlv = Var(self.model.TRANSF, domain=Reals)  # real power injected at b' onto transformer
-        self.model.Tap = Var(self.model.TRANSF, domain=Reals, initialize=self.tap_data[self.model.TRANSF])  # transformer tap ratio
+        self.model.Tap = Var(self.model.TRANSF, domain=Reals,
+                             initialize=self.tap_data[self.model.TRANSF])  # transformer tap ratio
 
         # transformer tap ratio
         for t in self.model.TRANSF:
@@ -328,18 +339,28 @@ class Basemodel:
         # self.model.refbus_delta = Constraint(self.model.eGbs, rule=ref_bus_def)
 
     def solve(self, to_net: bool = True, print_solver_output: bool = False, solver='ipopt', load_solutions: bool = True,
-              mip_solver=None, ):
+              mip_solver='gurobi', max_iter=None, time_limit=600):
         optimizer = SolverFactory(solver)
 
         if solver == 'mindtpy':
-            print('solving with mindtpy')
+            if not max_iter:
+                max_iter = 50
+
             if mip_solver == 'gurobi':
-                self.results = optimizer.solve(self.model, mip_solver='gurobi_persistent', nlp_solver='ipopt',
-                                               tee=print_solver_output)
-            else:
-                self.results = optimizer.solve(self.model, mip_solver='glpk', nlp_solver='ipopt',
-                                               tee=print_solver_output)
+                mip_solver = 'gurobi_persistent'
+
+            print('solving with mindtpy')
+            self.results = optimizer.solve(self.model, mip_solver=mip_solver, nlp_solver='ipopt',
+                                           tee=print_solver_output, iteration_limit=max_iter, time_limit=time_limit)
+
+            # if self.results.solver.termination_condition == TerminationCondition.feasible:
+            #     print('Model is feasible but not optimal. Trying to solve a second time.')
+            #     self.results = optimizer.solve(self.model, mip_solver=mip_solver, nlp_solver='ipopt',
+            #                                    tee=print_solver_output, iteration_limit=max_iter, time_limit=time_limit)
         else:
+            if max_iter:
+                optimizer.options['max_iter'] = max_iter
+
             print('solving with ipopt')
             self.results = optimizer.solve(self.model, load_solutions=load_solutions, tee=print_solver_output)
 

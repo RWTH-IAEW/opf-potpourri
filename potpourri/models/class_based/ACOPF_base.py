@@ -12,8 +12,8 @@ class ACOPF(AC, OPF):
             self.net.bus['max_vm_pu'] = 1.1
         if 'min_vm_pu' not in net.bus:
             self.net.bus['min_vm_pu'] = 0.9
-        self.vmax_data = pd.Series(self.net.bus.max_vm_pu[self.bus_set], self.bus_set)
-        self.vmin_data = pd.Series(self.net.bus.min_vm_pu[self.bus_set], self.bus_set)
+        self.vmax_data = self.net.bus.max_vm_pu.values
+        self.vmin_data = self.net.bus.min_vm_pu.values
 
         self.get_generator_reactive_data()
         self.get_demand_reactive_data()

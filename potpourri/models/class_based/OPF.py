@@ -17,9 +17,9 @@ class OPF(Basemodel):
         df_T = self.net.trafo.df
         self.SLmaxT_data = max_load_T * sn_mva * df_T * self.net.trafo.parallel / self.baseMVA
 
-        self.c0_data = [1] * len(self.gen_all_set)
-        self.c1_data = [2] * len(self.gen_all_set)
-        self.c2_data = [3] * len(self.gen_all_set)
+        self.c0_data = pd.Series([1] * len(self.gen_all_set), self.gen_all_set)
+        self.c1_data = pd.Series([2] * len(self.gen_all_set), self.gen_all_set)
+        self.c2_data = pd.Series([3] * len(self.gen_all_set), self.gen_all_set)
 
         self.get_generator_real_power_data()
         self.get_demand_real_power_data()

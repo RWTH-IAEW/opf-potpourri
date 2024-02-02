@@ -11,17 +11,22 @@ def pyo_sol_to_net_res(net, model):
 
     pp.clear_result_tables(net)
 
-    _bus_results_to_net(net, model)
+    _bus_voltage_results_to_net(net, model)
+    _load_results_to_net(net, model)
     _line_results_to_net(net, model)
     _ext_grid_results_to_net(net, model)
-    _load_results_to_net(net, model)
     _sgen_results_to_net(net, model)
     _gen_results_to_net(net, model)
     _trafo_results_to_net(net, model)
     _shunt_results_to_net(net, model)
+    # _bus_results_to_net(net, model)
+    _bus_power_results_to_net(net)
 
 
-def _bus_results_to_net(net, model):
+def _bus_voltage_results_to_net(net, model):
+    bus_lookup = net._pd2ppc_lookups["bus"]
+    bus_idx = bus_lookup[net.bus.index.values]
+
     if 'DC' in model.name:
         net.res_bus.vm_pu = pd.Series([1.] * len(net.bus.index), net.bus.index)
         # use values from net definition as voltage not calculated in DCLF calculation, to get same result tables as pandapower
@@ -29,26 +34,58 @@ def _bus_results_to_net(net, model):
         net.res_bus.vm_pu[net.ext_grid.bus] = net.ext_grid.vm_pu
 
     else:
-        net.res_bus.vm_pu = pd.Series(model.v.get_values(), index=net.bus.index)
+        v = model.v.get_values()
+        v_res = [v[b] for b in bus_idx]
+        net.res_bus.vm_pu = pd.Series(v_res, index=net.bus.index)
 
-        # bus reactive power
-        for b in model.B:
-            net.res_bus.loc[b, 'q_mvar'] = -(sum(model.qLfrom[l].value for l in model.L if model.A[l, 1] == b) +
-                                             sum(model.qLto[l].value for l in model.L if model.A[l, 2] == b) +
-                                             sum(model.qThv[l].value for l in model.TRANSF if model.AT[l, 1] == b) +
-                                             sum(model.qTlv[l].value for l in model.TRANSF if
-                                                 model.AT[l, 2] == b)) * model.baseMVA.value
-
-    # --- buses ---
-    for b in model.B:
-        net.res_bus.loc[b, 'p_mw'] = - (sum(model.pLfrom[l].value for l in model.L if model.A[l, 1] == b) +
-                                        sum(model.pLto[l].value for l in model.L if model.A[l, 2] == b) +
-                                        sum(model.pThv[l].value for l in model.TRANSF if model.AT[l, 1] == b) +
-                                        sum(model.pTlv[l].value for l in model.TRANSF if
-                                            model.AT[l, 2] == b)) * model.baseMVA.value
-
-    net.res_bus.va_degree = model.delta.get_values()
+    va = model.delta.get_values()
+    va_res = [va[b] for b in bus_idx]
+    net.res_bus.va_degree = va_res
     net.res_bus.va_degree *= 180 / np.pi
+
+
+def _bus_power_results_to_net(net):
+    bus_pq = np.zeros(shape=(len(net["bus"].index), 2), dtype=np.float64)
+
+    # create empty dataframe with columns bus, p, q, for all buses in net.bus.index
+    df = pd.DataFrame(index=net.bus.index, columns=['bus', 'p', 'q'])
+
+    elements = ['load', 'sgen', 'gen', 'ext_grid', 'shunt']
+
+    b = []
+    p = []
+    q = []
+
+    for element in elements:
+        res_ = "res_" + element
+        b_el = net[element]["bus"].values
+        p_el = net[res_]["p_mw"].values
+        q_el = net[res_]["q_mvar"].values
+
+        if element.endswith("gen") or element.endswith("ext_grid"):
+            p = np.hstack([p, -p_el])
+            q = np.hstack([q, -q_el])
+        else:
+            p = np.hstack([p, p_el])
+            q = np.hstack([q, q_el])
+        b = np.hstack([b, b_el])
+
+    dfgr = pd.DataFrame(np.vstack([b, p, q]).T, columns=["bus", "p", "q"])
+    dfgr = dfgr.groupby("bus").sum()
+    bus_idx = dfgr.index.to_numpy().astype(int)
+
+    maxBus = max(net["bus"].index.values)
+    bus_lookup_aranged = -np.ones(maxBus + 1, dtype=np.int64)
+    bus_lookup_aranged[net["bus"].index.values] = np.arange(len(net["bus"].index.values))
+
+    b_i = bus_lookup_aranged[bus_idx]
+
+    # assign p and q values to bus_pq according to dfgr['bus']
+    bus_pq[b_i, 0] = dfgr['p'].values
+    bus_pq[b_i, 1] = dfgr['q'].values
+
+    net.res_bus.p_mw = bus_pq[:, 0]
+    net.res_bus.q_mvar = bus_pq[:, 1]
 
 
 def _line_results_to_net(net, model):

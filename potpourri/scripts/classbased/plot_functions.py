@@ -153,7 +153,7 @@ def plot_qu_res(nets, labels=None):
     ax.plot([0.9, 0.9, 103 / 110, 1.1], [0.48, ymin, -0.23, -0.23], color=clrs[8])  # Qmin(P)
 
     plt.xticks(np.arange(0.9, 1.1, 0.05))
-    plt.xlabel('$U_{b} [p.u.]$')
+    plt.xlabel('$U_{b}$ [p.u.]')
     plt.ylabel('$Q_{w} / P_{w}$')
 
     for i, net in enumerate(nets):
@@ -165,3 +165,76 @@ def plot_qu_res(nets, labels=None):
 
     if labels:
         plt.legend()
+
+
+def plot_all_pG(hcs):
+    # Initialize an empty dictionary to store the values
+    values = {}
+    # Exclude list
+    exclude_w = [105, 106, 110]
+    # Iterate over all hcs
+    for hc in hcs:
+        # Iterate over all w in hc.model.WIND
+        for w in hc.model.WIND:
+            # Skip if w is in the exclude list
+            if w in exclude_w:
+                continue
+            # If w is not in the dictionary, add it with an empty list as value
+            if w not in values:
+                values[w] = []
+            # Append hc.model.pG[w] to the list corresponding to w
+            values[w].append(hc.model.pG[w].value)
+    # Create a bar plot for each w
+    plot_index = 0
+    plot_w = []
+    for i, (w, vals) in enumerate(values.items()):
+        # Skip if all values are smaller than 1e-3
+        if all(val < 1e-3 for val in vals):
+            continue
+        # Plot a light-colored bar as background
+        for j in range(len(vals)):
+            plt.bar(plot_index + j / len(vals), max(vals), width=1 / len(vals), color='lightgray')
+        # Plot the actual bars
+        plt.bar([plot_index + j / len(vals) for j in range(len(vals))], vals, width=1 / len(vals))
+        plot_w.append(w)
+        plot_index += 1
+
+    plt.xlabel('Generator')
+    plt.xticks(ticks=[])
+    plt.ylabel('$P_{wind}$ [MW]')
+    plt.show()
+
+
+
+def plot_all_pG(hcs):
+    # Initialize an empty dictionary to store the values
+    values = [[] for _ in range(len(hcs[0].model.WIND))]
+    ws = list(hcs[0].model.WIND)
+
+    # Exclude list
+    exclude_w = [105, 106, 110]
+    exclude_i = [ws.index(i) for i in exclude_w]
+
+    # Iterate over all hcs
+    for hc in hcs:
+        # Iterate over all w in hc.model.WINDhcs
+        for i, w in enumerate(ws):
+            if hc.model.y[w].value:
+                # Append hc.model.pG[w] to the list corresponding to w
+                values[i].append(hc.model.pG[w].value)
+            else:
+                values[i].append(0)
+    # Create a bar plot for each w
+    for i, (i, vals) in enumerate(values):
+        # Skip if all values are smaller than 1e-3
+        if all(val < 1e-3 for val in vals):
+            continue
+        # Plot a light-colored bar as background
+        for j in range(len(vals)):
+            plt.bar(i + j / len(vals), max(vals), width=1 / len(vals), color='lightgray')
+        # Plot the actual bars
+        plt.bar([i + j / len(vals) for j in range(len(vals))], vals, width=1 / len(vals))
+    plt.xlabel('Generator Number')
+    plt.ylabel('pG Value')
+    plt.title('pG values for all w')
+    plt.show()
