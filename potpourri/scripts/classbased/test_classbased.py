@@ -22,17 +22,16 @@ def create_testnet():
                     std_type='305-AL1/39-ST1A 110.0')
     pp.create_sgens(net, [0, 1, 2], p_mw=[10, 10, 10])
     pp.create_ext_grid(net, 0)
-    pp.create_loads(net, [0, 1, 2], name=["load1", "load2", "load3"], p_mw=[10, 10, 10])
+    pp.create_loads(net, [0, 1, 2], name=["load1", "load2", "load3"], p_mw=[1, 17, 10])
     # pp.createsgen(net, 0, p_mw=1, controllable=True)
     # pp.create_sgen(net, 0, p_mw=1, controllable=True, max_p_mw=10)
     # pp.create_load(net, 1, p_mw=1, controllable=True)
     # pp.create_load(net, 2, p_mw=2, controllable=True, max_p_mw=5)
 
-    pp.create_sgens(net, net.bus.index, p_mw=0, wind_hc=True)
+    # pp.create_sgens(net, net.bus.index, p_mw=0, wind_hc=True)
 
     # pp.create_shunt(net, 2, p_mw=3, q_mvar=5)
     return net
-
 
 
 def test_pf(net, mode, save: bool = False, folder='../hc_test_results/'):
@@ -62,6 +61,7 @@ def comp_hc_powerflow_to_pp(hc):
 
     return net, pp.nets_equal(net, hc.net, True)
 
+
 def get_limiting_constraints(model, tolerance=1e-4):
     lim_constr = []
     violated_constr = []
@@ -74,6 +74,8 @@ def get_limiting_constraints(model, tolerance=1e-4):
                 if ('W_max_constraint' in c[index].name) | ('W_min_constraint' in c[index].name) | (
                         'U_max_constraint' in c[index].name) | ('U_min_constraint' in c[index].name):
                     if model.y[index].value == 0.:
+                        continue
+                    if model.pG[index].value + model.qG[index].value <= tolerance:
                         continue
                 lim_constr.append(c[index])
             # negative slack means constraint is violated
@@ -185,6 +187,7 @@ def compare_hc_nlp_minlp_nlpstep(net):
 def get_total_line_loss_mvar(net):
     return np.sqrt(net.res_line.pl_mw.sum() ** 2 + net.res_line.ql_mvar.sum() ** 2)
 
+
 def get_total_trafo_loss_mvar(net):
     return np.sqrt(net.res_trafo.pl_mw.sum() ** 2 + net.res_trafo.ql_mvar.sum() ** 2)
 
@@ -208,36 +211,57 @@ def vary_pg_pd(net):
         net.sgen.q_mvar[sgen] = max([res.sgen.q_mvar[sgen] for res in res_nets])
 
 
-def max_wind_min_loss(net):
-    hc = HC_ACOPF(net, SWmax=10000, SWmin=0, peGmax=1000000)
-    hc.add_OPF()
-    hc.add_loss_obj()
+def vary_load(net):
+    hcs = []
+    res_obj = []
 
-    obj = []
-    p_w = []
-    p_line = []
+    for i in range(10):
+        net.load.scaling = np.random.rand(len(net.load))
+        hc = HC_ACOPF(net, SWmax=10000, SWmin=10, peGmax=1000000)
+        hc.add_OPF()
+        hc.solve(solver='mindtpy', mip_solver='gurobi')
 
-    for i in range(11):
-        hc.model.eps = 1 - i / 10
-        hc.solve(solver='mindtpy')
+        hcs.append(copy.deepcopy(hc))
+        res_obj.append(hc.model.OBJ())
 
-        if pe.check_optimal_termination(hc.results):
-            obj.append(hc.model.OBJ_with_loss)
-            p_w.append(pe.value(sum(hc.model.pG[w] for w in hc.model.WIND)))
-            p_line.append(pe.value(sum(hc.model.pLfrom[l] + hc.model.pLto[l] for l in hc.model.L)))
-        else:
-            obj.append(None)
-            p_w.append(None)
-            p_line.append(None)
 
-    return obj, p_w, p_line
+def diff_trafos(net):
+    std_types_220 = pp.find_std_type_by_parameter(net, data={"vn_lv_kv": 110., "vn_hv_kv": 220.}, element='trafo')
+    std_types_380 = pp.find_std_type_by_parameter(net, data={"vn_lv_kv": 110., "vn_hv_kv": 380.}, element='trafo')
+
+    for i in len(std_types_220):
+        net.trafo.std_type[net.trafo.vn_hv_kv == 220.] = std_types_220[i]
+        net.trafo.std_type[net.trafo.vn_hv_kv == 380.] = std_types_380[i]
 
 
 if __name__ == '__main__':
-    net = create_testnet()
-    net = pp.networks.simple_four_bus_system()
-
+    # net = create_testnet()
+    # net = pp.networks.simple_four_bus_system()
+    #
     net = sb.get_simbench_net("1-HV-mixed--0-no_sw")
+
+    # obj = []
+    # hcs = []
+    #
+    # for i in range(10):
+    #     net.trafo.parallel = i+1
+    #     hc = HC_ACOPF(net, SWmin=10)
+    #     hc.solve()
+    #     hc.add_OPF()
+    #     hc.solve(solver='mindtpy', mip_solver='gurobi')
+    #     obj.append(pe.value(hc.model.OBJ))
+    #     hcs.append(copy.deepcopy(hc))
+
+    # plot hc.model.pG[w] where hc.model.y[w] == 1. for all w in hc.model.WINd and all hcs in a bar plot
+
+
+
+    # net = pp.networks.simple_mv_open_ring_net()
+    # net.switch.closed = True
+    # net.trafo.shift_degree = 0.
+    # pp.create_bus(net, 20.)
+    # pp.create_switch(net, 2, 3, 'b')
+
     # hc_nlp, hc_minlp, hc_nlp_step, results = compare_hc_nlp_minlp_nlpstep(net)
 
     # start_0 = time.perf_counter()
@@ -280,4 +304,3 @@ if __name__ == '__main__':
     #
     # # create array with all total_solve_times from times_nlp
     # total_solve_time_nlp = np.array([time['total_solve_time'] for time in times_nlp])
-
