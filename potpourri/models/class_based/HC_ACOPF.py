@@ -17,6 +17,9 @@ class HC_ACOPF(ACOPF):
         self.wind_hc_set = self.generators.index[self.generators.wind_hc & self.generators.in_service]
         self.bus_whc_set = list(zip(self.bus_lookup[self.generators.bus[self.wind_hc_set].values], self.wind_hc_set))
 
+        if 'windpot_p_mw' in self.net.bus:
+            self.windpot = pd.Series(self.net.bus.windpot_p_mw[self.generators.bus[self.wind_hc_set].values].values, self.wind_hc_set)
+
         self.SWmax_data = pd.Series(SWmax / self.baseMVA, self.wind_hc_set)
         self.SWmin_data = pd.Series(SWmin / self.baseMVA, self.wind_hc_set)
 
@@ -38,6 +41,9 @@ class HC_ACOPF(ACOPF):
 
         self.model.SWmax = Param(self.model.WIND, initialize=self.SWmax_data[self.model.WIND], mutable=True)
         self.model.SWmin = Param(self.model.WIND, initialize=self.SWmin_data[self.model.WIND], mutable=True)
+
+        if 'windpot_p_mw' in self.net.bus:
+            self.model.pWmax = Param(self.model.WIND, initialize=self.windpot)
 
         # TODO: include ext grid limits from net.ext_grid in OPF
         self.model.peGmax = Param(self.model.eG, initialize=self.peGmax_data[self.model.eG], mutable=True)
@@ -115,6 +121,11 @@ class HC_ACOPF(ACOPF):
                 if g == w:
                     return model.qG[w] <= (self.m_qu * model.v[b] + self.qu_max) * model.pG[w]
         self.model.QU_max_constraint = Constraint(self.model.WIND, rule=QU_max)
+
+        if 'windpot_p_mw' in self.net.bus:
+            def PW_max(model, w):
+                return model.pG[w] <= model.pWmax[w]
+            self.model.PW_max_constraint = Constraint(self.model.WIND, rule=PW_max)
 
     def add_loss_obj(self):
         self.model.eps = Param(domain=Reals, initialize=1., mutable=True)
