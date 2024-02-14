@@ -10,8 +10,8 @@ from potpourri.models.class_based.pyo_to_net import pyo_sol_to_net_res
 
 class Basemodel:
     def __init__(self, net):
-        pp.runpp(net)
         self.net = copy.deepcopy(net)
+        pp.runpp(self.net)
         self.net.gen.index += len(self.net.sgen.index)
 
         self.generators = pd.concat([self.net.sgen, self.net.gen])
@@ -349,9 +349,11 @@ class Basemodel:
             if mip_solver == 'gurobi':
                 mip_solver = 'gurobi_persistent'
 
-            print('solving with mindtpy')
-            self.results = optimizer.solve(self.model, mip_solver=mip_solver, nlp_solver='ipopt',
+            try:
+                self.results = optimizer.solve(self.model, mip_solver=mip_solver, nlp_solver='ipopt',
                                            tee=print_solver_output, iteration_limit=max_iter, time_limit=time_limit)
+            except ValueError as err:
+                print(err)
 
             # if self.results.solver.termination_condition == TerminationCondition.feasible:
             #     print('Model is feasible but not optimal. Trying to solve a second time.')
@@ -361,7 +363,6 @@ class Basemodel:
             if max_iter:
                 optimizer.options['max_iter'] = max_iter
 
-            print('solving with ipopt')
             self.results = optimizer.solve(self.model, load_solutions=load_solutions, tee=print_solver_output)
 
         if check_optimal_termination(self.results) & to_net:

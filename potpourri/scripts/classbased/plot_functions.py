@@ -13,7 +13,10 @@ def plot_wind_hc_results(nets):
 
     for net in nets:
         sgen_wind = net.sgen[net.sgen.wind_hc]
-        net.res_bus.loc[sgen_wind.bus, 'p_wind_mw'] = sgen_wind['p_mw'].values
+        wind_index = net.sgen[net.sgen.wind_hc].index
+        sgen_wind_bus = net.sgen.bus[wind_index]
+        sgen_wind_p = net.res_sgen.p_mw[wind_index]
+        net.res_bus.loc[sgen_wind_bus, 'p_wind_mw'] = sgen_wind_p.values.astype(float)
 
         # create marker trace with marker size scaled according to wind generation
         marker_trace = pp.plotting.create_weighted_marker_trace(net, "res_bus",

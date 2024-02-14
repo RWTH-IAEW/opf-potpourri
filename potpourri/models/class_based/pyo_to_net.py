@@ -140,39 +140,45 @@ def _ext_grid_results_to_net(net, model):
 
 
 def _load_results_to_net(net, model):
+    net.res_load = pd.DataFrame(columns=['p_mw', 'q_mvar'], index=net.load.index)
     # --- load ---
-    net.res_load.p_mw = pd.Series(model.pD.get_values(), index=net.load.index)
+    net.res_load.p_mw = model.pD.get_values()
     net.res_load.p_mw *= model.baseMVA.value
     if 'AC' in model.name:
         # load
         net.res_load.q_mvar = model.qD.get_values()
         net.res_load.q_mvar *= model.baseMVA.value
 
+    net.res_load.p_mw.fillna(net.load.p_mw*net.load.scaling*net.load.in_service, inplace=True)
+    net.res_load.q_mvar.fillna(net.load.q_mvar*net.load.scaling*net.load.in_service, inplace=True)
+
 
 def _sgen_results_to_net(net, model):
     # --- sgen ---
+    net.res_sgen = pd.DataFrame(columns=['p_mw', 'q_mvar'], index=net.sgen.index)
     for g in model.sG:
         net.res_sgen.loc[g, 'p_mw'] = model.pG[g].value * model.baseMVA.value
 
-    if 'AC' in model.name:
-        # static generator
-        for g in model.sG:
+        if 'AC' in model.name:
             net.res_sgen.loc[g, 'q_mvar'] = model.qG[g].value * model.baseMVA.value
 
+    if 'HC' in model.name:
+        net.res_sgen['y_wind'] = model.y.get_values()
+
+    net.res_sgen.p_mw.fillna(net.sgen.p_mw*net.sgen.scaling*net.sgen.in_service, inplace=True)
+    net.res_sgen.q_mvar.fillna(net.sgen.q_mvar*net.sgen.scaling*net.sgen.in_service, inplace=True)
 
 def _gen_results_to_net(net, model):
     # --- gen ---
-
+    net.res_gen = pd.DataFrame(columns=['p_mw', 'q_mvar', 'va_degree', 'vm_pu'], index=net.gen.index)
     for g in model.gG:
         net.res_gen.loc[g, 'p_mw'] = model.pG[g].value * model.baseMVA.value
 
+        if 'AC' in model.name:
+            net.res_gen.loc[g, 'q_mvar'] = model.qG[g].value * model.baseMVA.value
+
     net.res_gen.va_degree = net.res_bus.va_degree[net.gen.bus].values
     net.res_gen.vm_pu = net.res_bus.vm_pu[net.gen.bus].values
-
-    if 'AC' in model.name:
-        # generator
-        for g in model.gG:
-            net.res_gen.loc[g, 'q_mvar'] = model.qG[g].value * model.baseMVA.value
 
 
 def _trafo_results_to_net(net, model):
@@ -212,6 +218,11 @@ def _trafo_results_to_net(net, model):
     net.res_trafo.va_hv_degree = net.res_bus.va_degree[net.trafo.hv_bus].values
     net.res_trafo.va_lv_degree = net.res_bus.va_degree[net.trafo.lv_bus].values
 
+    if hasattr(model, 'Tap_pos'):
+        net.res_trafo['tap'] = model.Tap.get_values()
+        net.res_trafo['tap_pos'] = model.Tap_pos.get_values()
+    elif hasattr(model, 'Tap_linear_constr'):
+        net.res_trafo['tap'] = model.Tap.get_values()
 
 def _shunt_results_to_net(net, model):
     for s in model.SHUNT:
