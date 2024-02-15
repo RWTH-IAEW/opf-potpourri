@@ -1,18 +1,29 @@
+import pandas as pd
+import pandapower as pp
+import copy
 from pyomo.environ import *
 from potpourri.models.class_based.basemodel import Basemodel
-import numpy as np
-import pandas as pd
+
 
 class DC(Basemodel):
     def __init__(self, net):
         super().__init__(net)
+
+        x = self.net._ppc["branch"][:, 3].real
+        BL = -1/x
+        trafo_start = len(self.net.line)
+        trafo_end = trafo_start + len(self.net.trafo)
+
+        self.trafo_data = self.trafo_data.assign(**{"BLT_data": BL[trafo_start:trafo_end]})
+        # self.line_data = pd.DataFrame(BL[:trafo_start], columns=["BL_data"])
+        self.line_data['BL_data'] = BL[:trafo_start]
 
         ZN = self.net.bus.vn_kv ** 2 / self.baseMVA
         y_s = - 1 / (self.net.line.x_ohm_per_km * self.net.line.length_km)      # according to matpower manual dc modeling
 
         self.BL_data = y_s * ZN[self.net.line.from_bus].values
 
-        self.BLT_data = pd.Series(-1 / self.trafo_parameters["x"] / self.trafo_parameters["ratio"][0], self.trafo_set)
+        # self.BLT_data = pd.Series(-1 / self.trafo_parameters["x"] / self.trafo_parameters["ratio"][0], self.trafo_set)
 
         self.create_model()
 
@@ -24,7 +35,7 @@ class DC(Basemodel):
         # lines and transformer chracteristics
         self.model.BL = Param(self.model.L, within=Reals, initialize=self.BL_data[self.model.L])  # susceptance of a line
         self.model.BLT = Param(self.model.TRANSF, within=Reals,
-                               initialize=self.BLT_data[self.model.TRANSF])  # susceptance of a transformer
+                               initialize=self.trafo_data.BLT_data[self.model.TRANSF])  # susceptance of a transformer
 
         # --- Variables ---
         self.model.deltaL = Var(self.model.L, domain=Reals)  # angle difference across lines

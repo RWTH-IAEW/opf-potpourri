@@ -148,9 +148,9 @@ def _load_results_to_net(net, model):
         # load
         net.res_load.q_mvar = model.qD.get_values()
         net.res_load.q_mvar *= model.baseMVA.value
+        net.res_load.q_mvar.fillna(net.load.q_mvar*net.load.scaling*net.load.in_service, inplace=True)
 
     net.res_load.p_mw.fillna(net.load.p_mw*net.load.scaling*net.load.in_service, inplace=True)
-    net.res_load.q_mvar.fillna(net.load.q_mvar*net.load.scaling*net.load.in_service, inplace=True)
 
 
 def _sgen_results_to_net(net, model):

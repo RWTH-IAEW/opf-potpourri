@@ -1,3 +1,5 @@
+import copy
+
 from pyomo.environ import *
 from potpourri.models.class_based.basemodel import Basemodel
 import numpy as np
@@ -9,13 +11,15 @@ class OPF(Basemodel):
         super().__init__(net)
 
         max_load = net.line.max_loading_percent.values if "max_loading_percent" in net.line else 100.
-        self.SLmax_data = self.__calc_SLmax(max_load)
+        self.line_data['SLmax_data'] = self.__calc_SLmax(max_load)
 
+        # maximum transformer loading
         max_load_T = self.net.trafo.max_loading_percent.fillna(
             100.) / 100. if "max_loading_percent" in net.trafo else 1.
         sn_mva = self.net.trafo.sn_mva
         df_T = self.net.trafo.df
-        self.SLmaxT_data = max_load_T * sn_mva * df_T * self.net.trafo.parallel / self.baseMVA
+        SLmaxT_data = max_load_T * sn_mva * df_T * self.net.trafo.parallel / self.baseMVA
+        self.trafo_data['SLmaxT_data'] = SLmaxT_data
 
         self.c0_data = pd.Series([1] * len(self.gen_all_set), self.gen_all_set)
         self.c1_data = pd.Series([2] * len(self.gen_all_set), self.gen_all_set)
@@ -24,15 +28,6 @@ class OPF(Basemodel):
         self.get_generator_real_power_data()
         self.get_demand_real_power_data()
 
-        self.tap_min_data = pd.Series(self.trafo_parameters["ratio"][1].round(15), self.trafo_set)
-        self.tap_max_data = pd.Series(self.trafo_parameters["ratio"][2].round(15), self.trafo_set)
-
-        self.tap_neutral = self.net.trafo.tap_neutral
-        self.tap_step = self.net.trafo.tap_step_percent / 100.
-        self.tap_pos_max = self.net.trafo.tap_max
-        self.tap_pos_min = self.net.trafo.tap_min
-        self.tap_side_data = pd.Series(np.where(self.net.trafo.tap_side == 'lv', 1, 0),
-                                       self.trafo_set)  # tap side data = 1 if tap side is lv, 0 if tap side is hv
 
     def get_generator_real_power_data(self):
         if 'controllable' not in self.generators:
@@ -74,42 +69,12 @@ class OPF(Basemodel):
         df = self.net.line.df.values
         return max_loading_percent / 100. * max_i_ka * df * self.net.line.parallel.values * vr / self.baseMVA
 
-    # def _calc_tap_range(self):
-    #     # only longitudinal regulators considered regarding control, no phase shifters, no cross regulators
-    #
-    #     tap_pos_min = self.net.trafo.tap_min
-    #     tap_pos_max = self.net.trafo.tap_max
-    #     tap_neutral = self.net.trafo.tap_neutral
-    #     tap_step = self.net.trafo.tap_step_percent / 100.
-    #
-    #     n_tap_min = 1 + (tap_pos_min - tap_neutral) * tap_step
-    #     n_tap_max = 1 + (tap_pos_max - tap_neutral) * tap_step
-    #
-    #     tap_range = []
-    #     for i in self.net.trafo.index:
-    #         tap_range.append(np.arange(n_tap_min[i], n_tap_max[i], tap_step[i]))
-    #
-    #     trafos_lv_index = self.net.trafo.index[self.net.trafo.tap_side == 'lv']
-    #     for i in trafos_lv_index:
-    #         tap_range[i] = 1 / tap_range[i]
-    #
-    #     return tap_range
-    #
-    #     # trafos_step_degree = self.net.trafo.index[(self.net.trafo.tap_step_degree == 0) & (self.net.trafo.tap_side == 'hv')]
-    #     #
-    #     # trafos_lv_degree = self.net.trafo.index[~trafos_hv_nodegree]
-    #     # for i in trafos_lv_degree:
-    #     #     vn_trafo_hv, vn_trafo_lv, shift = self._calc_tap_shift(tap_pos=i)
-    #     #     ratio = self._calc_nominal_ratio_from_dataframe(vn_trafo_hv, vn_trafo_lv)
-    #     #     tap_range[i]= ([i, ratio])
-    #     #     shift_range.append([i, shift])
-
     def set_SLmax(self, max_loading, unit: ['percent', 'MW']):
         if unit == 'percent':
-            SLmax = max_loading / 100. * self.SLmax_data
+            SLmax = max_loading / 100. * self.line_data['SLmax_data']
         elif unit == 'MW':
-            self.SLmax_data = max_loading * np.ones(len(self.model.L)) / self.baseMVA
-            SLmax = self.SLmax_data
+            self.line_data['SLmax_data'] = max_loading * np.ones(len(self.model.L)) / self.baseMVA
+            SLmax = self.line_data['SLmax_data']
         for l in self.model.L:
             self.model.SLmax[l] = SLmax[l]
 
@@ -126,9 +91,9 @@ class OPF(Basemodel):
 
         # lines and transformer chracteristics and ratings
         self.model.SLmax = Param(self.model.L, within=NonNegativeReals,
-                                 initialize=self.SLmax_data[self.model.L], mutable=True)  # real power line limit
+                                 initialize=self.line_data['SLmax_data'][self.model.L], mutable=True)  # real power line limit
         self.model.SLmaxT = Param(self.model.TRANSF, within=NonNegativeReals,
-                                  initialize=self.SLmaxT_data[self.model.TRANSF],
+                                  initialize=self.trafo_data.SLmaxT_data[self.model.TRANSF],
                                   mutable=True)  # real power transformer limit
 
         # cost data
@@ -155,10 +120,108 @@ class OPF(Basemodel):
 
         # --- transformer tap ratio limits ---
 
-
     def add_tap_changer_linear(self):
-        self.model.Tap_min = Param(self.model.TRANSF, within=Reals, initialize=self.tap_min_data[self.model.TRANSF])
-        self.model.Tap_max = Param(self.model.TRANSF, within=Reals, initialize=self.tap_max_data[self.model.TRANSF])
+        def _calc_tap_min_max(self):
+            vn_trafo_hv_min, vn_trafo_lv_min, shift_min = _calc_tap_shift(self, tap_pos=self.net.trafo.tap_min)
+            vn_trafo_hv_max, vn_trafo_lv_max, shift_max = _calc_tap_shift(self, tap_pos=self.net.trafo.tap_max)
+            ratio_min = _calc_nominal_ratio_from_dataframe(self, vn_trafo_hv_min, vn_trafo_lv_min)
+            ratio_max = _calc_nominal_ratio_from_dataframe(self, vn_trafo_hv_max, vn_trafo_lv_max)
+            return ratio_min, ratio_max
+
+        def _calc_nominal_ratio_from_dataframe(self, vn_hv_kv, vn_lv_kv):
+            """
+            Calculates (Vectorized) the off nominal tap ratio::
+
+                          (vn_hv_kv / vn_lv_kv) / (ub1_in_kv / ub2_in_kv)
+
+            INPUT:
+                **net** (Dataframe) - The net for which to calc the tap ratio.
+
+                **vn_hv_kv** (1d array, float) - The adjusted nominal high voltages
+
+                **vn_lv_kv** (1d array, float) - The adjusted nominal low voltages
+
+            OUTPUT:
+                **tab** (1d array, float) - The off-nominal tap ratio
+            """
+            # Calculating tab (transformer off nominal turns ratio)
+            tap_rat = vn_hv_kv / vn_lv_kv
+            hv_bus = self.net.trafo.hv_bus
+            lv_bus = self.net.trafo.lv_bus
+            nom_rat = self.net.bus.vn_kv[hv_bus].values / self.net.bus.vn_kv[lv_bus].values
+            return tap_rat / nom_rat
+
+        def _calc_tap_shift(self, tap_pos=None):
+            """
+            Adjust the nominal voltage vnh and vnl to the active tab position "tap_pos".
+            If "side" is 1 (high-voltage side) the high voltage vnh is adjusted.
+            If "side" is 2 (low-voltage side) the low voltage vnl is adjusted
+
+            INPUT:
+                **net** - The pandapower format network
+
+                **trafo** (Dataframe) - The dataframe in pd_net["structure"]["trafo"]
+                which contains transformer calculation values.
+
+            OUTPUT:
+                **vn_hv_kv** (1d array, float) - The adusted high voltages
+
+                **vn_lv_kv** (1d array, float) - The adjusted low voltages
+
+                **trafo_shift** (1d array, float) - phase shift angle
+
+            """
+            vnh = copy.deepcopy(self.net.trafo.vn_hv_kv.values)
+            vnl = copy.deepcopy(self.net.trafo.vn_lv_kv.values)
+            trafo_shift = self.net.trafo.shift_degree.values
+
+            if tap_pos is None:
+                tap_pos = self.net.trafo.tap_pos
+            tap_neutral = self.net.trafo.tap_neutral
+            tap_diff = tap_pos - tap_neutral
+            tap_phase_shifter = self.net.trafo.tap_phase_shifter
+            tap_side = self.net.trafo.tap_side
+            tap_step_percent = self.net.trafo.tap_step_percent
+            tap_step_degree = self.net.trafo.tap_step_degree
+
+            cos = lambda x: np.cos(np.deg2rad(x))
+            sin = lambda x: np.sin(np.deg2rad(x))
+            arctan = lambda x: np.rad2deg(np.arctan(x))
+
+            for side, vn, direction in [("hv", vnh, 1), ("lv", vnl, -1)]:
+                phase_shifters = tap_phase_shifter & (tap_side == side)
+                tap_complex = np.isfinite(tap_step_percent) & np.isfinite(tap_pos) & (tap_side == side) & \
+                              ~phase_shifters
+                if tap_complex.any():
+                    tap_steps = tap_step_percent[tap_complex] * tap_diff[tap_complex] / 100
+                    tap_angles = (tap_step_degree[tap_complex]).fillna(0)
+                    u1 = vn[tap_complex]
+                    du = u1 * tap_steps.fillna(0)
+                    vn[tap_complex] = np.sqrt((u1 + du * cos(tap_angles)) ** 2 + (du * sin(tap_angles)) ** 2)
+                    trafo_shift[tap_complex] += (arctan(direction * du * sin(tap_angles) /
+                                                        (u1 + du * cos(tap_angles))))
+                if phase_shifters.any():
+                    degree_is_set = tap_step_degree[phase_shifters].fillna(0) != 0
+                    percent_is_set = tap_step_percent[phase_shifters].fillna(0) != 0
+                    if (degree_is_set & percent_is_set).any():
+                        raise UserWarning(
+                            "Both tap_step_degree and tap_step_percent set for ideal phase shifter")
+                    trafo_shift[phase_shifters] += np.where(
+                        (degree_is_set),
+                        (direction * tap_diff[phase_shifters] * tap_step_degree[phase_shifters]),
+                        (direction * 2 * np.rad2deg(np.arcsin(tap_diff[phase_shifters] *
+                                                              tap_step_percent[phase_shifters] / 100 / 2)))
+                    )
+
+            return vnh, vnl, trafo_shift
+
+        ratio_min, ratio_max = _calc_tap_min_max(self)
+        self.trafo_data = self.trafo_data.assign(**{"tap_min_data": ratio_min, "tap_max_data": ratio_max})
+
+        self.model.Tap_min = Param(self.model.TRANSF, within=Reals,
+                                   initialize=self.trafo_data.tap_min_data[self.model.TRANSF])
+        self.model.Tap_max = Param(self.model.TRANSF, within=Reals,
+                                   initialize=self.trafo_data.tap_max_data[self.model.TRANSF])
 
         def trafo_tap_linear_bounds(model, t):
             return model.Tap_min[t], model.Tap[t], model.Tap_max[t]
@@ -168,14 +231,27 @@ class OPF(Basemodel):
         self.unfix_vars('Tap')
 
     def add_tap_changer_discrete(self):
+        tap_neutral = self.net.trafo.tap_neutral
+        tap_step = self.net.trafo.tap_step_percent / 100.
+        tap_pos_max = self.net.trafo.tap_max
+        tap_pos_min = self.net.trafo.tap_min
+        tap_side_data = np.where(self.net.trafo.tap_side == 'lv', 1, 0)
+
+        self.trafo_data = self.trafo_data.assign(**{"tap_neutral": tap_neutral, "tap_step": tap_step,
+                                                    "tap_pos_max": tap_pos_max, "tap_pos_min": tap_pos_min,
+                                                    "tap_side_data": tap_side_data})
+
         self.model.Tap_pos = Var(self.model.TRANSF, within=Integers, initialize=0.)  # transformer tap position
-        self.model.Tap_pos_min = Param(self.model.TRANSF, within=Integers, initialize=self.tap_pos_min)
-        self.model.Tap_pos_max = Param(self.model.TRANSF, within=Integers, initialize=self.tap_pos_max)
+        self.model.Tap_pos_min = Param(self.model.TRANSF, within=Integers,
+                                       initialize=self.trafo_data.tap_pos_min[self.model.TRANSF])
+        self.model.Tap_pos_max = Param(self.model.TRANSF, within=Integers,
+                                       initialize=self.trafo_data.tap_pos_max[self.model.TRANSF])
         self.model.Tap_neutral = Param(self.model.TRANSF, within=Integers,
-                                       initialize=self.tap_neutral)  # transformer tap neutral position
+                                       initialize=self.trafo_data.tap_neutral[
+                                           self.model.TRANSF])  # transformer tap neutral position
         self.model.Tap_step = Param(self.model.TRANSF, within=Reals,
-                                    initialize=self.tap_step)  # transformer tap step size
-        self.model.Tap_side = Param(self.model.TRANSF, initialize=self.tap_side_data[self.model.TRANSF])
+                                    initialize=self.trafo_data.tap_step[self.model.TRANSF])  # transformer tap step size
+        self.model.Tap_side = Param(self.model.TRANSF, initialize=self.trafo_data.tap_side_data[self.model.TRANSF])
 
         def trafo_tap_pos_min_max(model, t):
             return model.Tap_pos_min[t], model.Tap_pos[t], model.Tap_pos_max[t]
