@@ -8,6 +8,7 @@ from tqdm import tqdm
 
 from potpourri.models.class_based.HC_ACOPF import HC_ACOPF
 from potpourri.scripts.classbased.plot_functions import plot_wind_hc_results
+from potpourri.scripts.classbased.run_scenarios import create_output_writer
 
 
 def max_wind_min_loss(net, n=11, **kwargs):
@@ -109,9 +110,6 @@ def pareto_front(net, n=10, **kwargs):
     if kwargs.get('tap_linear', False):
         hc.add_tap_changer_linear()
 
-    if kwargs.get('tap_discrete', False):
-        hc.add_tap_changer_discrete()
-
     if kwargs.get('SWmin', False):
         hc.change_vals('SWmin', kwargs.get('SWmin'))
 
@@ -119,18 +117,21 @@ def pareto_front(net, n=10, **kwargs):
 
     p_wind_max = pe.value(hc.model.OBJ)
     p_loss_max = pe.value(sum(hc.model.pLfrom[l] + hc.model.pLto[l] for l in hc.model.L))
-    obj_max = pe.value(hc.model.OBJ)
 
     hc.model.OBJ.deactivate()
 
     # get minimum losses
     def obj_min_loss(model):
         return sum(model.pLfrom[l] + model.pLto[l] for l in model.L)
+
     hc.model.OBJ_loss = pe.Objective(rule=obj_min_loss, sense=pe.minimize)
 
     hc.solve(solver='mindtpy', mip_solver='gurobi')
     p_loss_min = pe.value(hc.model.OBJ_loss)
     p_wind_min = pe.value(sum(hc.model.pG[w] for w in hc.model.WIND))
+
+    if kwargs.get('tap_discrete', False):
+        hc.add_tap_changer_discrete()
 
     hc.model.OBJ_loss.deactivate()
     hc.model.OBJ.activate()
@@ -141,40 +142,37 @@ def pareto_front(net, n=10, **kwargs):
         expr=sum(hc.model.pLfrom[l] + hc.model.pLto[l] for l in hc.model.L) <= hc.model.eps)
 
     # generate pareto front
-    p_wind, p_loss, nets = [], [], []
+    p_w = [p_wind_min, p_wind_max]
+    p_l = [p_loss_min, p_loss_max]
 
-    step = (p_loss_max - p_loss_min) / n
-    steps = np.linspace(p_loss_max, p_loss_min, n)
+    step = (p_loss_max - p_loss_min) / (n - 1)
+    steps = np.linspace(p_loss_min + step, p_loss_max - step, (n - 2))
 
-    p_wind, p_loss, nets, p_wind_opt, p_loss_opt = epsilon_constraint(hc, step, steps)
-
-    # p_wind = np.append(p_wind, p_wind_max)
-    # p_loss = np.append(p_loss, p_loss_max)
+    p_wind, p_loss, nets, p_wind_opt, p_loss_opt = epsilon_constraint(hc, steps, p_w, p_l)
 
     results = pd.DataFrame({'p_wind': p_wind, 'p_loss': p_loss})
-
-    # # plot pareto front
-    # fig, ax = plt.subplots()
-    # ax.plot(p_loss, p_wind, 'o-.')
-    # ax.set_xlabel('$P_{losses}$ [MW]')
-    # ax.set_ylabel('$P_{wind}$ [MW]')
 
     return p_wind, p_loss, nets, results
 
 
 def p_wind_loss_opt(net, n=10, **kwargs):
-    hc = HC_ACOPF(net, SWmax=10000, SWmin=0, peGmax=1000000)
-    hc.solve()
-    hc.add_OPF()
+    if kwargs.get('hc', False):
+        hc = kwargs.get('hc')
+    else:
+        hc = HC_ACOPF(net, SWmax=10000, SWmin=0, peGmax=1000000)
+        hc.solve()
+        hc.add_OPF()
 
     if kwargs.get('tap_linear', False):
         hc.add_tap_changer_linear()
 
-    # if kwargs.get('tap_discrete', False):
-    #     hc.add_tap_changer_discrete()
-
     if kwargs.get('SWmin', False):
         hc.change_vals('SWmin', kwargs.get('SWmin'))
+
+    try:
+        hc.model.constr_loss.deactivate()
+    except AttributeError:
+        pass
 
     hc.solve(solver='mindtpy', mip_solver='gurobi')
 
@@ -183,11 +181,15 @@ def p_wind_loss_opt(net, n=10, **kwargs):
 
     hc.model.OBJ.deactivate()
 
-    # get minimum losses
-    def obj_min_loss(model):
-        return sum(model.pLfrom[l] + model.pLto[l] for l in model.L)
-    hc.model.OBJ_loss = pe.Objective(rule=obj_min_loss, sense=pe.minimize)
+    try:
+        hc.model.OBJ_loss.activate()
+    except AttributeError:
+        def obj_min_loss(model):
+            return sum(model.pLfrom[l] + model.pLto[l] for l in model.L)
 
+        hc.model.OBJ_loss = pe.Objective(rule=obj_min_loss, sense=pe.minimize)
+
+    # get minimum losses
     hc.solve(solver='mindtpy', mip_solver='gurobi')
     p_loss_min = pe.value(hc.model.OBJ_loss)
     p_wind_min = pe.value(sum(hc.model.pG[w] for w in hc.model.WIND))
@@ -199,25 +201,36 @@ def p_wind_loss_opt(net, n=10, **kwargs):
         hc.add_tap_changer_discrete()
 
     # add loss objective function as constraint
-    hc.model.eps = pe.Param(within=pe.Reals, initialize=p_loss_min, mutable=True)
-    hc.model.constr_loss = pe.Constraint(
-        expr=sum(hc.model.pLfrom[l] + hc.model.pLto[l] for l in hc.model.L) <= hc.model.eps)
+    try:
+        hc.model.constr_loss.activate()
+    except AttributeError:
+        hc.model.eps = pe.Param(within=pe.Reals, initialize=p_loss_min, mutable=True)
+        hc.model.constr_loss = pe.Constraint(
+            expr=sum(hc.model.pLfrom[l] + hc.model.pLto[l] for l in hc.model.L) <= hc.model.eps)
 
     # generate pareto front
-    p_wind, p_loss, nets = [[p_wind_min]], [[p_loss_min]], [copy.deepcopy(hc.net)]
+    p_wind, p_loss, nets = [[p_wind_min]], [[p_loss_min]], [[copy.deepcopy(hc.net)]]
     p_wind_opt = p_wind_min
     p_loss_opt = p_loss_min
 
     p_wind_next = p_wind_max
     p_loss_next = p_loss_max
 
-    step = (p_loss_max - p_loss_min) / (n-1)
-    steps = np.linspace(p_loss_min+step, p_loss_max-step, (n-2))
+    step = (p_loss_max - p_loss_min) / (n - 1)
+    steps = np.linspace(p_loss_min + step, p_loss_max - step, (n - 2))
 
-    # prev_p_wind_opt = p_wind_min
-    # prev_p_loss_opt = p_loss_min
-    # tolerance = 1e-5  # Define your tolerance here
-    # same_value_counter = 0
+    # create output writer
+    if kwargs.get('output_dir', False):
+        output_dir = kwargs.get('output_dir')
+        output_path = output_dir
+        ow = create_output_writer(hc.net, range(100), output_path)
+        ow.init_all(hc.net)
+    else:
+        ow = None
+
+    step_change_tolerance = 1e-4
+    step_change_counter = 0
+    prev_step = None
 
     while step > 0.005:
         tqdm.write(str(steps))
@@ -225,118 +238,143 @@ def p_wind_loss_opt(net, n=10, **kwargs):
         p_w = [p_wind_opt, p_wind_next]
         p_l = [p_loss_opt, p_loss_next]
 
-        p_wind_eps, p_loss_eps, nets_eps, p_wind_opt, p_loss_opt, p_wind_next, p_loss_next = epsilon_constraint(hc, steps, p_w, p_l, mode='opt')
+        p_wind_eps, p_loss_eps, nets_eps, p_wind_opt, p_loss_opt, p_wind_next, p_loss_next, net_opt = epsilon_constraint(
+            hc, steps, p_w, p_l, mode='opt', ow=ow)
 
         nets.append(nets_eps)
         p_wind.append(p_wind_eps)
         p_loss.append(p_loss_eps)
 
         if p_wind_opt is None:
-            p_wind_opt = p_wind_eps[-1]
-            p_loss_opt = p_loss_eps[-1]
+            p_wind_opt = p_w[-1]
+            p_loss_opt = p_l[-1]
+            p_loss_next = p_loss_opt + step * 10
+            p_wind_next = np.NaN
+            net_opt = nets[-1][-1]
+            # p_wind_opt = p_wind_eps[-1]
+            # p_loss_opt = p_loss_eps[-1]
+            # net_opt = nets_eps[-1]
 
-        # # If the new values are the same as the previous ones within the tolerance, increment the counter
-        # if np.isclose(p_wind_opt, prev_p_wind_opt, atol=tolerance) and np.isclose(p_loss_opt, prev_p_loss_opt, atol=tolerance):
-        #     same_value_counter += 1
-        #     # If the counter reaches 3, break the loop
-        #     if same_value_counter == 5:
-        #         break
-        # else:
-        #     same_value_counter = 0  # Reset counter if values are different
-        #
-        # # Update the previous values
-        # prev_p_wind_opt = p_wind_opt
-        # prev_p_loss_opt = p_loss_opt
-
-        # # Get the next smaller value from p_loss_eps
-        # smaller_elements = p_loss_eps[p_loss_eps < p_loss_opt]
-        # next_smaller_value = np.max(smaller_elements) if smaller_elements.size > 0 else p_loss_opt
+        # fig, ax = plt.subplots()
+        # for i in range(len(p_wind)):
+        #     ax.plot(p_loss[i], p_wind[i], 'o-.')
 
         # Calculate the new steps
-        step = abs(p_loss_opt - p_loss_next) / (n-1)
+        step = abs(p_loss_opt - p_loss_next) / (n - 1)
         steps = np.linspace(p_loss_opt - step, p_loss_next + step, n - 2)
+
+        # Check if step size change is within tolerance
+        if prev_step is not None and abs(step - prev_step) <= step_change_tolerance:
+            step_change_counter += 1
+            # Break loop if step size change is within tolerance for 3 consecutive iterations
+            if step_change_counter >= 3:
+                break
+        else:
+            step_change_counter = 0
+
+        # Update previous step size
+        prev_step = step
+
+    total_elements = sum([len(p) for p in p_wind])
+
+    if kwargs.get('output_dir', False):
+        ow.dump(hc.net)
 
     p_wind.append(p_wind_max)
     p_loss.append(p_loss_max)
 
     results = pd.DataFrame({'p_wind': p_wind, 'p_loss': p_loss})
 
-    # # plot pareto front
-    # fig, ax = plt.subplots()
-    # ax.plot(p_loss, p_wind, 'o-.')
-    # ax.set_xlabel('$P_{losses}$ [MW]')
-    # ax.set_ylabel('$P_{wind}$ [MW]')
+    net = net_opt if net_opt else nets[-1][-1]
 
-    return p_wind, p_loss, nets, results, p_wind_opt, p_loss_opt
+    return p_wind, p_loss, nets, results, p_wind_opt, p_loss_opt, net_opt
 
 
-def epsilon_constraint(hc, steps, p_w, p_l, mode=None):
+def epsilon_constraint(hc, steps, p_w, p_l, mode=None, ow=None):
     p_wind = [p_w[0]]
     p_loss = [p_l[0]]
     nets = []
 
     p_wind_opt = None
     p_loss_opt = None
+    net_opt = None
 
-    for i in tqdm(steps):
-        hc.model.eps = i
+    if ow:
+        offset_timestep = ow.time_step + 1 if ow.time_step else 0
+
+    for i, eps in enumerate(tqdm(steps)):
+        hc.model.eps = eps
         hc.solve(solver='mindtpy', mip_solver='gurobi')
 
         p_wind.append(pe.value(sum(hc.model.pG[w] for w in hc.model.WIND)))
         p_loss.append(pe.value(sum(hc.model.pLfrom[l] + hc.model.pLto[l] for l in hc.model.L)))
         nets.append(copy.deepcopy(hc.net))
 
+        if ow:
+            pf_converged = hc.results.solver.termination_condition == (
+                    pe.TerminationCondition.optimal or pe.TerminationCondition.feasible)
+
+            ow.time_step = i + 1 + offset_timestep
+            ow.save_results(hc.net, i + offset_timestep, pf_converged=pf_converged,
+                            ctrl_converged=pe.check_optimal_termination(hc.results))
+
         if not mode:
             continue
         # calculate difference between last two values
         if len(p_wind) > 1:
-            p_wind_diff = p_wind[-1] - p_wind[-2]
-            p_loss_diff = p_loss[-1] - p_loss[-2]
-            if p_wind_diff - p_loss_diff <= -1e-3:
-                p_wind_opt = p_wind[-2]
-                p_loss_opt = p_loss[-2]
+            p_wind_opt, p_loss_opt, p_wind_next, p_loss_next = check_slope(p_wind, p_loss)
 
-                if p_wind_diff <= 0:
-                    p_wind_next = p_wind[-1]
-                    p_loss_next = p_loss[-1]
-                else:
-                    p_wind_next = p_wind[-3]
-                    p_loss_next = p_loss[-3]
-
+            if p_wind_opt:
                 p_wind.pop(0)
                 p_loss.pop(0)
+                if len(p_wind) > 1:
+                    net_opt = nets[-2]
+                else:
+                    net_opt = nets[-1]
+                return np.array(p_wind), np.array(
+                    p_loss), nets, p_wind_opt, p_loss_opt, p_wind_next, p_loss_next, net_opt
 
-                return np.array(p_wind), np.array(p_loss), nets, p_wind_opt, p_loss_opt, p_wind_next, p_loss_next
+    p_wind.append(p_w[-1])
+    p_loss.append(p_l[-1])
 
     if mode:
-        p_wind_next = None
-        p_loss_next = None
-
-        if len(p_wind) > 1:
-            p_wind_diff = p_w[-1] - p_wind[-1]
-            p_loss_diff = p_l[-1] - p_loss[-1]
-
-            if p_wind_diff - p_loss_diff <= -1e-3:
-                p_wind_opt = p_wind[-1]
-                p_loss_opt = p_loss[-1]
-
-                if p_wind_diff <= 0:
-                    p_wind_next = p_w[-1]
-                    p_loss_next = p_l[-1]
-                else:
-                    p_wind_next = p_wind[-2]
-                    p_loss_next = p_loss[-2]
+        p_wind_opt, p_loss_opt, p_wind_next, p_loss_next = check_slope(p_wind, p_loss)
 
         p_wind.pop(0)
         p_loss.pop(0)
+        p_wind.pop()
+        p_loss.pop()
+        if p_wind_opt:
+            net_opt = nets[-1]
 
-        return np.array(p_wind), np.array(p_loss), nets, p_wind_opt, p_loss_opt, p_wind_next, p_loss_next
+        return np.array(p_wind), np.array(p_loss), nets, p_wind_opt, p_loss_opt, p_wind_next, p_loss_next, net_opt
 
     return np.array(p_wind), np.array(p_loss), nets, p_wind_opt, p_loss_opt
 
 
+def check_slope(p_wind, p_loss):
+    p_wind_opt, p_loss_opt, p_wind_next, p_loss_next = None, None, None, None
+
+    p_wind_diff = p_wind[-1] - p_wind[-2]
+    p_loss_diff = p_loss[-1] - p_loss[-2]
+    sign = np.sign(p_wind_diff)
+    if sign * (p_wind_diff / p_loss_diff) <= sign * 1.001:
+        p_wind_opt = p_wind[-2]
+        p_loss_opt = p_loss[-2]
+
+        if p_wind_diff <= 0:
+            p_wind_next = p_wind[-1]
+            p_loss_next = p_loss[-1]
+        else:
+            p_wind_next = p_wind[-3]
+            p_loss_next = p_loss[-3]
+
+    return p_wind_opt, p_loss_opt, p_wind_next, p_loss_next
+
+
 if __name__ == '__main__':
-    with open('C:/Users/f.lohse/PycharmProjects/potpourri/potpourri/data/simbench_hv_grid_with_potential_pkl.pkl', 'rb') as f:
+    with open('C:/Users/f.lohse/PycharmProjects/potpourri/potpourri/data/simbench_hv_grid_with_potential_pkl.pkl',
+              'rb') as f:
         net = pickle.load(f)
 
     # net = sb.get_simbench_net("1-HV-mixed--0-no_sw")
@@ -350,3 +388,9 @@ if __name__ == '__main__':
     net.sgen.scaling[net.sgen.type == 'PV'] = factors['PV_p']
     net.sgen.scaling[(net.sgen.type != 'Wind') & (net.sgen.type != 'Solar')] = factors['RES_p']
     net.ext_grid.vm_pu = factors['Slack_vm']
+
+    # # plot pareto front
+    # fig, ax = plt.subplots()
+    # ax.plot(p_loss, p_wind, 'o-.')
+    # ax.set_xlabel('$P_{losses}$ [MW]')
+    # ax.set_ylabel('$P_{wind}$ [MW]')

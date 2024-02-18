@@ -34,10 +34,6 @@ class Basemodel:
         self.bus_shunt_set = list(zip(self.bus_lookup[self.net.shunt.bus[self.shunt_set].values], self.shunt_set))
         self.bus_ext_grid_set = list(zip(self.bus_lookup[self.net.ext_grid.bus[self.ext_grid_set]], self.ext_grid_set))
 
-        # line and trafo matrizes
-        # self.bus_line_dict = dict(
-        #     zip(list(zip(self.line_set, [1] * len(self.line_set))) + list(zip(self.line_set, [2] * len(self.line_set))),
-        #         pd.concat([self.net.line.from_bus[self.line_set], self.net.line.to_bus[self.line_set]])))
         self.bus_line_dict = dict(
             zip(list(zip(self.line_set, [1] * len(self.line_set))) + list(zip(self.line_set, [2] * len(self.line_set))),
                 np.concatenate([self.bus_lookup[self.net.line.from_bus[self.line_set].values],
@@ -55,8 +51,8 @@ class Basemodel:
         self.delta_eG_data = self.net.ext_grid.va_degree * pi / 180
 
         # --- line ---
-        hv_bus = self.net._ppc['branch'][:, 0].astype(int)
-        lv_bus = self.net._ppc['branch'][:, 1].astype(int)
+        hv_bus = self.net._ppc['branch'][:, 0].real
+        lv_bus = self.net._ppc['branch'][:, 1].real
         trafo_start = len(self.net.line.index)
         trafo_end = trafo_start + len(self.net.trafo.index)
 
@@ -64,14 +60,10 @@ class Basemodel:
         lv_bus_line = lv_bus[:trafo_start]
         self.line_data = pd.DataFrame({'in_service': self.net.line.in_service.values})
         line_ind = self.line_data.index[self.line_data.in_service]
-        self.bus_trafo_dict = dict(zip(list(zip(line_ind, [1] * len(line_ind))) + list(
+        self.bus_line_dict = dict(zip(list(zip(line_ind, [1] * len(line_ind))) + list(
             zip(line_ind, [2] * len(line_ind))), np.concatenate([hv_bus_line[line_ind], lv_bus_line[line_ind]])))
 
         # --- transformer ---
-        # trafo_start = len(self.net.line.index)
-        # trafo_end = trafo_start + len(self.net.trafo.index)
-        # hv_bus = self.net._ppc['branch'][trafo_start:trafo_end, 0].astype(int)
-        # lv_bus = self.net._ppc['branch'][trafo_start:trafo_end, 1].astype(int)
         shift = self.net._ppc['branch'][trafo_start:trafo_end, 9].real * pi/180
         tap = self.net._ppc['branch'][trafo_start:trafo_end, 8].real
         self.trafo_data = pd.DataFrame({'in_service': self.net.trafo.in_service.values, 'shift_rad': shift, 'tap': tap})
