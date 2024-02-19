@@ -145,13 +145,14 @@ if __name__ == '__main__':
     grid = '1-HV-mixed--0-no_sw'
     # grid = 'hv_grid'
     type = "assumption"
-    net_name = 'simbench_hv_grid_with_potential_pkl.pkl'
-    net_name = grid + "_scenario_types.pkl"
+
+    # net_name = 'simbench_hv_grid_with_potential_pkl.pkl'
     # with open('C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\data\\' + net_name,
     #           'rb') as f:
     #     net = pickle.load(f)
         # net.bus.windpot_p_mw = net.bus.windpot_p_mw.where(net.bus.windpot_p_mw <= 200, 200)
 
+    net_name = grid + "_scenario_types.pkl"
     with open("../../data/scenarios/" + grid + "_scenario_types.pkl", "rb") as f:
         net = pickle.load(f)
 
@@ -159,6 +160,16 @@ if __name__ == '__main__':
         scenarios = pickle.load(f)
 
     # results_dir = '../../results/test_scenarios/' + grid + '_loadcases_' + type + '_scenarios/'
+
+    case = 'lW'
+    factors = net.loadcases.loc[case]
+    net.load.p_mw *= factors['pload']
+    net.load.q_mvar *= factors['qload']
+    net.sgen.scaling[net.sgen.type == 'Wind'] = factors['Wind_p']
+    net.sgen.scaling[net.sgen.type == 'PV'] = factors['PV_p']
+    net.sgen.scaling[(net.sgen.type != 'Wind') & (net.sgen.type != 'Solar')] = factors['RES_p']
+    net.ext_grid.vm_pu = factors['Slack_vm']
+
     results_dir = 'C:\\Users\\f.lohse\\PycharmProjects\\potpourri\\potpourri\\results\\scenarios_multiobj\\' + net_name + '_' + type + '\\'
 
     obj = run_scenarios(net, scenarios, results_dir + 'case', peGmax=10000, cases=[3, 4, 0, 1, 2], SWmin=10)

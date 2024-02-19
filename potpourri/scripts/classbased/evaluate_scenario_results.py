@@ -88,6 +88,11 @@ def box_plot_scenarios(results_dir, n_cases, cases=None):
         p_w = p_mw_y.sum(axis=1)
         p_wind.append(p_w)
 
+    std_dev_p = np.std(p_mw_y)
+    std_dev_p.dropna(inplace=True)
+    mean_p = np.mean(p_mw_y, axis=0)
+    mean_p.dropna(inplace=True)
+
     fig, ax = plt.subplots()
     ax.boxplot(p_wind[0:3])
 
@@ -151,3 +156,7 @@ def create_weighted_p_wind(probabilities, p_wind):
 
     fig, ax = plt.subplots()
     ax.boxplot(p_wind_weighted)
+
+
+if __name__ == "__main__":
+    results_dir = 'C:\\Users\\f.lohse\\PycharmProjects\potpourri\potpourri\\results\scenarios_multiobj\simbench_hv_grid_with_potential_pkl.pkl_assumption\\'

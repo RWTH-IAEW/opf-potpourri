@@ -139,8 +139,6 @@ class Basemodel:
         self.model.pLto = Var(self.model.L, domain=Reals)  # real power injected at b' onto line
         self.model.pThv = Var(self.model.TRANSF, domain=Reals)  # real power injected at b onto transformer
         self.model.pTlv = Var(self.model.TRANSF, domain=Reals)  # real power injected at b' onto transformer
-        # self.model.Tap = Var(self.model.TRANSF, domain=Reals,
-        #                      initialize=self.tap_data[self.model.TRANSF])  # transformer tap ratio
         self.model.Tap = Var(self.model.TRANSF, domain=Reals,
                              initialize=self.trafo_data.tap[self.model.TRANSF])  # transformer tap ratio
 

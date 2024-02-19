@@ -251,6 +251,8 @@ def p_wind_loss_opt(net, n=10, **kwargs):
             p_loss_next = p_loss_opt + step * 10
             p_wind_next = np.NaN
             net_opt = nets[-1][-1]
+        if p_loss_next is None:
+            p_loss_next = p_loss_opt + step * 10
             # p_wind_opt = p_wind_eps[-1]
             # p_loss_opt = p_loss_eps[-1]
             # net_opt = nets_eps[-1]
@@ -274,8 +276,6 @@ def p_wind_loss_opt(net, n=10, **kwargs):
 
         # Update previous step size
         prev_step = step
-
-    total_elements = sum([len(p) for p in p_wind])
 
     if kwargs.get('output_dir', False):
         ow.dump(hc.net)
@@ -354,20 +354,23 @@ def epsilon_constraint(hc, steps, p_w, p_l, mode=None, ow=None):
 
 def check_slope(p_wind, p_loss):
     p_wind_opt, p_loss_opt, p_wind_next, p_loss_next = None, None, None, None
+    try:
+        p_wind_diff = p_wind[-1] - p_wind[-2]
+        p_loss_diff = p_loss[-1] - p_loss[-2]
+        sign = np.sign(p_wind_diff)
+        if sign * (p_wind_diff / p_loss_diff) <= sign * 1.0001:
+            p_wind_opt = p_wind[-2]
+            p_loss_opt = p_loss[-2]
 
-    p_wind_diff = p_wind[-1] - p_wind[-2]
-    p_loss_diff = p_loss[-1] - p_loss[-2]
-    sign = np.sign(p_wind_diff)
-    if sign * (p_wind_diff / p_loss_diff) <= sign * 1.001:
-        p_wind_opt = p_wind[-2]
-        p_loss_opt = p_loss[-2]
-
-        if p_wind_diff <= 0:
-            p_wind_next = p_wind[-1]
-            p_loss_next = p_loss[-1]
-        else:
-            p_wind_next = p_wind[-3]
-            p_loss_next = p_loss[-3]
+            if p_wind_diff <= 0:
+                p_wind_next = p_wind[-1]
+                p_loss_next = p_loss[-1]
+            else:
+                p_wind_next = p_wind[-3]
+                p_loss_next = p_loss[-3]
+    except Exception as err:
+        print('Error in check_slope:')
+        print(err)
 
     return p_wind_opt, p_loss_opt, p_wind_next, p_loss_next
 

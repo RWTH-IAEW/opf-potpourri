@@ -6,8 +6,8 @@ import pandas as pd
 def pyo_sol_to_net_res(net, model):
     if 'HC' in model.name:
         for w in model.WIND:
-            net.sgen.p_mw[w] = model.pG[w].value * model.baseMVA.value
-            net.sgen.q_mvar[w] = model.qG[w].value * model.baseMVA.value
+            net.sgen.p_mw[w] = model.pG[w].value * model.baseMVA.value * model.y[w].value
+            net.sgen.q_mvar[w] = model.qG[w].value * model.baseMVA.value * model.y[w].value
 
     pp.clear_result_tables(net)
 
