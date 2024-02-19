@@ -22,9 +22,9 @@ class ACOPF(AC, OPF):
     def get_generator_reactive_data(self):
         # use active power for reactive power limits, if no reactive power given for any sgen
         if self.generators.q_mvar.sum() == 0:
-            lim_q = self.generators.p_mw
+            lim_q = abs(self.generators.p_mw)
         else:
-            lim_q = self.generators.q_mvar
+            lim_q = abs(self.generators.q_mvar)
 
         # add rows with reactive generation limits if not existing
         if 'max_q_mvar' not in self.generators:
@@ -38,19 +38,21 @@ class ACOPF(AC, OPF):
 
     def get_generator_v_limits(self):
         if self.gen_controllable_set.any():
-            gG_controllable_ind = self.gen_controllable_set.intersection(self.gen_set)
-            if gG_controllable_ind.any():
-                if 'max_vm_pu' not in self.generators:
-                    self.v_max_data = pd.Series(self.net.bus.max_vm_pu[self.net.gen.bus].values, self.gen_set)
-                else:
-                    self.v_max_data = self.net.gen.max_vm_pu.fillna(
-                        pd.Series(self.net.bus.max_vm_pu[self.net.gen.bus].values, self.net.gen.index))
+            # gG_controllable_ind = self.gen_controllable_set.intersection(self.gen_set)
+            # if gG_controllable_ind.any():
+            if 'max_vm_pu' not in self.generators:
+                self.v_max_data = pd.Series(
+                    self.net.bus.max_vm_pu[self.generators.bus[self.gen_controllable_set]].values,
+                    self.gen_controllable_set)
+            else:
+                self.v_max_data = self.net.gen.max_vm_pu.fillna(
+                    pd.Series(self.net.bus.max_vm_pu[self.net.gen.bus].values, self.net.gen.index))
 
-                if 'min_vm_pu' not in self.generators:
-                    self.v_min_data = pd.Series(self.net.bus.min_vm_pu[self.net.gen.bus].values, self.gen_set)
-                else:
-                    self.v_min_data = self.net.gen.min_vm_pu.fillna(
-                        pd.Series(self.net.bus.min_vm_pu[self.net.gen.bus].values, self.net.gen.index))
+            if 'min_vm_pu' not in self.generators:
+                self.v_min_data = pd.Series(self.net.bus.min_vm_pu[self.generators.bus[self.gen_controllable_set]].values, self.gen_controllable_set)
+            else:
+                self.v_min_data = self.net.gen.min_vm_pu.fillna(
+                        pd.Series(self.net.bus.min_vm_pu[self.net.gen.bus[self.gen_controllable_set]].values, self.net.gen.index))
         else:
             self.v_max_data = pd.Series()
             self.v_min_data = pd.Series()
@@ -59,9 +61,9 @@ class ACOPF(AC, OPF):
         # reactive power demand
         # use active power for reactive power limits, if no reactive power given for any sgen
         if self.net.load.q_mvar.sum() == 0:
-            lim_q = self.net.load.p_mw
+            lim_q = abs(self.net.load.p_mw)
         else:
-            lim_q = self.net.load.q_mvar
+            lim_q = abs(self.net.load.q_mvar)
 
         # add rows with reactive generation limits if not existing
         if 'max_q_mvar' not in self.net.load:
