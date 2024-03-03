@@ -12,43 +12,44 @@ class Basemodel:
     def __init__(self, net):
         self.net = copy.deepcopy(net)
         pp.runpp(self.net)
-        self.net.gen.index += len(self.net.sgen.index)
-
-        self.generators = pd.concat([self.net.sgen, self.net.gen])
 
         # --- Sets ---
-        self.gen_set = self.net.gen.index[self.net.gen.in_service]
-        self.sgen_set = self.net.sgen.index[self.net.sgen.in_service]
-        self.gen_all_set = self.generators.index[self.generators.in_service]
-
-        # self.bus_set = self.net.bus.index[self.net.bus.in_service]
         self.bus_lookup = self.net._pd2ppc_lookups["bus"]
         self.bus_set = self.net._ppc['bus'][:, 0].astype(int)
         self.demand_set = self.net.load.index[self.net.load.in_service]
-        self.line_set = self.net.line.index[self.net.line.in_service]
         self.shunt_set = self.net.shunt.index[self.net.shunt.in_service]
-        self.ext_grid_set = self.net.ext_grid.index[self.net.ext_grid.in_service]
 
-        self.bus_gen_set = list(zip(self.bus_lookup[self.generators.bus[self.gen_all_set].values], self.gen_all_set))
         self.bus_demand_set = list(zip(self.bus_lookup[self.net.load.bus[self.demand_set].values], self.demand_set))
         self.bus_shunt_set = list(zip(self.bus_lookup[self.net.shunt.bus[self.shunt_set].values], self.shunt_set))
-        self.bus_ext_grid_set = list(zip(self.bus_lookup[self.net.ext_grid.bus[self.ext_grid_set]], self.ext_grid_set))
-
-        self.bus_line_dict = dict(
-            zip(list(zip(self.line_set, [1] * len(self.line_set))) + list(zip(self.line_set, [2] * len(self.line_set))),
-                np.concatenate([self.bus_lookup[self.net.line.from_bus[self.line_set].values],
-                                self.bus_lookup[self.net.line.to_bus[self.line_set].values]])))
 
         # --- Param Data ---
         self.baseMVA = self.net.sn_mva
-
-        self.PG_data = self.generators.p_mw * self.generators.scaling / self.baseMVA  # active power generation set points
 
         self.PD_data = self.net.load.p_mw * self.net.load.scaling / self.baseMVA
 
         self.GB_data = self.net.shunt.p_mw * self.net.shunt.step / self.baseMVA
 
-        self.delta_eG_data = self.net.ext_grid.va_degree * pi / 180
+        # --- generation ---
+        pg = self.net._ppc['gen'][:, 1] / self.baseMVA
+        ref_gens = self.net._ppc['internal']['ref_gens']
+        in_service_gens = self.net._ppc['gen'][:, 7].astype(bool)
+        gen_bus = self.net._ppc['gen'][:, 0].astype(int)
+        self.generation_data = pd.DataFrame({'pg': pg, 'ref': False, 'in_service': in_service_gens, 'bus': gen_bus})
+        self.generation_data.loc[ref_gens, 'ref'] = True
+        gen_bus_tuples = list(enumerate(self.generation_data['bus']))
+        self.generation_data['gen_bus'] = gen_bus_tuples
+
+        # --- static generation ---
+        psg = self.net.sgen.p_mw * self.net.sgen.scaling / self.baseMVA
+        sgen_bus = self.bus_lookup[self.net.sgen.bus.values]
+        self.static_generation_data = pd.DataFrame(
+            {'p': psg.values, 'in_service': self.net.sgen.in_service.values, 'bus': sgen_bus})
+        self.static_generation_data['gen_bus'] = list(enumerate(self.static_generation_data['bus']))
+
+        # --- reference buses ---
+        ref_bus_set = self.net._ppc['bus'][self.net._ppc['bus'][:, 1] == 3, 0].astype(int)  # external grids and slack gens
+        delta_b0_data = self.net._ppc["bus"][ref_bus_set, 8] * pi / 180
+        self.b0_data = pd.DataFrame({'delta': delta_b0_data}, index=ref_bus_set)
 
         # --- line ---
         hv_bus = self.net._ppc['branch'][:, 0].real
@@ -64,7 +65,7 @@ class Basemodel:
             zip(line_ind, [2] * len(line_ind))), np.concatenate([hv_bus_line[line_ind], lv_bus_line[line_ind]])))
 
         # --- transformer ---
-        shift = self.net._ppc['branch'][trafo_start:trafo_end, 9].real * pi/180
+        shift = self.net._ppc['branch'][trafo_start:trafo_end, 9].real * pi / 180
         tap = self.net._ppc['branch'][trafo_start:trafo_end, 8].real
         self.trafo_data = pd.DataFrame({'in_service': self.net.trafo.in_service.values, 'shift_rad': shift, 'tap': tap})
 
@@ -74,32 +75,33 @@ class Basemodel:
         self.bus_trafo_dict = dict(zip(list(zip(trafo_ind, [1] * len(trafo_ind))) + list(
             zip(trafo_ind, [2] * len(trafo_ind))), np.concatenate([hv_bus_trafo[trafo_ind], lv_bus_trafo[trafo_ind]])))
 
-
     def create_model(self):
         self.model = ConcreteModel()
 
         # --- SETS ---
         self.model.B = Set(initialize=self.bus_set)
-        self.model.eG = Set(initialize=self.ext_grid_set)  # external grids
-        self.model.G = Set(initialize=self.gen_all_set)  # static generators and generators
-        self.model.sG = Set(within=self.model.G, initialize=self.sgen_set)  # static generators
-        self.model.gG = Set(within=self.model.G, initialize=self.gen_set)  # generators (not static)
+        self.model.b0 = Set(initialize=self.b0_data.index, within=self.model.B)  # reference buses
+        self.model.bPV = Set(initialize=self.generation_data.bus[self.generation_data.ref == False ])  # PV buses
+        self.model.sG = Set(
+            initialize=self.static_generation_data.index[self.static_generation_data.in_service])  # static generators
+        self.model.G = Set(
+            initialize=self.generation_data.index[self.generation_data.in_service])  # external grids and generators
+        self.model.eG = Set(initialize=self.generation_data.index[self.generation_data.ref], within=self.model.G)  # external grids
+        self.model.gG = Set(initialize=self.generation_data.index[self.generation_data.ref == False], within=self.model.G)  # generators (not static)
         self.model.D = Set(initialize=self.demand_set)
-        # self.model.L = Set(initialize=self.line_set)
         self.model.L = Set(initialize=self.line_data.index[self.line_data.in_service])
         self.model.SHUNT = Set(initialize=self.shunt_set)
         self.model.LE = Set(initialize=[1, 2])
         self.model.TRANSF = Set(initialize=self.trafo_data.index[self.trafo_data.in_service])
 
         # generators, buses, loads linked to each bus b
-        self.model.Gbs = Set(within=self.model.B * self.model.G,
-                             initialize=self.bus_gen_set)  # set of generator-bus mapping
         self.model.Dbs = Set(within=self.model.B * self.model.D,
                              initialize=self.bus_demand_set)  # set of demand-bus mapping
         self.model.SHUNTbs = Set(within=self.model.B * self.model.SHUNT,
                                  initialize=self.bus_shunt_set)  # set of shunt-bus mapping
-        self.model.eGbs = Set(within=self.model.B * self.model.eG,
-                              initialize=self.bus_ext_grid_set)  # set of external grid-bus mapping
+        self.model.Gbs = Set(within=self.model.G * self.model.B, initialize=self.generation_data['gen_bus'])
+        self.model.sGbs = Set(within=self.model.sG * self.model.B,
+                              initialize=self.static_generation_data['gen_bus'][self.model.sG])
 
         # --- parameters ---
         # line and trafo matrix
@@ -108,7 +110,8 @@ class Basemodel:
                               initialize=self.bus_trafo_dict)  # bus-transformer matrix
 
         # generation
-        self.model.PG = Param(self.model.G, initialize=self.PG_data[self.model.G])
+        self.model.PsG = Param(self.model.sG, initialize=self.static_generation_data.p[self.model.sG])
+        self.model.PG = Param(self.model.G, initialize=self.generation_data.pg[self.model.G])
 
         # demand
         self.model.PD = Param(self.model.D, initialize=self.PD_data[self.model.D])
@@ -118,13 +121,11 @@ class Basemodel:
                               initialize=self.GB_data[self.model.SHUNT])  # shunt conductance
 
         # trafo
-        # self.model.shift = Param(self.model.TRANSF, within=Reals,
-        #                          initialize=self.shift_rad_data[self.model.TRANSF])  # transformer phase shift in rad
-        self.model.shift = Param(self.model.TRANSF, within=Reals,
-                                 initialize=self.trafo_data.shift_rad[self.model.TRANSF])  # transformer phase shift in rad
+        self.model.shift = Param(self.model.TRANSF, within=Reals, initialize=self.trafo_data.shift_rad[
+                                     self.model.TRANSF])  # transformer phase shift in rad
 
         # external grid voltage angle
-        self.model.delta_eG = Param(self.model.eG, within=Reals, initialize=self.delta_eG_data[self.model.eG])
+        self.model.delta_b0 = Param(self.model.b0, within=Reals, initialize=self.b0_data.delta)
 
         # baseMVA of the net
         self.model.baseMVA = Param(within=NonNegativeReals, initialize=self.baseMVA)
@@ -133,8 +134,8 @@ class Basemodel:
         self.model.delta = Var(self.model.B, domain=Reals, initialize=0.0,
                                bounds=(-pi, pi))  # voltage phase angle at bus b, rad
         self.model.pD = Var(self.model.D, domain=Reals)  # real power demand delivered
-        self.model.pG = Var(self.model.G, domain=NonNegativeReals)  # real generator power
-        self.model.peG = Var(self.model.eG, domain=Reals)  # real power injection from external grids
+        self.model.psG = Var(self.model.sG, domain=NonNegativeReals)  # real static generator power
+        self.model.pG = Var(self.model.G, domain=Reals, initialize=self.model.PG)  # real power injection from static generators
         self.model.pLfrom = Var(self.model.L, domain=Reals)  # real power injected at b onto line
         self.model.pLto = Var(self.model.L, domain=Reals)  # real power injected at b' onto line
         self.model.pThv = Var(self.model.TRANSF, domain=Reals)  # real power injected at b onto transformer
@@ -147,7 +148,9 @@ class Basemodel:
             self.model.Tap[t].fix()
 
         # --- generator power ---
-        for g in self.model.G:
+        for g in self.model.sG:
+            self.model.psG[g].fix(self.model.PsG[g])
+        for g in self.model.gG:
             self.model.pG[g].fix(self.model.PG[g])
 
         # --- demand ---
@@ -155,12 +158,8 @@ class Basemodel:
             self.model.pD[d].fix(self.model.PD[d])
 
         # --- reference bus constraint ---
-        for (b, g) in self.model.eGbs:
-            self.model.delta[b].fix(self.model.delta_eG[g])
-        # def ref_bus_def(model, b, g):
-        #     return model.delta[b] == self.model.delta_eG[g]
-        #
-        # self.model.refbus_delta = Constraint(self.model.eGbs, rule=ref_bus_def)
+        for b in self.model.b0:
+            self.model.delta[b].fix(self.model.delta_b0[b])
 
     def solve(self, to_net: bool = True, print_solver_output: bool = False, solver='ipopt', load_solutions: bool = True,
               mip_solver='gurobi', max_iter=None, time_limit=600):

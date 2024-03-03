@@ -10,41 +10,47 @@ class OPF(Basemodel):
     def __init__(self, net):
         super().__init__(net)
 
-        max_load = net.line.max_loading_percent.values if "max_loading_percent" in net.line else 100.
-        self.line_data['SLmax_data'] = self.__calc_SLmax(max_load)
+    def generation_real_power_limits(self):
+        max_p = np.full(len(self.generation_data), 1e9) / self.baseMVA
+        min_p = np.full(len(self.generation_data), -1e9) / self.baseMVA
 
-        # maximum transformer loading
-        max_load_T = self.net.trafo.max_loading_percent.fillna(
-            100.) / 100. if "max_loading_percent" in net.trafo else 1.
-        sn_mva = self.net.trafo.sn_mva
-        df_T = self.net.trafo.df
-        SLmaxT_data = max_load_T * sn_mva * df_T * self.net.trafo.parallel / self.baseMVA
-        self.trafo_data['SLmaxT_data'] = SLmaxT_data
+        for element, (f, t) in self.net._gen_order.items():
+            if 'max_p_mw' in self.net[element]:
+                max_p[f:t] = self.net[element].max_p_mw.fillna(1e9).values / self.baseMVA
+            if 'min_p_mw' in self.net[element]:
+                min_p[f:t] = self.net[element].min_p_mw.fillna(-1e9).values / self.baseMVA
 
-        self.c0_data = pd.Series([1] * len(self.gen_all_set), self.gen_all_set)
-        self.c1_data = pd.Series([2] * len(self.gen_all_set), self.gen_all_set)
-        self.c2_data = pd.Series([3] * len(self.gen_all_set), self.gen_all_set)
+        if 'controllable' in self.net.gen:
+            controllable = self.net["gen"]["controllable"].values
+            not_controllable = ~controllable.astype(bool)
 
-        self.get_generator_real_power_data()
-        self.get_demand_real_power_data()
+            if np.any(not_controllable):
+                f, t = self.net._gen_order['gen']
 
+                p_mw = self.net["gen"]["p_mw"].values[not_controllable]
 
-    def get_generator_real_power_data(self):
-        if 'controllable' not in self.generators:
-            self.gen_controllable_set = pd.Index([])  # create empty Set if no controllable generators exist
+                not_controllable_gens = np.arange(f, t)[not_controllable]
+                max_p[not_controllable_gens] = p_mw / self.baseMVA
+                min_p[not_controllable_gens] = p_mw / self.baseMVA
+
+        self.generation_data['max_p'] = max_p
+        self.generation_data['min_p'] = min_p
+
+    def static_generation_real_power_limits(self):
+        if 'controllable' in self.net.sgen:
+            self.static_generation_data['controllable'] = self.net.sgen.controllable.values
         else:
-            self.gen_controllable_set = self.generators.index[self.generators.controllable == True]
+            self.static_generation_data['controllable'] = False
 
-        # add rows with active generation limits if not existing
-        if 'max_p_mw' not in self.generators:
-            self.generators['max_p_mw'] = self.generators.p_mw
-
-        if 'min_p_mw' not in self.net.sgen:
-            self.generators['min_p_mw'] = [0] * len(self.generators.index)
-
-        # generation limits for sgens
-        self.PGmax_data = self.generators.max_p_mw.fillna(self.generators.p_mw) / self.baseMVA
-        self.PGmin_data = self.generators.min_p_mw.fillna(0) / self.baseMVA
+        if 'max_p_mw' in self.net.sgen:
+            self.static_generation_data['max_p'] = self.net.sgen.max_p_mw.fillna(
+                self.net.sgen.p_mw).values / self.baseMVA
+        else:
+            self.static_generation_data['max_p'] = self.net.sgen.p_mw.values / self.baseMVA
+        if 'min_p_mw' in self.net.sgen:
+            self.static_generation_data['min_p'] = self.net.sgen.min_p_mw.fillna(0).values / self.baseMVA
+        else:
+            self.static_generation_data['min_p'] = np.zeros(len(self.net.sgen.index))
 
     def get_demand_real_power_data(self):
         if 'controllable' not in self.net.load:
@@ -78,11 +84,37 @@ class OPF(Basemodel):
         for l in self.model.L:
             self.model.SLmax[l] = SLmax[l]
 
-    def add_OPF(self):
+    def _calc_opf_parameters(self, **kwargs):
+        max_load = self.net.line.max_loading_percent.values if "max_loading_percent" in self.net.line else 100.
+        self.line_data['SLmax_data'] = self.__calc_SLmax(max_load)
+
+        # maximum transformer loading
+        max_load_T = self.net.trafo.max_loading_percent.fillna(
+            100.) / 100. if "max_loading_percent" in self.net.trafo else 1.
+        sn_mva = self.net.trafo.sn_mva
+        df_T = self.net.trafo.df
+        SLmaxT_data = max_load_T * sn_mva * df_T * self.net.trafo.parallel / self.baseMVA
+        self.trafo_data['SLmaxT_data'] = SLmaxT_data.values
+
+        # self.c0_data = pd.Series([1] * len(self.gen_all_set), self.gen_all_set)
+        # self.c1_data = pd.Series([2] * len(self.gen_all_set), self.gen_all_set)
+        # self.c2_data = pd.Series([3] * len(self.gen_all_set), self.gen_all_set)
+
+        # self.get_generator_real_power_data()
+        self.static_generation_real_power_limits()
+        self.generation_real_power_limits()
+        self.get_demand_real_power_data()
+
+    def add_OPF(self, **kwargs):
+        self._calc_opf_parameters(**kwargs)
+
         # controllable generation
-        self.model.Gc = Set(within=self.model.G, initialize=self.gen_controllable_set)  # controllable generators
-        self.model.PGmax = Param(self.model.G, initialize=self.PGmax_data[self.model.G])
-        self.model.PGmin = Param(self.model.G, initialize=self.PGmin_data[self.model.G])
+        self.model.sGc = Set(within=self.model.sG,
+                             initialize=self.static_generation_data.index[self.static_generation_data.controllable])
+        self.model.sPGmax = Param(self.model.sGc, initialize=self.static_generation_data.max_p[self.model.sGc])
+        self.model.sPGmin = Param(self.model.sGc, initialize=self.static_generation_data.min_p[self.model.sGc])
+        self.model.PGmax = Param(self.model.G, initialize=self.generation_data['max_p'][self.model.G])
+        self.model.PGmin = Param(self.model.G, initialize=self.generation_data['min_p'][self.model.G])
 
         # controllable loads
         self.model.Dc = Set(within=self.model.D, initialize=self.demand_controllable_set)  # controllable loads
@@ -91,26 +123,34 @@ class OPF(Basemodel):
 
         # lines and transformer chracteristics and ratings
         self.model.SLmax = Param(self.model.L, within=NonNegativeReals,
-                                 initialize=self.line_data['SLmax_data'][self.model.L], mutable=True)  # real power line limit
+                                 initialize=self.line_data['SLmax_data'][self.model.L],
+                                 mutable=True)  # real power line limit
         self.model.SLmaxT = Param(self.model.TRANSF, within=NonNegativeReals,
                                   initialize=self.trafo_data.SLmaxT_data[self.model.TRANSF],
                                   mutable=True)  # real power transformer limit
 
         # cost data
-        self.model.c2 = Param(self.model.G, within=NonNegativeReals,
-                              initialize=self.c2_data)  # generator cost coefficient c2 (*pG^2)
-        self.model.c1 = Param(self.model.G, within=NonNegativeReals,
-                              initialize=self.c1_data)  # generator cost coefficient c1 (*pG)
-        self.model.c0 = Param(self.model.G, within=NonNegativeReals,
-                              initialize=self.c0_data)  # generator cost coefficient c0
-        self.model.VOLL = Param(self.model.D, within=Reals, initialize=10000)  # value of lost load
+        # self.model.c2 = Param(self.model.G, within=NonNegativeReals,
+        #                       initialize=self.c2_data)  # generator cost coefficient c2 (*pG^2)
+        # self.model.c1 = Param(self.model.G, within=NonNegativeReals,
+        #                       initialize=self.c1_data)  # generator cost coefficient c1 (*pG)
+        # self.model.c0 = Param(self.model.G, within=NonNegativeReals,
+        #                       initialize=self.c0_data)  # generator cost coefficient c0
+        # self.model.VOLL = Param(self.model.D, within=Reals, initialize=10000)  # value of lost load
 
-        # --- generator power limits ---
+        # --- static generator power limits ---
+        def static_generation_real_power_bounds(model, g):
+            model.psG[g].unfix()
+            return model.sPGmin[g], model.psG[g], model.sPGmax[g]
+
+        self.model.PsG_Constraint = Constraint(self.model.sGc, rule=static_generation_real_power_bounds)
+
+        # --- generation real power limits ---
         def real_power_bounds(model, g):
             model.pG[g].unfix()
             return model.PGmin[g], model.pG[g], model.PGmax[g]
 
-        self.model.PGc_Constraint = Constraint(self.model.Gc, rule=real_power_bounds)
+        self.model.PG_Constraint = Constraint(self.model.G, rule=real_power_bounds)
 
         # --- demand limits ---
         def real_demand_bounds(model, d):

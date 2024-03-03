@@ -43,14 +43,14 @@ class DC(Basemodel):
 
         # --- Kirchoff's current law at each bus b ---
         def KCL_def(model, b):
-            kcl = (sum(model.pG[g] for g in model.G if (b, g) in model.Gbs) +
-                    sum(model.peG[g] for g in model.eG if (b, g) in model.eGbs) ==
-                    sum(model.pD[d] for d in model.D if (b, d) in model.Dbs) +
-                    sum(model.pLfrom[l] for l in model.L if model.A[l, 1] == b) +
-                    sum(model.pLto[l] for l in model.L if model.A[l, 2] == b) +
-                    sum(model.pThv[l] for l in model.TRANSF if model.AT[l, 1] == b) +
-                    sum(model.pTlv[l] for l in model.TRANSF if model.AT[l, 2] == b) +
-                    sum(model.GB[s] for s in model.SHUNT if (b, s) in model.SHUNTbs))
+            kcl = (sum(model.psG[g] for g in model.sG if (g, b) in model.sGbs) +
+                   sum(model.pG[g] for g in model.G if (g, b) in model.Gbs) ==
+                   sum(model.pD[d] for d in model.D if (b, d) in model.Dbs) +
+                   sum(model.pLfrom[l] for l in model.L if model.A[l, 1] == b) +
+                   sum(model.pLto[l] for l in model.L if model.A[l, 2] == b) +
+                   sum(model.pThv[l] for l in model.TRANSF if model.AT[l, 1] == b) +
+                   sum(model.pTlv[l] for l in model.TRANSF if model.AT[l, 2] == b) +
+                   sum(model.GB[s] for s in model.SHUNT if (b, s) in model.SHUNTbs))
             if isinstance(kcl, bool):
                 return Constraint.Skip
             return kcl
