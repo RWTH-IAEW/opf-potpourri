@@ -105,6 +105,34 @@ def plot_pq_gridcodes():
     plt.show()
 
 
+def plot_pq_res(nets, labels=None):
+    plt.style.use('rwth-word')
+
+    marker = ['o', '*', '+', '.', ',']
+
+    clrs = ['#00549F', '#000000', '#E30066', '#FFED00', '#006165',
+            '#0098A1', '#57AB27', '#BDCD00', '#F6A800', '#CC071E',
+            '#A11035', '#612158', '#7A6FAC']
+
+    fig, ax = plt.subplots()
+
+    # Variant 1
+    ax.vlines(1., -0.23, 0.48, color=clrs[8])  # Pmax
+    ax.vlines(0.1, -0.1, 0.1, color=clrs[8])  # Pmin
+    ax.plot([0.1, 0.2, 1], [-0.1, -0.23, -0.23], color=clrs[8], label='Variante 1')  # Qmin(P)
+    ax.plot([0.1, 0.2, 1], [0.1, 0.48, 0.48], color=clrs[8])  # Qmax(P)
+
+    for i, net in enumerate(nets):
+        line = ax.scatter(net.res_sgen.p_mw[net.sgen.wind_hc & net.sgen.in_service].values/ net.sgen.p_mw[net.sgen.wind_hc & net.sgen.in_service].values,
+                          net.res_sgen.q_mvar[net.sgen.wind_hc & net.sgen.in_service].values / net.sgen.p_mw[net.sgen.wind_hc & net.sgen.in_service].values,
+                          color=clrs[i], marker=marker[i])
+        if labels:
+            line.set_label(labels[i])
+
+    if labels:
+        plt.legend()
+
+
 def plot_qu_gridcodes():
     plt.style.use('rwth-word')
 
@@ -160,8 +188,8 @@ def plot_qu_res(nets, labels=None):
     plt.ylabel('$Q_{w} / P_{w}$')
 
     for i, net in enumerate(nets):
-        line = ax.scatter(net.res_bus.vm_pu[net.sgen.bus[net.sgen.wind_hc]],
-                          net.res_sgen.q_mvar[net.sgen.wind_hc].values / net.res_sgen.p_mw[net.sgen.wind_hc].values,
+        line = ax.scatter(net.res_bus.vm_pu[net.sgen.bus[net.sgen.wind_hc & net.sgen.in_service]],
+                          net.res_sgen.q_mvar[net.sgen.wind_hc & net.sgen.in_service].values / net.sgen.p_mw[net.sgen.wind_hc & net.sgen.in_service].values,
                           color=clrs[i], marker=marker[i])
         if labels:
             line.set_label(labels[i])

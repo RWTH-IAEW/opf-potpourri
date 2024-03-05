@@ -49,7 +49,7 @@ if __name__ == '__main__':
     hc_q.solve()
     hc_q.add_OPF()
     hc_q.model.QW_max_constraint.deactivate()
-    hc_q.model.QU_max_constraint.deactivate()
+    hc_q.model.QU_max_hc_constraint.deactivate()
     hc_q.solve(solver="mindtpy", mip_solver='gurobi')
 
     nets = [hc.net, hc_t.net, hc_l.net, hc_u.net, hc_q.net]
@@ -58,7 +58,7 @@ if __name__ == '__main__':
         plot_qu_res(net)
 
     # array with objective values rounded to 2 decimals
-    objectives = [round(hc.model.OBJ(), 2), round(hc_t.model.OBJ(), 2), round(hc_l.model.OBJ(), 2),
-                  round(hc_u.model.OBJ(), 2), round(hc_q.model.OBJ(), 2)]
+    objectives = [round(hc.model.obj_hc(), 2), round(hc_t.model.obj_hc(), 2), round(hc_l.model.obj_hc(), 2),
+                  round(hc_u.model.obj_hc(), 2), round(hc_q.model.obj_hc(), 2)]
 
     plt.bar(range(len(objectives)), objectives, tick_label=objectives)

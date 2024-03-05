@@ -25,7 +25,7 @@ def vary_SLmax(hc):
         hc.solve()
 
         store_values(hc, res)
-        obj.append(pe.value(hc.model.OBJ))
+        obj.append(pe.value(hc.model.obj_hc))
 
     return res
 
@@ -125,7 +125,7 @@ def vary_slack_and_SLmax(values=None, key=None, hc=None, SL_percent=[100], SWmax
                 hc_act.solve(solver=solver)
 
             store_values(hc_act, res)
-            obj.append(pe.value(hc_act.model.OBJ))
+            obj.append(pe.value(hc_act.model.obj_hc))
             x.append(i)
             model.append(hc_act)
             baseMVA = hc_act.model.baseMVA.value

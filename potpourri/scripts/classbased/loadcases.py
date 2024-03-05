@@ -26,11 +26,11 @@ if __name__ == '__main__':
 
         net_case.ext_grid.vm_pu = factors['Slack_vm']
 
-        hc = HC_ACOPF(net_case, SWmin=10)
+        hc = HC_ACOPF(net_case)
         hc.solve()
         hc.add_OPF()
         hc.solve(solver='mindtpy', mip_solver='gurobi')
 
         hcs.append(copy.deepcopy(hc))
-        obj.append(pe.value(hc.model.OBJ))
+        obj.append(pe.value(hc.model.obj))
 

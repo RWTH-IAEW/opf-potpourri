@@ -1,6 +1,7 @@
 import copy
 import math
 import time
+import pickle
 
 import pyomo.environ as pe
 import simbench as sb
@@ -12,7 +13,7 @@ from potpourri.models.class_based.AC import AC
 from potpourri.models.class_based.pyo_to_net import pyo_sol_to_net_res
 
 from potpourri.scripts.classbased.plot_functions import *
-
+from potpourri.scripts.classbased.init_pyo_from_pp_res import init_pyo_from_dcpp
 
 def create_testnet():
     net = pp.create_empty_network()
@@ -71,12 +72,12 @@ def get_limiting_constraints(model, tolerance=1e-4):
                 continue
             if c[index].slack() < tolerance:
                 # don't consider wind constraints when y = 0
-                if ('W_max_constraint' in c[index].name) | ('W_min_constraint' in c[index].name) | (
-                        'U_max_constraint' in c[index].name) | ('U_min_constraint' in c[index].name):
-                    if model.y[index].value == 0.:
-                        continue
-                    if model.pG[index].value + model.qG[index].value <= tolerance:
-                        continue
+                # if ('W_max_constraint' in c[index].name) | ('W_min_constraint' in c[index].name) | (
+                #         'U_max_constraint' in c[index].name) | ('U_min_constraint' in c[index].name):
+                    # if model.y[index].value == 0.:
+                    #     continue
+                    # if model.pG[index].value + model.qG[index].value <= tolerance:
+                    #     continue
                 lim_constr.append(c[index])
             # negative slack means constraint is violated
             if c[index].slack() < -tolerance:
@@ -204,7 +205,7 @@ def vary_pg_pd(net):
         pyo_sol_to_net_res(hc.net, hc.model)
 
         res_nets.append(hc.net)
-        res_obj.append(hc.model.OBJ())
+        res_obj.append(hc.model.obj_hc())
 
     for sgen in net.sgen.index:
         net.sgen.p_mw[sgen] = max([res.sgen.p_mw[sgen] for res in res_nets])
@@ -222,7 +223,7 @@ def vary_load(net):
         hc.solve(solver='mindtpy', mip_solver='gurobi')
 
         hcs.append(copy.deepcopy(hc))
-        res_obj.append(hc.model.OBJ())
+        res_obj.append(hc.model.obj_hc())
 
 
 def diff_trafos(net):
@@ -238,7 +239,21 @@ if __name__ == '__main__':
     # net = create_testnet()
     # net = pp.networks.simple_four_bus_system()
     #
-    net = sb.get_simbench_net("1-HV-mixed--0-no_sw")
+    # net = sb.get_simbench_net("1-HV-mixed--0-no_sw")
+    # net = pickle.load(open('C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\windpot\simbench_hv_grid_with_potential.pkl', 'rb'))
+    net = pickle.load(open('C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\data\simbench_hv_grid_with_potential_pkl.pkl', 'rb'))
+
+    # net = pp.from_excel('C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\data\\hv_grid.xlsx')
+    # net.ext_grid['max_p_mw'] = 800
+    # net.ext_grid['min_p_mw'] = -800
+
+    hc = HC_ACOPF(net)
+    init_pyo_from_dcpp(hc.net, hc.model)
+    hc.solve()
+    # ac = AC(net)
+
+    pp.runpp(net)
+    pp.nets_equal(net, hc.net)
 
     # obj = []
     # hcs = []

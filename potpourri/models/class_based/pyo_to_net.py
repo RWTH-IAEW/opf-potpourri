@@ -6,7 +6,7 @@ import pandas as pd
 def pyo_sol_to_net_res(net, model):
 
     if 'HC' in model.name:
-        for w in model.WIND:
+        for w in model.WIND_HC:
             net.sgen.p_mw[w] = model.psG[w].value * model.baseMVA.value * model.y[w].value
             net.sgen.q_mvar[w] = model.qsG[w].value * model.baseMVA.value * model.y[w].value
 
@@ -175,12 +175,12 @@ def _load_results_to_net(net, model):
 
 def _sgen_results_to_net(net, model):
     # --- sgen ---
-    # net.res_sgen = pd.DataFrame(columns=['p_mw', 'q_mvar'], index=net.sgen.index)
+    net.res_sgen = pd.DataFrame(columns=['p_mw', 'q_mvar'], index=net.sgen.index)
     for g in model.sG:
-        net.res_sgen.loc[g, 'p_mw'] = model.psG[g].value * model.baseMVA.value
+        net.res_sgen.iloc[g]['p_mw'] = model.psG[g].value * model.baseMVA.value
 
         if 'AC' in model.name:
-            net.res_sgen.loc[g, 'q_mvar'] = model.qsG[g].value * model.baseMVA.value
+            net.res_sgen.iloc[g]['q_mvar'] = model.qsG[g].value * model.baseMVA.value
 
     if 'HC' in model.name:
         net.res_sgen['y_wind'] = model.y.get_values()

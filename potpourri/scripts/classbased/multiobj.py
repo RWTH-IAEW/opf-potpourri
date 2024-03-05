@@ -33,7 +33,7 @@ def max_wind_min_loss(net, n=11, **kwargs):
 
         if pe.check_optimal_termination(hc.results):
             obj.append(pe.value(hc.model.OBJ_with_loss))
-            p_wind.append(pe.value(sum(hc.model.pG[w] for w in hc.model.WIND)))
+            p_wind.append(pe.value(sum(hc.model.psG[w] for w in hc.model.WIND)))
             p_loss.append(pe.value(sum(hc.model.pLfrom[l] + hc.model.pLto[l] for l in hc.model.L)))
         else:
             obj.append(None)
@@ -47,7 +47,7 @@ def max_wind_min_loss(net, n=11, **kwargs):
 
 
 def weighted_sum(net, n=11, **kwargs):
-    hc = HC_ACOPF(net, SWmax=10000, SWmin=0, peGmax=1000000)
+    hc = HC_ACOPF(net)
     hc.solve()
     hc.add_OPF()
 
@@ -62,16 +62,16 @@ def weighted_sum(net, n=11, **kwargs):
 
     hc.solve(solver='mindtpy', mip_solver='gurobi')
 
-    p_wind_max = pe.value(hc.model.OBJ)
+    p_wind_max = pe.value(hc.model.obj_hc)
 
     hc.model.w_wind = pe.Param(within=pe.Reals, initialize=0., mutable=True)
     hc.model.w_loss = pe.Param(within=pe.Reals, initialize=1., mutable=True)
 
     def objective_pwind_loss(model):
-        return model.w_wind * sum(model.pG[w] for w in model.WIND) + model.w_loss * (
+        return model.w_wind * sum(model.psG[w] for w in model.WIND) + model.w_loss * (
             - sum(model.pLfrom[l] + model.pLto[l] for l in model.L))
 
-    hc.model.OBJ.deactivate()
+    hc.model.obj_hc.deactivate()
     hc.model.OBJ_with_loss = pe.Objective(rule=objective_pwind_loss, sense=pe.maximize)
 
     hc.solve(solver='mindtpy', mip_solver='gurobi')
@@ -90,7 +90,7 @@ def weighted_sum(net, n=11, **kwargs):
 
         if pe.check_optimal_termination(hc.results):
             obj.append(pe.value(hc.model.OBJ_with_loss))
-            p_wind.append(pe.value(sum(hc.model.pG[w] for w in hc.model.WIND)))
+            p_wind.append(pe.value(sum(hc.model.psG[w] for w in hc.model.WIND)))
             p_loss.append(pe.value(sum(hc.model.pLfrom[l] + hc.model.pLto[l] for l in hc.model.L)))
             hcs.append(copy.deepcopy(hc))
         else:
@@ -103,7 +103,7 @@ def weighted_sum(net, n=11, **kwargs):
 
 
 def pareto_front(net, n=10, **kwargs):
-    hc = HC_ACOPF(net, SWmax=10000, SWmin=0, peGmax=1000000)
+    hc = HC_ACOPF(net)
     hc.solve()
     hc.add_OPF()
 
@@ -113,12 +113,14 @@ def pareto_front(net, n=10, **kwargs):
     if kwargs.get('SWmin', False):
         hc.change_vals('SWmin', kwargs.get('SWmin'))
 
+    hc.model.obj_hc.activate()
+    hc.model.obj.deactivate()
     hc.solve(solver='mindtpy', mip_solver='gurobi')
 
-    p_wind_max = pe.value(hc.model.OBJ)
+    p_wind_max = pe.value(hc.model.obj_hc)
     p_loss_max = pe.value(sum(hc.model.pLfrom[l] + hc.model.pLto[l] for l in hc.model.L))
 
-    hc.model.OBJ.deactivate()
+    hc.model.obj_hc.deactivate()
 
     # get minimum losses
     def obj_min_loss(model):
@@ -128,13 +130,13 @@ def pareto_front(net, n=10, **kwargs):
 
     hc.solve(solver='mindtpy', mip_solver='gurobi')
     p_loss_min = pe.value(hc.model.OBJ_loss)
-    p_wind_min = pe.value(sum(hc.model.pG[w] for w in hc.model.WIND))
+    p_wind_min = pe.value(sum(hc.model.psG[w] for w in hc.model.WIND))
 
     if kwargs.get('tap_discrete', False):
         hc.add_tap_changer_discrete()
 
     hc.model.OBJ_loss.deactivate()
-    hc.model.OBJ.activate()
+    hc.model.obj_hc.activate()
 
     # add loss objective function as constraint
     hc.model.eps = pe.Param(within=pe.Reals, initialize=p_loss_min, mutable=True)
@@ -159,7 +161,7 @@ def p_wind_loss_opt(net, n=10, **kwargs):
     if kwargs.get('hc', False):
         hc = kwargs.get('hc')
     else:
-        hc = HC_ACOPF(net, SWmax=10000, SWmin=0, peGmax=1000000)
+        hc = HC_ACOPF(net)
         hc.solve()
         hc.add_OPF()
 
@@ -174,12 +176,15 @@ def p_wind_loss_opt(net, n=10, **kwargs):
     except AttributeError:
         pass
 
+    hc.model.obj_hc.activate()
+    hc.model.obj.deactivate()
+
     hc.solve(solver='mindtpy', mip_solver='gurobi')
 
-    p_wind_max = pe.value(hc.model.OBJ)
+    p_wind_max = pe.value(hc.model.obj_hc)
     p_loss_max = pe.value(sum(hc.model.pLfrom[l] + hc.model.pLto[l] for l in hc.model.L))
 
-    hc.model.OBJ.deactivate()
+    hc.model.obj_hc.deactivate()
 
     try:
         hc.model.OBJ_loss.activate()
@@ -192,10 +197,10 @@ def p_wind_loss_opt(net, n=10, **kwargs):
     # get minimum losses
     hc.solve(solver='mindtpy', mip_solver='gurobi')
     p_loss_min = pe.value(hc.model.OBJ_loss)
-    p_wind_min = pe.value(sum(hc.model.pG[w] for w in hc.model.WIND))
+    p_wind_min = pe.value(sum(hc.model.psG[w] for w in hc.model.WIND))
 
     hc.model.OBJ_loss.deactivate()
-    hc.model.OBJ.activate()
+    hc.model.obj_hc.activate()
 
     if kwargs.get('tap_discrete', False):
         hc.add_tap_changer_discrete()
@@ -306,7 +311,7 @@ def epsilon_constraint(hc, steps, p_w, p_l, mode=None, ow=None):
         hc.model.eps = eps
         hc.solve(solver='mindtpy', mip_solver='gurobi')
 
-        p_wind.append(pe.value(sum(hc.model.pG[w] for w in hc.model.WIND)))
+        p_wind.append(pe.value(sum(hc.model.psG[w] for w in hc.model.WIND)))
         p_loss.append(pe.value(sum(hc.model.pLfrom[l] + hc.model.pLto[l] for l in hc.model.L)))
         nets.append(copy.deepcopy(hc.net))
 
@@ -380,6 +385,10 @@ if __name__ == '__main__':
               'rb') as f:
         net = pickle.load(f)
 
+    # with open('C:/Users/f.lohse/PycharmProjects/potpourri/potpourri/windpot/simbench_hv_grid_with_potential.pkl',
+    #           'rb') as f:
+    #     net = pickle.load(f)
+
     # net = sb.get_simbench_net("1-HV-mixed--0-no_sw")
 
     case = 'lW'
@@ -391,6 +400,10 @@ if __name__ == '__main__':
     net.sgen.scaling[net.sgen.type == 'PV'] = factors['PV_p']
     net.sgen.scaling[(net.sgen.type != 'Wind') & (net.sgen.type != 'Solar')] = factors['RES_p']
     net.ext_grid.vm_pu = factors['Slack_vm']
+
+    # p_wind, p_loss, nets, results, p_wind_opt, p_loss_opt, net_opt = p_wind_loss_opt(net, SWmin=10.)
+
+    p_wind, p_loss, nets, results = pareto_front(net, n=30)
 
     # # plot pareto front
     # fig, ax = plt.subplots()

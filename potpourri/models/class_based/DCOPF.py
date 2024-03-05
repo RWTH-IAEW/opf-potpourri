@@ -15,12 +15,12 @@ class DCOPF(DC, OPF):
         self.model.name = "DCOPF"
 
         # --- cost function ---
-        def objective(model):
-            obj = sum(model.c1[g] * (model.baseMVA * model.pG[g]) + model.c0[g] for g in model.G) + \
-                  sum(model.VOLL[d] * (model.PD[d] - model.pD[d]) * model.baseMVA for d in model.D)
-            return obj
-
-        self.model.OBJ = Objective(rule=objective, sense=minimize)
+        # def objective(model):
+        #     obj = sum(model.c1[g] * (model.baseMVA * model.pG[g]) + model.c0[g] for g in model.G) + \
+        #           sum(model.VOLL[d] * (model.PD[d] - model.pD[d]) * model.baseMVA for d in model.D)
+        #     return obj
+        #
+        # self.model.OBJ = Objective(rule=objective, sense=minimize)
 
         # --- line power limits ---
         def line_lim1_def(model, l):

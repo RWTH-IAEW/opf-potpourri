@@ -110,7 +110,7 @@ class OPF(Basemodel):
 
         # controllable generation
         self.model.sGc = Set(within=self.model.sG,
-                             initialize=self.static_generation_data.index[self.static_generation_data.controllable])
+                             initialize=self.static_generation_data.index[self.static_generation_data.controllable & self.static_generation_data.in_service])
         self.model.sPGmax = Param(self.model.sGc, initialize=self.static_generation_data.max_p[self.model.sGc])
         self.model.sPGmin = Param(self.model.sGc, initialize=self.static_generation_data.min_p[self.model.sGc])
         self.model.PGmax = Param(self.model.G, initialize=self.generation_data['max_p'][self.model.G])
