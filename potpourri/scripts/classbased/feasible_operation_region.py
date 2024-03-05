@@ -15,394 +15,37 @@ Institut für Elektrische Anlagen und Netze, Digitalisierung und Energiewirtscha
 from __future__ import division
 
 import copy
-
+import math
 from pyomo.environ import *
-import pandapower as pp
 import pickle
+from shapely import concave_hull, MultiPoint, convex_hull
+import geopandas as gpd
 
 from potpourri.models.class_based.HC_ACOPF import HC_ACOPF
+from potpourri.models.class_based.ACOPF_base import ACOPF
+from potpourri.scripts.classbased.plot_functions import *
 
 
 # ==========================
-
-def feasible_operation_region(net: pp.pandapowerNet) -> ConcreteModel:
-    model = ConcreteModel()
-
-    def _create_sets(model: ConcreteModel, net: pp.pandapowerNet):
-        # --- sets ---
-        # buses, generators, loads, lines, sections
-        model.B = Set(initialize=net.bus.index)  # set of buses
-        model.G = Set(initialize=net.gen.index)  # set of generators
-        model.WIND = Set(initialize=net.sgen.index)  # set of wind generators
-        model.D = Set(initialize=net.load.index)  # set of demands
-        model.DNeg = Set(initialize=net.load.index)  # set of demands
-        model.L = Set(initialize=net.line.index)  # set of lines
-        model.SHUNT = Set(initialize=net.shunt.index)  # set of shunts
-        model.LE = Set()  # line-to and from ends set (1,2)
-        model.TRANSF = Set(initialize=net.trafo.index)  # set of transformers
-        model.b0 = Set(initialize=net.ext_grid.bus, within=model.B)  # set of reference buses
-
-        # generators, buses, loads linked to each bus b
-        model.Gbs = Set(within=model.B * model.G)  # generator-bus mapping
-        model.Dbs = Set(within=model.B * model.D)  # demand-bus mapping
-        model.Wbs = Set(within=model.B * model.WIND)  # wind-bus mapping
-        model.SHUNTbs = Set(within=model.B * model.SHUNT)  # shunt-bus mapping
-
-        return model
-
-    model = _create_sets(model, net)
-
-    def _create_parameters(model: ConcreteModel, net: pp.pandapowerNet):
-        # --- parameters ---
-        # line matrix
-        model.A = Param(model.L * model.LE, within=pyomo.core.Any)  # bus-line
-        model.AT = Param(model.TRANSF * model.LE, within=pyomo.core.Any)  # bus-transformer
-
-        # demands
-        model.PD = Param(model.D,
-                         initialize={load_idx: net.load.p_mw[load_idx] for load_idx in net.load.index},
-                         within=pyomo.core.Reals)  # real power demand
-        model.QD = Param(model.D,
-                         initialize={load_idx: net.load.q_mvar[load_idx] for load_idx in net.load.index},
-                         within=pyomo.core.Reals)  # reactive power demand
-        model.VOLL = Param(model.D,
-                           initialize={load_idx: 1000 for load_idx in net.load.index},
-                           within=pyomo.core.Reals)  # value of lost load
-
-        # generators
-        model.PGmax = Param(model.G,
-                            initialize={gen_idx: net.gen.max_p_mw[gen_idx] for gen_idx in net.gen.index},
-                            within=pyomo.core.NonNegativeReals)  # max real power of generator
-        model.PGmin = Param(model.G,
-                            initialize={gen_idx: 0 for gen_idx in net.gen.index},
-                            within=pyomo.core.Reals)  # min real power of generator
-        model.QGmax = Param(model.G,
-                            initialize={gen_idx: net.gen.max_q_mvar[gen_idx] for gen_idx in net.gen.index},
-                            within=pyomo.core.NonNegativeReals)  # max reactive power of generator
-        model.QGmin = Param(model.G,
-                            initialize={gen_idx: net.gen.min_q_mvar[gen_idx] for gen_idx in net.gen.index},
-                            within=pyomo.core.Reals)  # min reactive power of generator
-
-        # wind generators
-        model.WGmax = Param(model.WIND,
-                            initialize={sgen_idx: net.sgen.max_p_mw[sgen_idx] for sgen_idx in net.sgen.index},
-                            within=pyomo.core.NonNegativeReals)  # max real power of wind generator
-        model.WGmin = Param(model.WIND,
-                            initialize={sgen_idx: 0 for sgen_idx in net.sgen.index},
-                            within=pyomo.core.NonNegativeReals)  # min real power of wind generator
-        model.WGQmax = Param(model.WIND,
-                             initialize={sgen_idx: net.sgen.max_q_mvar[sgen_idx] for sgen_idx in net.sgen.index},
-                             within=pyomo.core.NonNegativeReals)  # max reactive power of wind generator
-        model.WGQmin = Param(model.WIND,
-                             initialize={sgen_idx: net.sgen.min_q_mvar[sgen_idx] for sgen_idx in net.sgen.index},
-                             within=pyomo.core.Reals)  # min reactive power of wind generator
-
-        # lines
-        model.SLmax = Param(model.L,
-                            initialize={line_idx: net.line.max_i_ka[line_idx] for line_idx in net.line.index},
-                            within=pyomo.core.NonNegativeReals)  # max real power limit on flow in a line
-        model.GL = Param(model.L, within=pyomo.core.Reals)
-        model.BL = Param(model.L, within=pyomo.core.Reals)
-        model.BC = Param(model.L, within=pyomo.core.Reals)
-
-        # emergency ratings
-        model.SLmax_E = Param(model.L, within=pyomo.core.NonNegativeReals)  # max emergency real power flow limit
-        model.SLmaxT_E = Param(model.TRANSF, within=pyomo.core.NonNegativeReals)  # max emergency real power flow limit
-
-        # transformers
-        model.Tap = Param(model.TRANSF, within=pyomo.core.NonNegativeReals)  # turns ratio of a transformer
-        model.TapLB = Param(model.TRANSF, within=pyomo.core.NonNegativeReals)  # lower bound on turns ratio
-        model.TapUB = Param(model.TRANSF, within=pyomo.core.NonNegativeReals)  # upper bound on turns ratio
-        model.Deltashift = Param(model.TRANSF)  # phase shift of transformer, rad
-        model.DeltashiftLB = Param(model.TRANSF)  # lower bound on phase shift of transformer, rad
-        model.DeltashiftUB = Param(model.TRANSF)  # upper bound on phase shift of transformer, rad
-
-        model.SLmaxT = Param(model.TRANSF, within=pyomo.core.NonNegativeReals)  # max real power flow limit
-        model.GLT = Param(model.TRANSF, within=pyomo.core.Reals)
-        model.BLT = Param(model.TRANSF, within=pyomo.core.Reals)
-
-        # derived line parameters
-        model.G11 = Param(model.L, within=pyomo.core.Reals)
-        model.G12 = Param(model.L, within=pyomo.core.Reals)
-        model.G21 = Param(model.L, within=pyomo.core.Reals)
-        model.G22 = Param(model.L, within=pyomo.core.Reals)
-        model.B11 = Param(model.L, within=pyomo.core.Reals)
-        model.B12 = Param(model.L, within=pyomo.core.Reals)
-        model.B21 = Param(model.L, within=pyomo.core.Reals)
-        model.B22 = Param(model.L, within=pyomo.core.Reals)
-        ## derived transformer parameters
-        model.G11T = Param(model.TRANSF, within=pyomo.core.Reals)
-        model.G12T = Param(model.TRANSF, within=pyomo.core.Reals)
-        model.G21T = Param(model.TRANSF, within=pyomo.core.Reals)
-        model.G22T = Param(model.TRANSF, within=pyomo.core.Reals)
-        model.B11T = Param(model.TRANSF, within=pyomo.core.Reals)
-        model.B12T = Param(model.TRANSF, within=pyomo.core.Reals)
-        model.B21T = Param(model.TRANSF, within=pyomo.core.Reals)
-        model.B22T = Param(model.TRANSF, within=pyomo.core.Reals)
-
-        # buses
-        model.Vmax = Param(model.B, within=pyomo.core.NonNegativeReals)  # max voltage angle
-        model.Vmin = Param(model.B, within=pyomo.core.NonNegativeReals)  # min voltage angle
-
-        # shunt
-        model.GB = Param(model.SHUNT, within=pyomo.core.Reals)  # shunt conductance
-        model.BB = Param(model.SHUNT, within=pyomo.core.Reals)  # shunt susceptance
-
-        # cost
-        model.c2 = Param(model.G, within=pyomo.core.NonNegativeReals)  # generator cost coefficient c2 (*pG^2)
-        model.c1 = Param(model.G, within=pyomo.core.NonNegativeReals)  # generator cost coefficient c1 (*pG)
-        model.c0 = Param(model.G, within=pyomo.core.NonNegativeReals)  # generator cost coefficient c0
-
-        model.baseMVA = Param(within=pyomo.core.NonNegativeReals)  # base MVA
-
-        # constants
-        model.eps = Param(within=pyomo.core.NonNegativeReals)
-
-        return model
-
-    model = _create_parameters(model, net)
-
-    def _create_variables(model: ConcreteModel, net: pp.pandapowerNet):
-        # --- variables ---
-        model.pG = Var(model.G, domain=pyomo.core.NonNegativeReals)  # real power output of generator
-        model.qG = Var(model.G, domain=pyomo.core.Reals)  # reactive power output of generator
-        model.pW = Var(model.WIND, domain=pyomo.core.Reals)  # real power generation from wind
-        model.qW = Var(model.WIND, domain=pyomo.core.Reals)  # reactive power generation from wind
-        model.pD = Var(model.D, domain=pyomo.core.Reals)  # real power absorbed by demand
-        model.qD = Var(model.D, domain=pyomo.core.Reals)  # reactive power absorbed by demand
-        model.pLfrom = Var(model.L, domain=pyomo.core.Reals)  # real power injected at b onto line
-        model.pLto = Var(model.L, domain=pyomo.core.Reals)  # real power injected at b' onto line
-        model.qLfrom = Var(model.L, domain=pyomo.core.Reals)  # reactive power injected at b onto line
-        model.qLto = Var(model.L, domain=pyomo.core.Reals)  # reactive power injected at b' onto line
-        model.pLfromT = Var(model.TRANSF, domain=pyomo.core.Reals)  # real power injected at b onto transformer
-        model.pLtoT = Var(model.TRANSF, domain=pyomo.core.Reals)  # real power injected at b' onto transformer
-        model.qLfromT = Var(model.TRANSF, domain=pyomo.core.Reals)  # reactive power injected at b onto transformer
-        model.qLtoT = Var(model.TRANSF, domain=pyomo.core.Reals)  # reactive power injected at b' onto transformer
-
-        # model.deltaL = Var(model.L, domain= Reals) # angle difference across lines
-        model.delta = Var(model.B, domain=pyomo.core.Reals, initialize=0.0)  # voltage phase angle at bus b, rad
-        model.v = Var(model.B, domain=pyomo.core.NonNegativeReals, initialize=1.0)  # voltage magnitude at bus b, rad
-        model.alpha = Var(model.D, initialize=1.0, domain=pyomo.core.NonNegativeReals)  # proportion to supply of load d
-
-    # --- cost function ---
-    def objective(model):
-        obj = sum(
-            model.c2[g] * (model.baseMVA * model.pG[g]) ** 2 + model.c1[g] * model.baseMVA * model.pG[g] + model.c0[g]
-            for g in model.G) + \
-              sum(model.VOLL[d] * (1 - model.alpha[d]) * model.baseMVA * model.PD[d] for d in model.D)
-        return obj
-
-    model.OBJ = Objective(rule=objective, sense=minimize)
-
-    # --- Kirchoff's current law at each bus b ---
-    def KCL_real_def(model, b):
-        return sum(model.pG[g] for g in model.G if (b, g) in model.Gbs) + \
-            sum(model.pW[w] for w in model.WIND if (b, w) in model.Wbs) == \
-            sum(model.pD[d] for d in model.D if (b, d) in model.Dbs) + \
-            sum(model.pLfrom[l] for l in model.L if model.A[l, 1] == b) + \
-            sum(model.pLto[l] for l in model.L if model.A[l, 2] == b) + \
-            sum(model.pLfromT[l] for l in model.TRANSF if model.AT[l, 1] == b) + \
-            sum(model.pLtoT[l] for l in model.TRANSF if model.AT[l, 2] == b) + \
-            sum(model.GB[s] * model.v[b] ** 2 for s in model.SHUNT if (b, s) in model.SHUNTbs)
-
-    def KCL_reactive_def(model, b):
-        return sum(model.qG[g] for g in model.G if (b, g) in model.Gbs) + \
-            sum(model.qW[w] for w in model.WIND if (b, w) in model.Wbs) == \
-            sum(model.qD[d] for d in model.D if (b, d) in model.Dbs) + \
-            sum(model.qLfrom[l] for l in model.L if model.A[l, 1] == b) + \
-            sum(model.qLto[l] for l in model.L if model.A[l, 2] == b) + \
-            sum(model.qLfromT[l] for l in model.TRANSF if model.AT[l, 1] == b) + \
-            sum(model.qLtoT[l] for l in model.TRANSF if model.AT[l, 2] == b) - \
-            sum(model.BB[s] * model.v[b] ** 2 for s in model.SHUNT if (b, s) in model.SHUNTbs)
-
-    model.KCL_real = Constraint(model.B, rule=KCL_real_def)
-    model.KCL_reactive = Constraint(model.B, rule=KCL_reactive_def)
-
-    # --- Kirchoff's voltage law on each line ---
-    def KVL_real_fromend(model, l):
-        return model.pLfrom[l] == model.G11[l] * (model.v[model.A[l, 1]] ** 2) + \
-            model.v[model.A[l, 1]] * model.v[model.A[l, 2]] * (model.B12[l] * sin(model.delta[model.A[l, 1]] - \
-                                                                                  model.delta[model.A[l, 2]]) +
-                                                               model.G12[l] * cos(
-                        model.delta[model.A[l, 1]] - model.delta[model.A[l, 2]]))
-
-    def KVL_real_toend(model, l):
-        return model.pLto[l] == model.G22[l] * (model.v[model.A[l, 2]] ** 2) + \
-            model.v[model.A[l, 1]] * model.v[model.A[l, 2]] * (model.B21[l] * sin(model.delta[model.A[l, 2]] - \
-                                                                                  model.delta[model.A[l, 1]]) +
-                                                               model.G21[l] * cos(
-                        model.delta[model.A[l, 2]] - model.delta[model.A[l, 1]]))
-
-    def KVL_reactive_fromend(model, l):
-        return model.qLfrom[l] == -model.B11[l] * (model.v[model.A[l, 1]] ** 2) + \
-            model.v[model.A[l, 1]] * model.v[model.A[l, 2]] * (model.G12[l] * sin(model.delta[model.A[l, 1]] - \
-                                                                                  model.delta[model.A[l, 2]]) -
-                                                               model.B12[l] * cos(
-                        model.delta[model.A[l, 1]] - model.delta[model.A[l, 2]]))
-
-    def KVL_reactive_toend(model, l):
-        return model.qLto[l] == (-model.B22[l] * (model.v[model.A[l, 2]] ** 2) + \
-                                 model.v[model.A[l, 1]] * model.v[model.A[l, 2]] * (
-                                         model.G21[l] * sin(model.delta[model.A[l, 2]] - \
-                                                            model.delta[model.A[l, 1]]) - model.B21[l] * cos(
-                                     model.delta[model.A[l, 2]] - model.delta[model.A[l, 1]])))
-
-    model.KVL_real_from = Constraint(model.L, rule=KVL_real_fromend)
-    model.KVL_real_to = Constraint(model.L, rule=KVL_real_toend)
-    model.KVL_reactive_from = Constraint(model.L, rule=KVL_reactive_fromend)
-    model.KVL_reactive_to = Constraint(model.L, rule=KVL_reactive_toend)
-
-    # --- Kirchoff's voltage law on each transformer line ---
-    def KVL_real_fromendTransf(model, l):
-        return model.pLfromT[l] == model.G11T[l] * (model.v[model.AT[l, 1]] ** 2) + \
-            model.v[model.AT[l, 1]] * model.v[model.AT[l, 2]] * (model.B12T[l] * sin(model.delta[model.AT[l, 1]] - \
-                                                                                     model.delta[model.AT[l, 2]]) +
-                                                                 model.G12T[l] * cos(
-                        model.delta[model.AT[l, 1]] - model.delta[model.AT[l, 2]]))
-
-    def KVL_real_toendTransf(model, l):
-        return model.pLtoT[l] == model.G22T[l] * (model.v[model.AT[l, 2]] ** 2) + \
-            model.v[model.AT[l, 1]] * model.v[model.AT[l, 2]] * (model.B21T[l] * sin(model.delta[model.AT[l, 2]] - \
-                                                                                     model.delta[model.AT[l, 1]]) +
-                                                                 model.G21T[l] * cos(
-                        model.delta[model.AT[l, 2]] - model.delta[model.AT[l, 1]]))
-
-    def KVL_reactive_fromendTransf(model, l):
-        return model.qLfromT[l] == -model.B11T[l] * (model.v[model.AT[l, 1]] ** 2) + \
-            model.v[model.AT[l, 1]] * model.v[model.AT[l, 2]] * (model.G12T[l] * sin(model.delta[model.AT[l, 1]] - \
-                                                                                     model.delta[model.AT[l, 2]]) -
-                                                                 model.B12T[l] * cos(
-                        model.delta[model.AT[l, 1]] - model.delta[model.AT[l, 2]]))
-
-    def KVL_reactive_toendTransf(model, l):
-        return model.qLtoT[l] == -model.B22T[l] * (model.v[model.AT[l, 2]] ** 2) + \
-            model.v[model.AT[l, 1]] * model.v[model.AT[l, 2]] * (model.G21T[l] * sin(model.delta[model.AT[l, 2]] - \
-                                                                                     model.delta[model.AT[l, 1]]) -
-                                                                 model.B21T[l] * cos(
-                        model.delta[model.AT[l, 2]] - model.delta[model.AT[l, 1]]))
-
-    model.KVL_real_fromTransf = Constraint(model.TRANSF, rule=KVL_real_fromendTransf)
-    model.KVL_real_toTransf = Constraint(model.TRANSF, rule=KVL_real_toendTransf)
-    model.KVL_reactive_fromTransf = Constraint(model.TRANSF, rule=KVL_reactive_fromendTransf)
-    model.KVL_reactive_toTransf = Constraint(model.TRANSF, rule=KVL_reactive_toendTransf)
-
-    # --- generator power limits ---
-    def Real_Power_Max(model, g):
-        return model.pG[g] <= model.PGmax[g]
-
-    def Real_Power_Min(model, g):
-        return model.pG[g] >= model.PGmin[g]
-
-    def Reactive_Power_Max(model, g):
-        return model.qG[g] <= model.QGmax[g]
-
-    def Reactive_Power_Min(model, g):
-        return model.qG[g] >= model.QGmin[g]
-
-    model.PGmaxC = Constraint(model.G, rule=Real_Power_Max)
-    model.PGminC = Constraint(model.G, rule=Real_Power_Min)
-    model.QGmaxC = Constraint(model.G, rule=Reactive_Power_Max)
-    model.QGminC = Constraint(model.G, rule=Reactive_Power_Min)
-
-    # ---wind generator power limits ---
-    def Wind_Real_Power_Max(model, w):
-        return model.pW[w] <= model.WGmax[w]
-
-    def Wind_Real_Power_Min(model, w):
-        return model.pW[w] >= model.WGmin[w]
-
-    def Wind_Reactive_Power_Max(model, w):
-        return model.qW[w] <= model.WGQmax[w]
-
-    def Wind_Reactive_Power_Min(model, w):
-        return model.qW[w] >= model.WGQmin[w]
-
-    model.WGmaxC = Constraint(model.WIND, rule=Wind_Real_Power_Max)
-    model.WGminC = Constraint(model.WIND, rule=Wind_Real_Power_Min)
-    model.WGQmaxC = Constraint(model.WIND, rule=Wind_Reactive_Power_Max)
-    model.WGQminC = Constraint(model.WIND, rule=Wind_Reactive_Power_Min)
-
-    # --- demand and load shedding ---
-    def Load_Shed_real(model, d):
-        return model.pD[d] == model.alpha[d] * model.PD[d]
-
-    def Load_Shed_reactive(model, d):
-        return model.qD[d] == model.alpha[d] * model.QD[d]
-
-    def alpha_FixNegDemands(model, d):
-        return model.alpha[d] == 1
-
-    model.LoadShed_real = Constraint(model.D, rule=Load_Shed_real)
-    model.LoadShed_reactive = Constraint(model.D, rule=Load_Shed_reactive)
-    model.alphaFix = Constraint(model.DNeg, rule=alpha_FixNegDemands)
-
-    def alpha_BoundUB(model, d):
-        return model.alpha[d] <= 1
-
-    def alpha_BoundLB(model, d):
-        return model.alpha[d] >= 0
-
-    model.alphaBoundUBC = Constraint(model.D, rule=alpha_BoundUB)
-    model.alphaBoundLBC = Constraint(model.D, rule=alpha_BoundLB)
-
-    # --- line power limits ---
-    def line_lim1_def(model, l):
-        return model.pLfrom[l] ** 2 + model.qLfrom[l] ** 2 <= model.SLmax[l] ** 2
-
-    def line_lim2_def(model, l):
-        return model.pLto[l] ** 2 + model.qLto[l] ** 2 <= model.SLmax[l] ** 2
-
-    model.line_lim1 = Constraint(model.L, rule=line_lim1_def)
-    model.line_lim2 = Constraint(model.L, rule=line_lim2_def)
-
-    # --- power flow limits on transformer lines---
-    def transf_lim1_def(model, l):
-        return model.pLfromT[l] ** 2 + model.qLfromT[l] ** 2 <= model.SLmaxT[l] ** 2
-
-    def transf_lim2_def(model, l):
-        return model.pLtoT[l] ** 2 + model.qLtoT[l] ** 2 <= model.SLmaxT[l] ** 2
-
-    model.transf_lim1 = Constraint(model.TRANSF, rule=transf_lim1_def)
-    model.transf_lim2 = Constraint(model.TRANSF, rule=transf_lim2_def)
-
-    # --- voltage constraints ---
-    def bus_max_voltage(model, b):
-        return model.v[b] <= model.Vmax[b]
-
-    def bus_min_voltage(model, b):
-        return model.v[b] >= model.Vmin[b]
-
-    model.Vmaxc = Constraint(model.B, rule=bus_max_voltage)
-    model.Vminc = Constraint(model.B, rule=bus_min_voltage)
-
-    # --- reference bus constraint ---
-    def ref_bus_def(model, b):
-        return model.delta[b] == 0
-
-    model.refbus = Constraint(model.b0, rule=ref_bus_def)
-
-    return model
-
-
 def run_feasible_operation_region(self):
     print("Run feasible operation region")
     import numpy as np
 
-    theta_values = np.linspace(0, 2 * np.pi, 8)  # One degree resolution
+    theta_values = np.linspace(0, 2 * np.pi, 36)  # One degree resolution
     boundary_P_values = [[], [], []]
     boundary_Q_values = [[], [], []]
     boundary_U_values = []
 
     # Set objective to maximize absolute power for the given angle
     self.model.obj = Objective(
-        expr=sum(self.model.peG[b0]**2 + self.model.qeG[b0]**2 for b0 in self.model.eG),
+        expr=sum(self.model.pG[b0] ** 2 + self.model.qG[b0] ** 2 for b0 in self.model.eG),
         sense=maximize)
 
     # Constraint for the given power factor angle
     self.model.tan_theta = Param(mutable=True, initialize=0.0)
 
     def constrain_pf(model, b0):
-        return model.qeG[b0] == self.model.tan_theta * model.peG[b0]
+        return model.qG[b0] == model.tan_theta * model.pG[b0]
 
     self.model.power_factor_constraint = Constraint(self.model.eG, rule=constrain_pf)
 
@@ -415,23 +58,77 @@ def run_feasible_operation_region(self):
         self.solve()
 
         for i in self.model.eG:
-            print(value(self.model.peG[i]))
+            print(value(self.model.pG[i]))
 
         for b0 in self.model.eG:
-            boundary_P_values[b0].append(value(self.model.peG[b0]))
-            boundary_Q_values[b0].append(value(self.model.qeG[b0]))
+            boundary_P_values[b0].append(value(self.model.pG[b0]))
+            boundary_Q_values[b0].append(value(self.model.qG[b0]))
 
     return boundary_P_values, boundary_Q_values
 
-def for_setpoint_based(opf):
-    alpha_beta = [(1, 0), (1, 1), (0, 1), (-1, 0), (-1, -1), (0, -1), (1, -1), (-1, 1)]
+
+def for_angle_based_sampling(opf, n=36):
+    theta_values = np.linspace(0, 2 * np.pi, n)  # One degree resolution
+    if n % 4 == 0:
+        theta_splits = np.split(theta_values, 4)
+    else:
+        print('n has to be a multiple of 4')
+    a = [-1, 1, 1, -1]
+    b = [-1, -1, 1, 1]
+
+    boundary_P_values = [[], [], []]
+    boundary_Q_values = [[], [], []]
+    boundary_U_values = [[], [], []]
+
+    # Constraint for the given power factor angle
+    opf.model.tan_theta = Param(mutable=True, initialize=0.0)
+
+    def constrain_pf(model, b0):
+        return model.qG[b0] == model.tan_theta * model.pG[b0]
+
+    opf.model.power_factor_constraint = Constraint(opf.model.eG, rule=constrain_pf)
+
+    # Set objective to maximize absolute power for the given angle
+    opf.model.a = Param(initialize=-1, mutable=True)
+    opf.model.b = Param(initialize=-1, mutable=True)
+    opf.model.obj = Objective(
+        expr=sum(opf.model.a * opf.model.pG[b0] + opf.model.b * abs(opf.model.tan_theta) * opf.model.qG[b0] for b0 in
+                 opf.model.eG),
+        sense=minimize)
+
+    for i, theta_i in enumerate(theta_splits):
+        opf.model.a = a[i]
+        opf.model.b = b[i]
+
+        for theta in theta_i:
+            # Constraint for the given power factor angle
+            tan_theta = np.tan(theta)
+            opf.model.tan_theta = tan_theta
+
+            # Solve
+            opf.solve()
+
+            for i in opf.model.eG:
+                print(value(opf.model.pG[i]))
+
+            for b0 in opf.model.eG:
+                boundary_P_values[b0].append(value(opf.model.pG[b0]))
+                boundary_Q_values[b0].append(value(opf.model.qG[b0]))
+                boundary_U_values[b0].append(value(opf.model.v[b0]))
+
+    return boundary_P_values, boundary_Q_values, boundary_U_values
+
+
+def for_setpoint_based(opf, n=36):
+    alpha_beta = [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)]
     opf.model.alpha_beta = Set(initialize=alpha_beta)
     opf.model.alpha = Param(initialize=0, mutable=True)
     opf.model.beta = Param(initialize=0, mutable=True)
 
     def setpoint_based(model):
-        return sum(model.peG[g]*model.alpha + model.qeG[g]*model.beta for g in model.eG)
-    opf.model.obj = Objective(expr=setpoint_based, sense=maximize)
+        return sum(-model.pG[g] * model.alpha + -model.qG[g] * model.beta for g in model.eG)
+
+    opf.model.obj = Objective(expr=setpoint_based, sense=minimize)
 
     boundary_P_values = [[], [], []]
     boundary_Q_values = [[], [], []]
@@ -443,7 +140,7 @@ def for_setpoint_based(opf):
         print(value(opf.model.obj))
 
         for i in opf.model.eG:
-            print(value(opf.model.peG[i]))
+            print(value(opf.model.pG[i]))
 
         for b0 in opf.model.eG:
             boundary_P_values[b0].append(value(opf.model.peG[b0]))
@@ -452,8 +149,257 @@ def for_setpoint_based(opf):
     return boundary_P_values, boundary_Q_values
 
 
+def for_setpoint_based_with_directions(opf, stepsize=100):
+    alpha_beta = [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)]
+    opf.model.alpha_beta = Set(initialize=alpha_beta)
+    opf.model.alpha = Param(initialize=0, mutable=True)
+    opf.model.beta = Param(initialize=0, mutable=True)
+
+    def setpoint_based(model):
+        return sum(-model.pG[g] * model.alpha + -model.qG[g] * model.beta for g in model.eG)
+
+    opf.model.obj = Objective(expr=setpoint_based, sense=minimize)
+
+    boundary_P_values = [[], [], []]
+    boundary_Q_values = [[], [], []]
+    boundary_U_values = [[], [], []]
+    nets = []
+    p = [[], [], []]
+    q = [[], [], []]
+    u = [[], [], []]
+    for (alpha, beta) in alpha_beta:
+        opf.model.alpha = alpha
+        opf.model.beta = beta
+        opf.solve()
+        print(value(opf.model.obj))
+
+        for i in opf.model.eG:
+            print(value(opf.model.pG[i]))
+
+        for b0 in opf.model.eG:
+            p[b0].append(value(opf.model.pG[b0]))
+            q[b0].append(value(opf.model.qG[b0]))
+            u[b0].append(value(opf.model.v[b0]))
+
+    for i in range(3):
+        boundary_P_values[i].append(p[i])
+        boundary_Q_values[i].append(q[i])
+        boundary_U_values[i].append(u[i])
+
+    p_max = np.array([max(boundary_P_values[i][0]) for i in range(len(boundary_P_values))])
+    p_min = np.array([min(boundary_P_values[i][0]) for i in range(len(boundary_P_values))])
+
+    q_max = np.array([max(boundary_Q_values[i][0]) for i in range(len(boundary_Q_values))])
+    q_min = np.array([min(boundary_Q_values[i][0]) for i in range(len(boundary_Q_values))])
+
+    delta_p = abs(p_max - p_min)
+    delta_q = abs(q_max - q_min)
+
+    # ----
+    delta_max = np.max((delta_p, delta_q))
+    d_max = stepsize / delta_max
+    for g in range(len(boundary_P_values)):
+        boundary_P_values[g][-1].append(boundary_P_values[g][-1][0])
+        boundary_Q_values[g][-1].append(boundary_Q_values[g][-1][0])
+    p_diff = [np.diff(boundary_P_values[i][0]) for i in range(len(boundary_P_values))]
+    q_diff = [np.diff(boundary_Q_values[i][0]) for i in range(len(boundary_Q_values))]
+    ds = [np.sqrt((p_diff[g] / delta_p[g]) ** 2 + (q_diff[g] / delta_q[g]) ** 2) for g in range(len(boundary_P_values))]
+    ind_next = [np.argwhere(ds[g] >= d_max) for g in range(len(boundary_P_values))]
+    ind_next = np.unique(np.concatenate(ind_next))
+    # p_next = []
+    # q_next = []
+    # for g in range(len(boundary_P_values)):
+    #     p_next.append([(boundary_P_values[g][-1][i] + boundary_P_values[g][-1][i + 1]) / 2 for i in ind_next])
+    #     q_next.append([(boundary_Q_values[g][-1][i] + boundary_Q_values[g][-1][i + 1]) / 2 for i in ind_next])
+
+    tol = 0.1
+
+    opf.model.p_sp = Param(opf.model.eG, mutable=True)
+
+    def p_eg_upper(model, g):
+        return (model.pG[g]) <= (model.p_sp[g]) + tol
+
+    opf.model.p_eg_max = Constraint(opf.model.eG, rule=p_eg_upper)
+
+    def p_eg_lower(model, g):
+        return (model.pG[g]) >= (model.p_sp[g]) - tol
+
+    opf.model.p_eg_min = Constraint(opf.model.eG, rule=p_eg_lower)
+
+    ind_alpha_0 = np.argwhere(abs(p_diff[0][ind_next]) >= abs(q_diff[0][ind_next]))
+
+    p = [[], [], []]
+    q = [[], [], []]
+    u = [[], [], []]
+
+    for i in ind_alpha_0:
+        ind = ind_next[i[0]]
+        alpha = alpha_beta[ind][0]
+        beta = alpha_beta[ind][1]
+
+        opf.model.alpha = alpha
+        opf.model.beta = beta
+
+        opf.model.p_eg_min.deactivate()
+        opf.model.p_eg_max.deactivate()
+        opf.solve()
+
+        nets.append(copy.deepcopy(opf.net))
+
+        opf.model.p_eg_min.activate()
+        opf.model.p_eg_max.activate()
+
+        n_steps = math.ceil(max(abs(p_diff[g][ind]) for g in range(len(p_diff))) / stepsize)
+        p_sp = np.array([np.linspace(boundary_P_values[g][0][ind], boundary_P_values[g][0][ind + 1], n_steps) for g in
+                         range(len(boundary_P_values))])
+
+        opf.model.alpha = 0
+
+        for i in range(len(p_sp[0])):
+            for g in opf.model.eG:
+                opf.model.p_sp[g] = p_sp[g, i]
+            opf.solve()
+            for i in opf.model.eG:
+                print(value(opf.model.pG[i]))
+            if check_optimal_termination(opf.results):
+                for b0 in opf.model.eG:
+                    p[b0].append(value(opf.model.pG[b0]))
+                    q[b0].append(value(opf.model.qG[b0]))
+                    u[b0].append(value(opf.model.v[b0]))
+            else:
+                pass
+
+    for i in range(len(p)):
+        boundary_P_values[i].append(p[i])
+        boundary_Q_values[i].append(q[i])
+        boundary_U_values[i].append(u[i])
+
+    opf.model.p_eg_max.deactivate()
+    opf.model.p_eg_min.deactivate()
+
+    opf.model.q_sp = Param(opf.model.eG, mutable=True)
+
+    def q_eg_upper(model, g):
+        return (model.qG[g]) <= (model.q_sp[g]) + tol
+
+    opf.model.q_eg_max = Constraint(opf.model.eG, rule=q_eg_upper)
+
+    def q_eg_lower(model, g):
+        return (model.qG[g]) >= (model.q_sp[g]) - tol
+
+    opf.model.q_eg_min = Constraint(opf.model.eG, rule=q_eg_lower)
+
+    p = [[], [], []]
+    q = [[], [], []]
+    v = [[], [], []]
+
+    ind_beta_0 = np.argwhere(abs(p_diff[0][ind_next]) <= abs(q_diff[0][ind_next]))
+    for i in ind_beta_0:
+        ind = ind_next[i[0]]
+        beta = alpha_beta[ind][1]
+        alpha = alpha_beta[ind][0]
+
+        n_steps = math.ceil(max(abs(q_diff[g][ind]) for g in range(len(q_diff))) / stepsize)
+
+        q_sp = np.array([np.linspace(boundary_Q_values[g][0][ind], boundary_Q_values[g][0][ind + 1], n_steps) for g in
+                         range(len(boundary_Q_values))])
+
+        opf.model.alpha = alpha
+        opf.model.beta = beta
+
+        opf.model.q_eg_min.deactivate()
+        opf.model.q_eg_max.deactivate()
+        opf.solve()
+
+        nets.append(copy.deepcopy(opf.net))
+
+        opf.model.q_eg_min.activate()
+        opf.model.q_eg_max.activate()
+
+        opf.model.beta = 0
+
+        for i in range(len(q_sp[0])):
+            for g in opf.model.eG:
+                opf.model.q_sp[g] = q_sp[g, i]
+            opf.solve()
+            for i in opf.model.eG:
+                print(value(opf.model.pG[i]))
+            if check_optimal_termination(opf.results):
+                for b0 in opf.model.eG:
+                    p[b0].append(value(opf.model.pG[b0]))
+                    q[b0].append(value(opf.model.qG[b0]))
+                    v[b0].append(value(opf.model.v[b0]))
+            else:
+                pass
+
+    for i in range(len(p)):
+        boundary_P_values[i].append(p[i])
+        boundary_Q_values[i].append(q[i])
+        boundary_U_values[i].append(v[i])
+
+    return boundary_P_values, boundary_Q_values, boundary_U_values, nets
+
+
+def plot_hull(p, q, ratio=0.1):
+    pq = []
+    for i in range(len(p)):
+        p_i = [p_mw for p_list in p[i] for p_mw in p_list]
+        q_i = [q_mw for q_list in q[i] for q_mw in q_list]
+        pq.append(np.array((p_i, q_i)).T)
+
+    pq_tot = sum(pq_i for pq_i in pq)
+
+    clrs = ['#00549F', '#000000', '#E30066', '#FFED00', '#006165',
+            '#0098A1', '#57AB27', '#BDCD00', '#F6A800', '#CC071E',
+            '#A11035', '#612158', '#7A6FAC']
+
+    fig, ax = plt.subplots()
+
+    clr = clrs[5]
+    ax.plot(pq_tot[:, 0], pq_tot[:, 1], '.', label='Total', color=clr)
+    try:
+        hull = concave_hull(MultiPoint(pq_tot), ratio)
+    except Exception as e:
+        print('Creating convex hull instead of concave hull: ' + str(e))
+        hull = convex_hull(MultiPoint(pq_tot))
+    polygon = gpd.GeoSeries(hull)
+    polygon.plot(ax=ax, alpha=0.2, color=clr)
+    polygon.boundary.plot(ax=ax, edgecolor=clr, linewidth=2)
+
+    # alpha_shape = alphashape.alphashape(pq_tot, 0.001)
+    # ax.add_patch(PolygonPatch(alpha_shape, alpha=1, fill=False, edgecolor=clr, linewidth=2, color=clr))
+    # ax.add_patch(PolygonPatch(alpha_shape, alpha=0.2, edgecolor=clr, linewidth=2, color=clr))
+
+    for i, points in enumerate(pq):
+        clr = clrs[i + 6]
+        ax.plot(points[:, 0], points[:, 1], '.', label='Slack #' + str(i), color=clr)
+        ax.legend()
+
+        try:
+            hull = concave_hull(MultiPoint(points), ratio)
+        except Exception as e:
+            print('Creating convex hull instead of concave hull: ' + str(e))
+            hull = convex_hull(MultiPoint(points))
+
+        polygon = gpd.GeoSeries(hull)
+        polygon.plot(ax=ax, alpha=0.2, color=clr)
+        polygon.boundary.plot(ax=ax, edgecolor=clr, linewidth=2)
+
+        # hull = ConvexHull(pq[i])
+        # for simplex in hull.simplices:
+        #     plt.plot(points[simplex, 0], points[simplex, 1], color=clr)
+        # plt.legend()
+
+        # alpha_shape = alphashape.alphashape(pq[i], 0.001)
+        # ax.add_patch(PolygonPatch(alpha_shape, alpha=1, fill=False, edgecolor=clr, linewidth=2, color=clr))
+        # ax.add_patch(PolygonPatch(alpha_shape, alpha=0.2, edgecolor=clr, linewidth=2, color=clr))
+
+        ax.set_xlabel('P [MW]')
+        ax.set_ylabel('Q [MVar]')
+
+
 if __name__ == "__main__":
-    net = pp.networks.create_cigre_network_mv()
+    # net = pp.networks.create_cigre_network_mv()
 
     with open('C:/Users/f.lohse/PycharmProjects/potpourri/potpourri/data/simbench_hv_grid_with_potential_pkl.pkl',
               'rb') as f:
@@ -462,36 +408,73 @@ if __name__ == "__main__":
     # net = sb.get_simbench_net("1-HV-mixed--0-no_sw")
 
     case = 'lW'
-
     factors = net.loadcases.loc[case]
-    net.load.p_mw *= factors['pload']
-    net.load.q_mvar *= factors['qload']
-    net.sgen.scaling[net.sgen.type == 'Wind'] = factors['Wind_p']
-    net.sgen.scaling[net.sgen.type == 'PV'] = factors['PV_p']
-    net.sgen.scaling[(net.sgen.type != 'Wind') & (net.sgen.type != 'Solar')] = factors['RES_p']
+    # net.load.p_mw *= factors['pload']
+    # net.load.q_mvar *= factors['qload']
+    # net.sgen.scaling[net.sgen.type == 'Wind'] = factors['Wind_p']
+    # net.sgen.scaling[net.sgen.type == 'PV'] = factors['PV_p']
+    # net.sgen.scaling[(net.sgen.type != 'Wind') & (net.sgen.type != 'Solar')] = factors['RES_p']
     net.ext_grid.vm_pu = factors['Slack_vm']
 
-    hc = HC_ACOPF(net, SWmin=10)
+    hc = HC_ACOPF(net)
     hc.solve()
-    hc.add_OPF()
+    hc.add_OPF(SWmin=10)
+
     hc.solve(solver='mindtpy', mip_solver='gurobi')
 
     net_wind = copy.deepcopy(hc.net)
+    net_wind.sgen.in_service[net_wind.res_sgen.y_wind == 0 & net_wind.sgen.wind_hc] = False
+
     net_wind.sgen['controllable'] = True
     net_wind.load['controllable'] = True
 
-    hc_for = HC_ACOPF(net_wind)
-    hc_for.solve()
-    hc_for.add_OPF()
-    hc_for.fix_vars('y')
-    hc_for.model.OBJ.deactivate()
+    acopf = ACOPF(net_wind)
+    acopf.add_OPF()
 
-    # p, q = for_setpoint_based(hc_for)
-    p, q = run_feasible_operation_region(hc_for)
-    # model = feasible_operation_region(net)
-    # fig, ax = plt.subplots()
-    # for g in hc_for.model.eG:
-    #     ax.plot(p[g], q[g], '.-', label = 'Slack #' + str(g))
-    # ax.legend()
-    # ax.set_xlabel('P [MW]')
-    # ax.set_ylabel('Q [MVAr]')
+    p, q, u, nets = for_setpoint_based_with_directions(acopf, stepsize=50)
+
+    # p, q = for_setpoint_based(hc_for, n=9)
+#    p, q = run_feasible_operation_region(hc_for)
+
+    # p_tot_slack = value(sum(hc.model.pG[g] for g in hc.model.eG))
+    # q_tot_slack = value(sum(hc.model.qG[g] for g in hc.model.eG))
+    #
+    # p_cases = []
+    # q_cases = []
+    # u_cases = []
+    # nets_cases = []
+    # for i in ['hL', 'hW', 'hPV', 'lW', 'lPV']:
+    #
+    #     factors = net.loadcases.loc[i]
+    #
+    #     net_case = copy.deepcopy(net_wind)
+    #
+    #     net_case.load.p_mw *= factors['pload']
+    #     net_case.load.q_mvar *= factors['qload']
+    #     net_case.sgen.p_mw[net_case.sgen.type == 'Wind'] *= factors['Wind_p']
+    #     net_case.sgen.p_mw[net_case.sgen.wind_hc] *= factors['Wind_p']
+    #     net_case.sgen.p_mw[net_case.sgen.type == 'PV'] *= factors['PV_p']
+    #     net_case.sgen.p_mw[(net_case.sgen.type != 'Wind') & (net_case.sgen.type != 'Solar') & (net_case.sgen.wind_hc == False)] *= factors['RES_p']
+    #
+    #     acopf = ACOPF(net_case)
+    #     acopf.add_OPF()
+    #
+    #     p, q, u, nets = for_setpoint_based_iterative(acopf, stepsize=120)
+    #     p_cases.append(p)
+    #     q_cases.append(q)
+    #     u_cases.append(u)
+    #     nets_cases.append(nets)
+    #
+    # for i in range(len(p_cases)):
+    #     plot_hull(p_cases[i], q_cases[i])
+    #     plot_qu_res(nets_cases[i])
+    #     plot_pq_res(nets_cases[i])
+
+# p, q, u = for_angle_based_sampling(hc_for, n=360)
+#  model = feasible_operation_region(net)
+# fig, ax = plt.subplots()
+# for g in hc_for.model.eG:
+#     ax.plot(p[g], q[g], '.-', label = 'Slack #' + str(g))
+# ax.legend()
+# ax.set_xlabel('P [MW]')
+# ax.set_ylabel('Q [MVAr]')
