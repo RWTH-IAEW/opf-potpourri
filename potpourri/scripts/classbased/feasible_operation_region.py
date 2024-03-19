@@ -24,6 +24,7 @@ import geopandas as gpd
 from potpourri.models.class_based.HC_ACOPF import HC_ACOPF
 from potpourri.models.class_based.ACOPF_base import ACOPF
 from potpourri.scripts.classbased.plot_functions import *
+from scipy.spatial import ConvexHull
 
 
 # ==========================
@@ -121,7 +122,6 @@ def for_angle_based_sampling(opf, n=36):
 
 def for_setpoint_based(opf, n=36):
     alpha_beta = [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)]
-    opf.model.alpha_beta = Set(initialize=alpha_beta)
     opf.model.alpha = Param(initialize=0, mutable=True)
     opf.model.beta = Param(initialize=0, mutable=True)
 
@@ -151,46 +151,53 @@ def for_setpoint_based(opf, n=36):
 
 def for_setpoint_based_with_directions(opf, stepsize=100):
     alpha_beta = [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)]
-    opf.model.alpha_beta = Set(initialize=alpha_beta)
-    opf.model.alpha = Param(initialize=0, mutable=True)
-    opf.model.beta = Param(initialize=0, mutable=True)
 
-    def setpoint_based(model):
-        return sum(-model.pG[g] * model.alpha + -model.qG[g] * model.beta for g in model.eG)
+    n_ext_grids = len(opf.model.eG)
+    range_ext_grids = range(n_ext_grids)
 
-    opf.model.obj = Objective(expr=setpoint_based, sense=minimize)
+    def _set_objective_function(model):
+        model.alpha = Param(initialize=0, mutable=True)
+        model.beta = Param(initialize=0, mutable=True)
 
-    boundary_P_values = [[], [], []]
-    boundary_Q_values = [[], [], []]
-    boundary_U_values = [[], [], []]
+        def setpoint_based(model):
+            return sum(model.pG[g] * model.alpha + model.qG[g] * model.beta for g in model.eG)
+
+        model.obj = Objective(expr=setpoint_based, sense=maximize)
+
+    _set_objective_function(opf.model)
+
+    boundary_P_values = [[] for _ in range_ext_grids]
+    boundary_Q_values = [[] for _ in range_ext_grids]
+    boundary_V_values = [[] for _ in range_ext_grids]
     nets = []
-    p = [[], [], []]
-    q = [[], [], []]
-    u = [[], [], []]
+    p = [[] for _ in range_ext_grids]
+    q = [[] for _ in range_ext_grids]
+    v = [[] for _ in range_ext_grids]
+
     for (alpha, beta) in alpha_beta:
         opf.model.alpha = alpha
         opf.model.beta = beta
         opf.solve()
-        print(value(opf.model.obj))
-
-        for i in opf.model.eG:
-            print(value(opf.model.pG[i]))
 
         for b0 in opf.model.eG:
             p[b0].append(value(opf.model.pG[b0]))
             q[b0].append(value(opf.model.qG[b0]))
-            u[b0].append(value(opf.model.v[b0]))
+            v[b0].append(value(opf.model.v[b0]))
 
-    for i in range(3):
-        boundary_P_values[i].append(p[i])
-        boundary_Q_values[i].append(q[i])
-        boundary_U_values[i].append(u[i])
+    for g in range_ext_grids:
+        boundary_P_values[g].append(p[g])
+        boundary_Q_values[g].append(q[g])
+        boundary_V_values[g].append(v[g])
 
-    p_max = np.array([max(boundary_P_values[i][0]) for i in range(len(boundary_P_values))])
-    p_min = np.array([min(boundary_P_values[i][0]) for i in range(len(boundary_P_values))])
+        boundary_P_values[g][-1].append(boundary_P_values[g][-1][0])
+        boundary_Q_values[g][-1].append(boundary_Q_values[g][-1][0])
+        boundary_V_values[g][-1].append(boundary_V_values[g][-1][0])
 
-    q_max = np.array([max(boundary_Q_values[i][0]) for i in range(len(boundary_Q_values))])
-    q_min = np.array([min(boundary_Q_values[i][0]) for i in range(len(boundary_Q_values))])
+    p_max = np.array([max(boundary_P_values[i][0]) for i in range_ext_grids])
+    p_min = np.array([min(boundary_P_values[i][0]) for i in range_ext_grids])
+
+    q_max = np.array([max(boundary_Q_values[i][0]) for i in range_ext_grids])
+    q_min = np.array([min(boundary_Q_values[i][0]) for i in range_ext_grids])
 
     delta_p = abs(p_max - p_min)
     delta_q = abs(q_max - q_min)
@@ -198,13 +205,11 @@ def for_setpoint_based_with_directions(opf, stepsize=100):
     # ----
     delta_max = np.max((delta_p, delta_q))
     d_max = stepsize / delta_max
-    for g in range(len(boundary_P_values)):
-        boundary_P_values[g][-1].append(boundary_P_values[g][-1][0])
-        boundary_Q_values[g][-1].append(boundary_Q_values[g][-1][0])
-    p_diff = [np.diff(boundary_P_values[i][0]) for i in range(len(boundary_P_values))]
-    q_diff = [np.diff(boundary_Q_values[i][0]) for i in range(len(boundary_Q_values))]
-    ds = [np.sqrt((p_diff[g] / delta_p[g]) ** 2 + (q_diff[g] / delta_q[g]) ** 2) for g in range(len(boundary_P_values))]
-    ind_next = [np.argwhere(ds[g] >= d_max) for g in range(len(boundary_P_values))]
+
+    p_diff = [np.diff(boundary_P_values[i][0]) for i in range_ext_grids]
+    q_diff = [np.diff(boundary_Q_values[i][0]) for i in range_ext_grids]
+    ds = [np.sqrt((p_diff[g] / delta_p[g]) ** 2 + (q_diff[g] / delta_q[g]) ** 2) for g in range_ext_grids]
+    ind_next = [np.argwhere(ds[g] >= d_max) for g in range_ext_grids]
     ind_next = np.unique(np.concatenate(ind_next))
     # p_next = []
     # q_next = []
@@ -214,23 +219,41 @@ def for_setpoint_based_with_directions(opf, stepsize=100):
 
     tol = 0.1
 
-    opf.model.p_sp = Param(opf.model.eG, mutable=True)
+    def _add_setpoint_constraints(model):
+        model.p_sp = Param(model.eG, mutable=True)
 
-    def p_eg_upper(model, g):
-        return (model.pG[g]) <= (model.p_sp[g]) + tol
+        def p_eg_upper(model, g):
+            return (model.pG[g]) <= (model.p_sp[g]) + tol
 
-    opf.model.p_eg_max = Constraint(opf.model.eG, rule=p_eg_upper)
+        model.p_eg_max = Constraint(model.eG, rule=p_eg_upper)
 
-    def p_eg_lower(model, g):
-        return (model.pG[g]) >= (model.p_sp[g]) - tol
+        def p_eg_lower(model, g):
+            return (model.pG[g]) >= (model.p_sp[g]) - tol
 
-    opf.model.p_eg_min = Constraint(opf.model.eG, rule=p_eg_lower)
+        model.p_eg_min = Constraint(model.eG, rule=p_eg_lower)
+
+        model.q_sp = Param(model.eG, mutable=True)
+
+        def q_eg_upper(model, g):
+            return (model.qG[g]) <= (model.q_sp[g]) + tol
+
+        model.q_eg_max = Constraint(model.eG, rule=q_eg_upper)
+
+        def q_eg_lower(model, g):
+            return (model.qG[g]) >= (model.q_sp[g]) - tol
+
+        model.q_eg_min = Constraint(model.eG, rule=q_eg_lower)
+
+    _add_setpoint_constraints(opf.model)
+
+    opf.model.q_eg_min.deactivate()
+    opf.model.q_eg_max.deactivate()
 
     ind_alpha_0 = np.argwhere(abs(p_diff[0][ind_next]) >= abs(q_diff[0][ind_next]))
 
     p = [[], [], []]
     q = [[], [], []]
-    u = [[], [], []]
+    v = [[], [], []]
 
     for i in ind_alpha_0:
         ind = ind_next[i[0]]
@@ -259,39 +282,23 @@ def for_setpoint_based_with_directions(opf, stepsize=100):
             for g in opf.model.eG:
                 opf.model.p_sp[g] = p_sp[g, i]
             opf.solve()
-            for i in opf.model.eG:
-                print(value(opf.model.pG[i]))
+
             if check_optimal_termination(opf.results):
-                for b0 in opf.model.eG:
-                    p[b0].append(value(opf.model.pG[b0]))
-                    q[b0].append(value(opf.model.qG[b0]))
-                    u[b0].append(value(opf.model.v[b0]))
+                for g in opf.model.eG:
+                    p[g].append(value(opf.model.pG[g]))
+                    q[g].append(value(opf.model.qG[g]))
+                for b in opf.model.b0:
+                    v[b].append(value(opf.model.v[b]))
             else:
                 pass
 
-    for i in range(len(p)):
+    for i in range_ext_grids:
         boundary_P_values[i].append(p[i])
         boundary_Q_values[i].append(q[i])
-        boundary_U_values[i].append(u[i])
+        boundary_V_values[i].append(v[i])
 
     opf.model.p_eg_max.deactivate()
     opf.model.p_eg_min.deactivate()
-
-    opf.model.q_sp = Param(opf.model.eG, mutable=True)
-
-    def q_eg_upper(model, g):
-        return (model.qG[g]) <= (model.q_sp[g]) + tol
-
-    opf.model.q_eg_max = Constraint(opf.model.eG, rule=q_eg_upper)
-
-    def q_eg_lower(model, g):
-        return (model.qG[g]) >= (model.q_sp[g]) - tol
-
-    opf.model.q_eg_min = Constraint(opf.model.eG, rule=q_eg_lower)
-
-    p = [[], [], []]
-    q = [[], [], []]
-    v = [[], [], []]
 
     ind_beta_0 = np.argwhere(abs(p_diff[0][ind_next]) <= abs(q_diff[0][ind_next]))
     for i in ind_beta_0:
@@ -325,19 +332,217 @@ def for_setpoint_based_with_directions(opf, stepsize=100):
             for i in opf.model.eG:
                 print(value(opf.model.pG[i]))
             if check_optimal_termination(opf.results):
-                for b0 in opf.model.eG:
-                    p[b0].append(value(opf.model.pG[b0]))
-                    q[b0].append(value(opf.model.qG[b0]))
-                    v[b0].append(value(opf.model.v[b0]))
+                for g in opf.model.eG:
+                    p[g].append(value(opf.model.pG[g]))
+                    q[g].append(value(opf.model.qG[g]))
+                for b in opf.model.b0:
+                    v[b].append(value(opf.model.v[b]))
             else:
                 pass
 
     for i in range(len(p)):
         boundary_P_values[i].append(p[i])
         boundary_Q_values[i].append(q[i])
-        boundary_U_values[i].append(v[i])
+        boundary_V_values[i].append(v[i])
 
-    return boundary_P_values, boundary_Q_values, boundary_U_values, nets
+    return boundary_P_values, boundary_Q_values, boundary_V_values, nets
+
+
+def node_for_setpoint_based_with_directions(opf, w, stepsize=100):
+    alpha_beta = [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)]
+
+    n_ext_grids = 1
+    range_ext_grids = range(n_ext_grids)
+
+    def _set_objective_function(model):
+        model.alpha = Param(initialize=0, mutable=True)
+        model.beta = Param(initialize=0, mutable=True)
+
+        def setpoint_based(model):
+            return model.psG[w] * model.alpha + model.qsG[w] * model.beta
+
+        model.obj = Objective(expr=setpoint_based, sense=maximize)
+
+    _set_objective_function(opf.model)
+
+    boundary_P_values = [[] for _ in range_ext_grids]
+    boundary_Q_values = [[] for _ in range_ext_grids]
+    boundary_V_values = [[] for _ in range_ext_grids]
+    nets = []
+    p = [[] for _ in range_ext_grids]
+    q = [[] for _ in range_ext_grids]
+    v = [[] for _ in range_ext_grids]
+
+    for (alpha, beta) in alpha_beta:
+        opf.model.alpha = alpha
+        opf.model.beta = beta
+        opf.solve()
+
+        for b0 in range_ext_grids:
+            p[b0].append(value(opf.model.psG[w]))
+            q[b0].append(value(opf.model.qsG[w]))
+
+    for g in range_ext_grids:
+        boundary_P_values[g].append(p[g])
+        boundary_Q_values[g].append(q[g])
+        boundary_V_values[g].append(v[g])
+
+        boundary_P_values[g][-1].append(boundary_P_values[g][-1][0])
+        boundary_Q_values[g][-1].append(boundary_Q_values[g][-1][0])
+        # boundary_V_values[g][-1].append(boundary_V_values[g][-1][0])
+
+    p_max = np.array([max(boundary_P_values[i][0]) for i in range_ext_grids])
+    p_min = np.array([min(boundary_P_values[i][0]) for i in range_ext_grids])
+
+    q_max = np.array([max(boundary_Q_values[i][0]) for i in range_ext_grids])
+    q_min = np.array([min(boundary_Q_values[i][0]) for i in range_ext_grids])
+
+    delta_p = abs(p_max - p_min)
+    delta_q = abs(q_max - q_min)
+
+    # ----
+    delta_max = np.max((delta_p, delta_q))
+    d_max = stepsize / delta_max
+
+    p_diff = [np.diff(boundary_P_values[i][0]) for i in range_ext_grids]
+    q_diff = [np.diff(boundary_Q_values[i][0]) for i in range_ext_grids]
+    ds = [np.sqrt((p_diff[g] / delta_p[g]) ** 2 + (q_diff[g] / delta_q[g]) ** 2) for g in range_ext_grids]
+    ind_next = [np.argwhere(ds[g] >= d_max) for g in range_ext_grids]
+    ind_next = np.unique(np.concatenate(ind_next))
+    # p_next = []
+    # q_next = []
+    # for g in range(len(boundary_P_values)):
+    #     p_next.append([(boundary_P_values[g][-1][i] + boundary_P_values[g][-1][i + 1]) / 2 for i in ind_next])
+    #     q_next.append([(boundary_Q_values[g][-1][i] + boundary_Q_values[g][-1][i + 1]) / 2 for i in ind_next])
+
+    tol = 0.1
+
+    # def _add_setpoint_constraints(model):
+    #     model.p_sp = Param([w], mutable=True)
+    #
+    #     def p_eg_upper(model, g):
+    #         return (model.psG[g]) <= (model.p_sp[g]) + tol
+    #
+    #     model.p_eg_max = Constraint([w], rule=p_eg_upper)
+    #
+    #     def p_eg_lower(model, g):
+    #         return (model.psG[g]) >= (model.p_sp[g]) - tol
+    #
+    #     model.p_eg_min = Constraint([w], rule=p_eg_lower)
+    #
+    #     model.q_sp = Param([w], mutable=True)
+    #
+    #     def q_eg_upper(model, g):
+    #         return (model.qsG[g]) <= (model.q_sp[g]) + tol
+    #
+    #     model.q_eg_max = Constraint([w], rule=q_eg_upper)
+    #
+    #     def q_eg_lower(model, g):
+    #         return (model.qsG[g]) >= (model.q_sp[g]) - tol
+    #
+    #     model.q_eg_min = Constraint([w], rule=q_eg_lower)
+    #
+    # _add_setpoint_constraints(opf.model)
+
+    opf.model.q_eg_min.deactivate()
+    opf.model.q_eg_max.deactivate()
+
+    ind_alpha_0 = np.argwhere(abs(p_diff[0][ind_next]) >= abs(q_diff[0][ind_next]))
+
+    p = [[], [], []]
+    q = [[], [], []]
+    v = [[], [], []]
+
+    for i in ind_alpha_0:
+        ind = ind_next[i[0]]
+        alpha = alpha_beta[ind][0]
+        beta = alpha_beta[ind][1]
+
+        opf.model.alpha = alpha
+        opf.model.beta = beta
+
+        opf.model.p_eg_min.deactivate()
+        opf.model.p_eg_max.deactivate()
+        opf.solve()
+
+        nets.append(copy.deepcopy(opf.net))
+
+        opf.model.p_eg_min[w].activate()
+        opf.model.p_eg_max[w].activate()
+
+        n_steps = math.ceil(max(abs(p_diff[g][ind]) for g in range(len(p_diff))) / stepsize)
+        p_sp = np.array([np.linspace(boundary_P_values[g][0][ind], boundary_P_values[g][0][ind + 1], n_steps) for g in
+                         range(len(boundary_P_values))])
+
+        opf.model.alpha = 0
+
+        for i in range(len(p_sp[0])):
+            for g in range_ext_grids:
+                opf.model.p_sp[w] = p_sp[g, i]
+            opf.solve()
+
+            if check_optimal_termination(opf.results):
+                for g in range_ext_grids:
+                    p[g].append(value(opf.model.psG[w]))
+                    q[g].append(value(opf.model.qsG[w]))
+                # for b in opf.model.b0:
+                #     v[b].append(value(opf.model.v[b]))
+            else:
+                pass
+
+    for i in range_ext_grids:
+        boundary_P_values[i].append(p[i])
+        boundary_Q_values[i].append(q[i])
+        boundary_V_values[i].append(v[i])
+
+    opf.model.p_eg_max.deactivate()
+    opf.model.p_eg_min.deactivate()
+
+    ind_beta_0 = np.argwhere(abs(p_diff[0][ind_next]) <= abs(q_diff[0][ind_next]))
+    for i in ind_beta_0:
+        ind = ind_next[i[0]]
+        beta = alpha_beta[ind][1]
+        alpha = alpha_beta[ind][0]
+
+        n_steps = math.ceil(max(abs(q_diff[g][ind]) for g in range(len(q_diff))) / stepsize)
+
+        q_sp = np.array([np.linspace(boundary_Q_values[g][0][ind], boundary_Q_values[g][0][ind + 1], n_steps) for g in
+                         range(len(boundary_Q_values))])
+
+        opf.model.alpha = alpha
+        opf.model.beta = beta
+
+        opf.model.q_eg_min.deactivate()
+        opf.model.q_eg_max.deactivate()
+        opf.solve()
+
+        nets.append(copy.deepcopy(opf.net))
+
+        opf.model.q_eg_min[w].activate()
+        opf.model.q_eg_max[w].activate()
+
+        opf.model.beta = 0
+
+        for i in range(len(q_sp[0])):
+            for g in range_ext_grids:
+                opf.model.q_sp[w] = q_sp[g, i]
+            opf.solve()
+
+            if check_optimal_termination(opf.results):
+                for g in range_ext_grids:
+                    p[g].append(value(opf.model.psG[w]))
+                    q[g].append(value(opf.model.qsG[w]))
+                # for b in opf.model.b0:
+                #     v[b].append(value(opf.model.v[b]))
+            else:
+                pass
+
+    for i in range_ext_grids:
+        boundary_P_values[i].append(p[i])
+        boundary_Q_values[i].append(q[i])
+        boundary_V_values[i].append(v[i])
+
+    return boundary_P_values, boundary_Q_values, boundary_V_values, nets
 
 
 def plot_hull(p, q, ratio=0.1):
@@ -401,7 +606,7 @@ def plot_hull(p, q, ratio=0.1):
 if __name__ == "__main__":
     # net = pp.networks.create_cigre_network_mv()
 
-    with open('C:/Users/f.lohse/PycharmProjects/potpourri/potpourri/data/simbench_hv_grid_with_potential_pkl.pkl',
+    with open('C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\data\simbench_hv_grid_with_potential.pkl',
               'rb') as f:
         net = pickle.load(f)
 
@@ -428,10 +633,94 @@ if __name__ == "__main__":
     net_wind.sgen['controllable'] = True
     net_wind.load['controllable'] = True
 
+    net_wind = copy.deepcopy(net)
+    # create wind generators in original net
+    wind_hc_index = hc.net.sgen.index[hc.net.res_sgen.y_wind == 1]
+    pp.create_sgens(net_wind, hc.net.sgen.bus[wind_hc_index], p_mw=hc.net.sgen.p_mw[wind_hc_index], var_q=0,
+                    type='Wind', wind_hc=True)
+
+    net_wind.sgen['wind_hc'].fillna(False, inplace=True)
+
+    # -- ext grids for
+    net_wind.sgen['controllable'] = False
+    net_wind.sgen['controllable'][net_wind.sgen.type == 'Wind'] = True
+    net_wind.sgen['p_inst_mw'] = net_wind.sgen['p_mw']
+    net_wind.sgen['var_q'][net_wind.sgen.type == 'Wind'] = 1
+    net_wind.sgen['var_q'][net_wind.sgen.wind_hc] = 0
+
     acopf = ACOPF(net_wind)
     acopf.add_OPF()
 
-    p, q, u, nets = for_setpoint_based_with_directions(acopf, stepsize=50)
+    p, q, u, nets = for_setpoint_based_with_directions(acopf, stepsize=60)
+    #
+    # # -- node for
+    # net_wind.sgen['controllable'] = False
+    # net_wind.sgen['controllable'][(net_wind.sgen.type == 'Wind') & ~net_wind.sgen.wind_hc] = True
+    # net_wind.sgen['p_inst_mw'] = net_wind.sgen['p_mw']
+    # net_wind.sgen['var_q'][(net_wind.sgen.type == 'Wind') & ~net_wind.sgen.wind_hc] = 1
+    #
+    # hc_node = HC_ACOPF(net_wind)
+    # hc_node.add_OPF()
+    #
+    # hc_node.fix_vars('y', 0)
+    # hc_node.model.obj.deactivate()
+    #
+    # p_nodes = []
+    # q_nodes = []
+    # u_nodes = []
+    # nets_nodes = []
+    #
+    # def _add_setpoint_constraints(model):
+    #     model.p_sp = Param(model.WIND_HC, mutable=True)
+    #
+    #     tol = 0.1
+    #     def p_eg_upper(model, g):
+    #         return (model.psG[g]) <= (model.p_sp[g]) + tol
+    #
+    #     model.p_eg_max = Constraint(model.WIND_HC, rule=p_eg_upper)
+    #
+    #     def p_eg_lower(model, g):
+    #         return (model.psG[g]) >= (model.p_sp[g]) - tol
+    #
+    #     model.p_eg_min = Constraint(model.WIND_HC, rule=p_eg_lower)
+    #
+    #     model.q_sp = Param(model.WIND_HC, mutable=True)
+    #
+    #     def q_eg_upper(model, g):
+    #         return (model.qsG[g]) <= (model.q_sp[g]) + tol
+    #
+    #     model.q_eg_max = Constraint(model.WIND_HC, rule=q_eg_upper)
+    #
+    #     def q_eg_lower(model, g):
+    #         return (model.qsG[g]) >= (model.q_sp[g]) - tol
+    #
+    #     model.q_eg_min = Constraint(model.WIND_HC, rule=q_eg_lower)
+    #
+    #
+    #
+    # _add_setpoint_constraints(hc_node.model)
+    #
+    # for w in hc_node.model.WIND_HC:
+    #     hc_node.model.p_eg_max.deactivate()
+    #     hc_node.model.p_eg_min.deactivate()
+    #     hc_node.model.q_eg_max.deactivate()
+    #     hc_node.model.q_eg_min.deactivate()
+    #     hc_node.model.y[w].fix(1)
+    #
+    #     p, q, u, nets = node_for_setpoint_based_with_directions(hc_node, w, stepsize=60)
+    #     plot_hull(p, q)
+    #
+    #     p_nodes.append(p)
+    #     q_nodes.append(q)
+    #     u_nodes.append(u)
+    #     nets_nodes.append(nets)
+    #
+    #     hc_node.model.y[w].fix(0)
+    #     hc_node.model.psG[w] = 0
+    #     hc_node.model.qsG[w] = 0
+    #
+
+
 
     # p, q = for_setpoint_based(hc_for, n=9)
 #    p, q = run_feasible_operation_region(hc_for)

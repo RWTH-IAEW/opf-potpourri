@@ -52,7 +52,7 @@ def get_p_wind(ind):
     return eval_func
 
 
-def run_scenarios(net, scenarios, output_dir, SWmin=10, peGmax=10000, cases=None):
+def run_scenarios(net, scenarios, output_dir, SWmin=10, cases=None, solver='gurobi', tap='fixed'):
     busses = scenarios['load_sgen_busses']
     if cases:
         pass
@@ -62,12 +62,12 @@ def run_scenarios(net, scenarios, output_dir, SWmin=10, peGmax=10000, cases=None
 
     load_ind, sgen_ind = add_scenario_load_sgen_to_net(net, busses)
 
-    obj = {}
+    hc_results = {}
 
     for case in cases:
-        obj[case] = []
+        hc_results[case] = []
 
-        hc = HC_ACOPF(net, SWmin=SWmin, peGmax=peGmax)
+        hc = HC_ACOPF(net)
 
         sc = 0
         for i, d in enumerate(load_ind):
@@ -75,39 +75,34 @@ def run_scenarios(net, scenarios, output_dir, SWmin=10, peGmax=10000, cases=None
             hc.model.qD[d] = scenarios['load_q'][case][i, sc]
 
         for i, g in enumerate(sgen_ind):
-            hc.model.pG[g] = scenarios['sgen'][case][i, sc]
-            hc.model.qG[g] = scenarios['sgen_q'][case][i, sc]
+            hc.model.psG[g] = scenarios['sgen'][case][i, sc]
+            hc.model.qsG[g] = scenarios['sgen_q'][case][i, sc]
 
         if any(hc.net.trafo.shift_degree):
             init_pyo_from_dcpp(hc.net, hc.model)
 
         hc.solve()
-        hc.add_OPF()
-        # hc.add_loss_obj()
-        # hc.model.eps = 0.9
+        hc.add_OPF(SWmin=SWmin)
+        if tap == 'discrete':
+            hc.add_tap_changer_discrete()
+        elif tap == 'linear':
+            hc.add_tap_changer_linear()
 
-        hc.model.OBJ.deactivate()
+        output_path = output_dir + 'case_' + str(case) + '_obj_trafo\\'
+        # ow = create_output_writer(hc.net, range(n_scenarios), output_path)
+        # ow.init_all(hc.net)
 
-        def obj_wind_loss(model):
-            return sum(model.pG[w] for w in model.WIND) - sum(
-                model.pLfrom[l] + model.pLto[l] for l in model.L)
-
-        hc.model.OBJ_wind_loss = pe.Objective(rule=obj_wind_loss, sense=pe.maximize)
-
-        output_path = output_dir + '_' + str(case)
-        ow = create_output_writer(hc.net, range(n_scenarios), output_path)
-        ow.init_all(hc.net)
-
-        hc.solve(solver='mindtpy', mip_solver='gurobi')
+        hc.solve(solver='mindtpy', mip_solver=solver)
+        pickle.dump(hc.net, open(output_path + 'sc_' + str(sc) + '.pkl', 'wb'))
 
         # use solver.status == 'ok' instead?
         pf_converged = hc.results.solver.termination_condition == (
                 pe.TerminationCondition.optimal or pe.TerminationCondition.feasible)
 
-        ow.time_step = sc
-        ow.save_results(hc.net, sc, pf_converged=pf_converged, ctrl_converged=pf_converged)
+        # ow.time_step = sc
+        # ow.save_results(hc.net, sc, pf_converged=pf_converged, ctrl_converged=pf_converged)
 
-        obj[case].append(pe.value(hc.model.OBJ))
+        hc_results[case].append(pe.value(sum(hc.model.psG[w] for w in hc.model.WIND_HC)))
 
         for sc in tqdm(range(1, n_scenarios)):
             for i, d in enumerate(load_ind):
@@ -115,22 +110,24 @@ def run_scenarios(net, scenarios, output_dir, SWmin=10, peGmax=10000, cases=None
                 hc.model.qD[d] = scenarios['load_q'][case][i, sc]
 
             for i, g in enumerate(sgen_ind):
-                hc.model.pG[g] = scenarios['sgen'][case][i, sc]
-                hc.model.qG[g] = scenarios['sgen_q'][case][i, sc]
+                hc.model.psG[g] = scenarios['sgen'][case][i, sc]
+                hc.model.qsG[g] = scenarios['sgen_q'][case][i, sc]
 
-            hc.solve(solver='mindtpy', mip_solver='gurobi')
+            hc.solve(solver='mindtpy', mip_solver=solver)
 
             # use solver.status == 'ok' instead?
             pf_converged = hc.results.solver.termination_condition == (
                     pe.TerminationCondition.optimal or pe.TerminationCondition.feasible)
 
-            ow.time_step = sc
-            ow.save_results(hc.net, sc, pf_converged=pf_converged,
-                            ctrl_converged=pe.check_optimal_termination(hc.results))
+            # ow.time_step = sc
+            # ow.save_results(hc.net, sc, pf_converged=pf_converged,
+            #                 ctrl_converged=pe.check_optimal_termination(hc.results))
 
-            obj[case].append(pe.value(hc.model.OBJ))
+            pickle.dump(hc.net, open(output_path + 'sc_' + str(sc) + '.pkl', 'wb'))
 
-    return obj
+            hc_results[case].append(pe.value(sum(hc.model.psG[w] for w in hc.model.WIND_HC)))
+
+    return hc_results
 
 
 if __name__ == '__main__':
@@ -146,37 +143,60 @@ if __name__ == '__main__':
     # grid = 'hv_grid'
     type = "assumption"
 
-    # net_name = 'simbench_hv_grid_with_potential_pkl.pkl'
+    # net_name = 'simbench_hv_grid_with_potential.pkl'
     # with open('C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\data\\' + net_name,
     #           'rb') as f:
     #     net = pickle.load(f)
-        # net.bus.windpot_p_mw = net.bus.windpot_p_mw.where(net.bus.windpot_p_mw <= 200, 200)
-
-    net_name = grid + "_scenario_types.pkl"
-    with open("../../data/scenarios/" + grid + "_scenario_types.pkl", "rb") as f:
-        net = pickle.load(f)
+    #
+    # net_name = grid + "_scenario_types.pkl"
+    # with open("../../data/scenarios/" + grid + "_scenario_types.pkl", "rb") as f:
+    #     net = pickle.load(f)
+    # results_dir = '../../results/test_scenarios/' + grid + '_loadcases_' + type + '_scenarios/'
 
     with open("../../data/scenarios/" + grid + "_loadcases_" + type + "_scenarios_with_q.pkl", "rb") as f:
         scenarios = pickle.load(f)
 
-    # results_dir = '../../results/test_scenarios/' + grid + '_loadcases_' + type + '_scenarios/'
+    net_name = 'simbench_hv_grid_with_potential_2'
+    with open('C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\data\\' + net_name + '.pkl',
+              'rb') as f:
+        net = pickle.load(f)
 
     case = 'lW'
     factors = net.loadcases.loc[case]
-    net.load.p_mw *= factors['pload']
-    net.load.q_mvar *= factors['qload']
-    net.sgen.scaling[net.sgen.type == 'Wind'] = factors['Wind_p']
-    net.sgen.scaling[net.sgen.type == 'PV'] = factors['PV_p']
-    net.sgen.scaling[(net.sgen.type != 'Wind') & (net.sgen.type != 'Solar')] = factors['RES_p']
     net.ext_grid.vm_pu = factors['Slack_vm']
 
-    results_dir = 'C:\\Users\\f.lohse\\PycharmProjects\\potpourri\\potpourri\\results\\scenarios_multiobj\\' + net_name + '_' + type + '\\'
+    results_dir = 'C:\\Users\\f.lohse\\PycharmProjects\\potpourri\\potpourri\\results\\scenarios_multiobj_new\\' + net_name + '\\' + type + '_scenarios\\'
 
-    obj = run_scenarios(net, scenarios, results_dir + 'case', peGmax=10000, cases=[3, 4, 0, 1, 2], SWmin=10)
+    cases = [3]
+    obj = run_scenarios(net, scenarios, results_dir, cases=cases, SWmin=10)
 
-    # for i in range(len(scenarios['load'][case][0])):
-    #     net.load.p_mw[net.load.name == 'load_scenario'] = scenarios['load'][case][:, i]
-    #     net.load.q_mvar[net.load.name == 'load_scenario'] = scenarios['load_q'][case][:, i]
+    # #check if all results are correct
+    # for case in cases:
+    #     hc_diff = np.diff(np.array(obj))
+    #     sc_not_opt = np.where(hc_diff == 0)
+    #     sc_not_opt = sc_not_opt[0]+1
     #
-    #     net.sgen.p_mw[net.sgen.name == 'sgen_scenario'] = scenarios['sgen'][case][:, i]
-    #     net.sgen.q_mvar[net.sgen.name == 'sgen_scenario'] = scenarios['sgen_q'][case][:, i]
+    #     output_path = results_dir + 'case_' + str(case) + '_glpk\\'
+    #
+    #     if sc_not_opt.size > 0:
+    #         load_ind = net.load.index[net.load.name == 'load_scenario']
+    #         sgen_ind = net.sgen.index[net.sgen.name == 'sgen_scenario']
+    #
+    #         hc = HC_ACOPF(net)
+    #         hc.solve()
+    #         hc.add_OPF()
+    #
+    #         for sc in sc_not_opt[0]+1:
+    #             for i, d in enumerate(load_ind):
+    #                 hc.model.pD[d] = scenarios['load'][case][i, sc]
+    #                 hc.model.qD[d] = scenarios['load_q'][case][i, sc]
+    #
+    #             for i, g in enumerate(sgen_ind):
+    #                 hc.model.psG[g] = scenarios['sgen'][case][i, sc]
+    #                 hc.model.qsG[g] = scenarios['sgen_q'][case][i, sc]
+    #
+    #             hc.solve(solver='mindtpy', mip_solver='glpk')
+    #             hc.add_OPF()
+    #
+    #             pickle.dump(hc.net, open(output_path + 'sc_' + str(sc) + '.pkl', 'wb'))
+

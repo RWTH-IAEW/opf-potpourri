@@ -13,6 +13,16 @@ def init_pGW_qGW(hc_model, pGW=1, qGW=0):
         hc_model.qG[w] = qGW / hc_model.baseMVA
 
 
+def set_SLmax(self, max_loading, unit: ['percent', 'MW']):
+    if unit == 'percent':
+        SLmax = max_loading / 100. * self.line_data['SLmax_data']
+    elif unit == 'MW':
+        self.line_data['SLmax_data'] = max_loading * np.ones(len(self.model.L)) / self.baseMVA
+        SLmax = self.line_data['SLmax_data']
+    for l in self.model.L:
+        self.model.SLmax[l] = SLmax[l]
+
+
 def vary_SLmax(hc):
     res = {'p_wind_mw': {}, 'q_wind_mvar': {}, 'v_bus_pu': {}, 'va_bus_degree': {}, 'line_loading_%': {},
            'p_line_mw': {}, 'q_line_mvar': {}, 'p_slack_mw': {}, 'q_slack_mvar': {}}
@@ -20,7 +30,7 @@ def vary_SLmax(hc):
     for i in range(10, 110, 10):
         init_pGW_qGW(hc.model, pGW=10, qGW=0)
         #        hc = HC_ACOPF(net)
-        hc.set_SLmax(i, 'percent')
+        set_SLmax(hc, i, 'percent')
         print("max loading: " + str(i))
         hc.solve()
 
@@ -44,7 +54,7 @@ def diff_SLmax(SLmax, hc=None, SWmax=None, peGmax=None):
             hc_act = HC_ACOPF(net)
     if peGmax:
         hc_act.model.peGmax[0] = peGmax
-    hc_act.set_SLmax(SLmax, 'MW')
+    set_SLmax(hc_act, SLmax, 'MW')
     return hc_act
 
 
@@ -62,7 +72,7 @@ def diff_peGmax(peGmax, hc=None, SWmax=None, SLmax=None):
         else:
             hc_act = HC_ACOPF(net, peGmax=peGmax)
     if SLmax:
-        hc_act.set_SLmax(SLmax, 'MW')
+        set_SLmax(hc_act, SLmax, 'MW')
     return hc_act
 
 
@@ -76,7 +86,7 @@ def diff_SWmax(SWmax, hc=None, SLmax=None, peGmax=None):
         hc_act = HC_ACOPF(net, SWmax=SWmax)
 
     if SLmax:
-        hc_act.set_SLmax(SLmax)
+        set_SLmax(hc_act, SLmax)
     if peGmax:
         hc_act.model.peGmax[0] = peGmax
 
@@ -116,7 +126,7 @@ def vary_slack_and_SLmax(values=None, key=None, hc=None, SL_percent=[100], SWmax
                 if key == 'SL_%':
                     val.append(i)
 
-            hc_act.set_SLmax(i, 'percent')
+            set_SLmax(hc_act, i, 'percent')
 
             print("max loading: " + str(i))
             if mip_solver:

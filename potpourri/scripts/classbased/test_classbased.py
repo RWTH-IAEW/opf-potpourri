@@ -6,6 +6,8 @@ import pickle
 import pyomo.environ as pe
 import simbench as sb
 import random
+
+from potpourri.models.class_based.ACOPF_base import ACOPF
 from potpourri.models.class_based.HC_ACOPF import HC_ACOPF
 from potpourri.models.class_based.DC import DC
 from potpourri.models.class_based.AC import AC
@@ -118,27 +120,39 @@ def hc_nlp_swmin(net, SWmin=10):
 
 
 def hc_nlp_swmin_steps(net, SWmin=10, stepsize=1):
-    hc = HC_ACOPF(net, SWmax=10000, SWmin=0, peGmax=1000000)
+    hc = HC_ACOPF(net)
 
+    if any(net.trafo.shift_degree):
+        init_pyo_from_dcpp(hc.net, hc.model)
     hc.solve()
     initial_solve = hc.results.solver.Time
 
     hc.add_OPF()
     hc.fix_vars('y', 1.)
 
+    for w in hc.model.WIND_HC:
+        if hc.model.pWmax[w].value == 0:
+            hc.model.y[w].fix(0)
+            hc.model.psG[w].fix(0.)
+            hc.model.qsG[w].fix(0.)
+
     total_solve_time = 0
     start = time.perf_counter()
 
     hc.solve(to_net=False)
     total_solve_time += hc.results.solver.Time
+    print(hc.model.obj.value)
 
     for i in range(stepsize, SWmin + 1, stepsize):
+        print(hc.model.obj.value)
         print(i / hc.baseMVA)
         hc.change_vals('SWmin', i / hc.baseMVA)
 
-        for w in hc.model.WIND:
-            if (hc.model.pG[w].value ** 2 + hc.model.qG[w].value ** 2) < (i / hc.baseMVA) ** 2:
+        for w in hc.model.WIND_HC:
+            if (hc.model.psG[w].value ** 2 + hc.model.qsG[w].value ** 2) < (i / hc.baseMVA) ** 2:
                 hc.model.y[w].fix(0.)
+                hc.model.psG[w] = 0.
+                hc.model.qsG[w] = 0.
 
         hc.solve(to_net=False)
         total_solve_time += hc.results.solver.Time
@@ -239,21 +253,28 @@ if __name__ == '__main__':
     # net = create_testnet()
     # net = pp.networks.simple_four_bus_system()
     #
-    # net = sb.get_simbench_net("1-HV-mixed--0-no_sw")
-    # net = pickle.load(open('C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\windpot\simbench_hv_grid_with_potential.pkl', 'rb'))
-    net = pickle.load(open('C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\data\simbench_hv_grid_with_potential_pkl.pkl', 'rb'))
+    # net = sb.get_simbench_net("1-HV-urban--0-no_sw")
+    # net = pickle.load(open('C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\data\simbench_hv_grid_with_potential.pkl', 'rb'))
+    net = pickle.load(open('C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\data\windpot\simbench_hv_grid_urban_with_potential.pkl', 'rb'))
 
     # net = pp.from_excel('C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\data\\hv_grid.xlsx')
+    # net = pickle.load(open('C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\data\hv_grid_with_potential_2.pkl', 'rb'))
+    #
     # net.ext_grid['max_p_mw'] = 800
     # net.ext_grid['min_p_mw'] = -800
 
-    hc = HC_ACOPF(net)
-    init_pyo_from_dcpp(hc.net, hc.model)
-    hc.solve()
+    # hc = HC_ACOPF(net)
+    # init_pyo_from_dcpp(hc.net, hc.model)
+    # hc.solve()
     # ac = AC(net)
 
+    acopf = ACOPF(net)
+    if any(net.trafo.shift_degree):
+        init_pyo_from_dcpp(acopf.net, acopf.model)
+    acopf.solve()
+
     pp.runpp(net)
-    pp.nets_equal(net, hc.net)
+    pp.nets_equal(net, acopf.net)
 
     # obj = []
     # hcs = []

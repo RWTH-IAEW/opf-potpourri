@@ -113,8 +113,12 @@ def pareto_front(net, n=10, **kwargs):
     if kwargs.get('SWmin', False):
         hc.change_vals('SWmin', kwargs.get('SWmin'))
 
-    hc.model.obj_hc.activate()
     hc.model.obj.deactivate()
+
+    def objective(model):
+        return sum(model.psG[w] for w in model.WIND_HC)
+    hc.model.obj_hc = pe.Objective(rule=objective, sense=pe.maximize)
+
     hc.solve(solver='mindtpy', mip_solver='gurobi')
 
     p_wind_max = pe.value(hc.model.obj_hc)
@@ -381,7 +385,7 @@ def check_slope(p_wind, p_loss):
 
 
 if __name__ == '__main__':
-    with open('C:/Users/f.lohse/PycharmProjects/potpourri/potpourri/data/simbench_hv_grid_with_potential_pkl.pkl',
+    with open('../../data/simbench_hv_grid_with_potential_2.pkl',
               'rb') as f:
         net = pickle.load(f)
 

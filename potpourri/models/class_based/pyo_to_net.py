@@ -4,20 +4,14 @@ import pandas as pd
 
 
 def pyo_sol_to_net_res(net, model):
-
-    if 'HC' in model.name:
-        for w in model.WIND_HC:
-            net.sgen.p_mw[w] = model.psG[w].value * model.baseMVA.value * model.y[w].value
-            net.sgen.q_mvar[w] = model.qsG[w].value * model.baseMVA.value * model.y[w].value
-
     pp.clear_result_tables(net)
 
     _bus_voltage_results_to_net(net, model)
-    _load_results_to_net(net, model)
     _line_results_to_net(net, model)
     _generation_results_to_net(net, model)
     # _ext_grid_results_to_net(net, model)
     _sgen_results_to_net(net, model)
+    _load_results_to_net(net, model)
     # _gen_results_to_net(net, model)
     _trafo_results_to_net(net, model)
     _shunt_results_to_net(net, model)
@@ -141,6 +135,7 @@ def _ext_grid_results_to_net(net, model):
         net.res_ext_grid.q_mvar = model.qeG.get_values()
         net.res_ext_grid.q_mvar *= model.baseMVA.value
 
+
 def _generation_results_to_net(net, model):
     pg = model.pG.get_values()
     for gen, ord in net._gen_order.items():
@@ -157,8 +152,9 @@ def _generation_results_to_net(net, model):
     net.res_gen.va_degree = net.res_bus.va_degree[net.gen.bus].values
     net.res_gen.vm_pu = net.res_bus.vm_pu[net.gen.bus].values
 
+
 def _load_results_to_net(net, model):
-    # net.res_load = pd.DataFrame(columns=['p_mw', 'q_mvar'], index=net.load.index)
+    net.res_load = pd.DataFrame(columns=['p_mw', 'q_mvar'], index=net.load.index)
     # --- load ---
     net.res_load.p_mw = model.pD.get_values()
     net.res_load.p_mw *= model.baseMVA.value
@@ -166,11 +162,10 @@ def _load_results_to_net(net, model):
         # load
         net.res_load.q_mvar = model.qD.get_values()
         net.res_load.q_mvar *= model.baseMVA.value
-        net.res_load.q_mvar.fillna(net.load.q_mvar*net.load.scaling*net.load.in_service, inplace=True)
+        net.res_load.q_mvar.fillna(net.load.q_mvar * net.load.scaling * net.load.in_service, inplace=True)
 
     net.res_load.set_index(net.load.index, inplace=True)
-    net.res_load.p_mw.fillna(net.load.p_mw*net.load.scaling*net.load.in_service, inplace=True)
-
+    net.res_load.p_mw.fillna(net.load.p_mw * net.load.scaling * net.load.in_service, inplace=True)
 
 
 def _sgen_results_to_net(net, model):
@@ -183,12 +178,16 @@ def _sgen_results_to_net(net, model):
             net.res_sgen.iloc[g]['q_mvar'] = model.qsG[g].value * model.baseMVA.value
 
     if 'HC' in model.name:
-        net.res_sgen['y_wind'] = model.y.get_values()
+        y = model.y.get_values()
+        net.res_sgen['y_wind'] = None
+        for w in model.WIND_HC:
+            net.res_sgen['y_wind'].iloc[w] = y[w]
 
     net.res_sgen.set_index(net.sgen.index, inplace=True)
-    net.res_sgen.p_mw.fillna(net.sgen.p_mw*net.sgen.scaling*net.sgen.in_service, inplace=True)
+    net.res_sgen.p_mw.fillna(net.sgen.p_mw * net.sgen.scaling * net.sgen.in_service, inplace=True)
     if 'AC' in model.name:
-        net.res_sgen.q_mvar.fillna(net.sgen.q_mvar*net.sgen.scaling*net.sgen.in_service, inplace=True)
+        net.res_sgen.q_mvar.fillna(net.sgen.q_mvar * net.sgen.scaling * net.sgen.in_service, inplace=True)
+
 
 def _gen_results_to_net(net, model):
     # --- gen ---
@@ -247,6 +246,7 @@ def _trafo_results_to_net(net, model):
         net.res_trafo['tap'] = model.Tap.get_values()
 
     net.res_trafo.set_index(net.trafo.index, inplace=True)
+
 
 def _shunt_results_to_net(net, model):
     for s in model.SHUNT:

@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-def plot_wind_hc_results(nets):
+def plot_wind_hc_results(nets, offset=None):
     # marker_trace = pp.plotting.create_weighted_marker_trace(net, "sgen", elm_ids=net.sgen.index[net.sgen.wind_hc],
     #                                                         column_to_plot="p_mw", marker_scaling=2, color="green")
     # pp.plotting.simple_plotly(net, bus_size=0.25, additional_traces=[marker_trace])
@@ -12,7 +12,6 @@ def plot_wind_hc_results(nets):
     max_wind_gen = max([net.sgen[net.sgen.wind_hc].p_mw.max() for net in nets])
 
     for net in nets:
-        sgen_wind = net.sgen[net.sgen.wind_hc]
         wind_index = net.sgen[net.sgen.wind_hc].index
         sgen_wind_bus = net.sgen.bus[wind_index]
         sgen_wind_p = net.res_sgen.p_mw[wind_index]
@@ -33,6 +32,12 @@ def plot_wind_hc_results(nets):
         bt[0]['marker']['size'] = marker_trace['marker']['size']
         bt[0]['marker']['sizemode'] = marker_trace['marker']['sizemode']
         bt[0]['text'] = marker_trace['text']
+
+        # adjust the position of the bus trace
+        if offset:
+            # offset = 0.01  # adjust this value as needed
+            bt[0]['x'] = [x + offset for x in bt[0]['x']]
+            bt[0]['y'] = [y + offset for y in bt[0]['y']]
 
         pp.plotting.simple_plotly(net, bus_size=3, bus_color='black', additional_traces=bt, showlegend=False)
 
@@ -107,12 +112,10 @@ def plot_pq_gridcodes():
 
 def plot_pq_res(nets, labels=None):
     plt.style.use('rwth-word')
-
-    marker = ['o', '*', '+', '.', ',']
-
-    clrs = ['#00549F', '#000000', '#E30066', '#FFED00', '#006165',
-            '#0098A1', '#57AB27', '#BDCD00', '#F6A800', '#CC071E',
+    clrs = ['#00549F', '#E30066', '#BDCD00', '#000000', '#FFED00', '#006165',
+            '#0098A1', '#57AB27', '#F6A800', '#CC071E',
             '#A11035', '#612158', '#7A6FAC']
+    marker = ['o', '*', '+', '.', ',']
 
     fig, ax = plt.subplots()
 
@@ -123,14 +126,39 @@ def plot_pq_res(nets, labels=None):
     ax.plot([0.1, 0.2, 1], [0.1, 0.48, 0.48], color=clrs[8])  # Qmax(P)
 
     for i, net in enumerate(nets):
-        line = ax.scatter(net.res_sgen.p_mw[net.sgen.wind_hc & net.sgen.in_service].values/ net.sgen.p_mw[net.sgen.wind_hc & net.sgen.in_service].values,
-                          net.res_sgen.q_mvar[net.sgen.wind_hc & net.sgen.in_service].values / net.sgen.p_mw[net.sgen.wind_hc & net.sgen.in_service].values,
-                          color=clrs[i], marker=marker[i])
+        if hasattr(net.sgen, 'p_inst_mw') and (net.sgen.p_inst_mw != 0).any():
+            sgens_to_plot = net.sgen.index[net.sgen.wind_hc & net.sgen.in_service & ((net.sgen.p_mw != 0) | (net.sgen.p_inst_mw != 0))]
+            sgen_wind = net.sgen.index[(net.sgen.type == 'Wind') & ~net.sgen.wind_hc & net.sgen.in_service & ((net.sgen.p_mw != 0) | (net.sgen.p_inst_mw != 0))]
+        else:
+            sgens_to_plot = net.sgen.index[net.sgen.wind_hc & net.sgen.in_service & net.sgen.p_mw!=0]
+            sgen_wind = net.sgen.index[(net.sgen.type == 'Wind') & ~net.sgen.wind_hc & net.sgen.in_service & net.sgen.p_mw!=0]
+        # sgens = net.sgen.index[net.sgen.wind_hc & net.sgen.in_service & (net.sgen.p_mw != 0 or net.sgen.p_inst_mw != 0)]
+        sgens = sgens_to_plot
+        try:
+            p_mw_wind_hc = net.sgen.p_inst_mw[sgens].fillna(net.sgen.p_mw).values
+        except:
+            p_mw_wind_hc = net.sgen.p_mw[sgens].values
+        line = ax.scatter(net.res_sgen.p_mw[sgens].values/ p_mw_wind_hc,
+                          net.res_sgen.q_mvar[sgens].values / p_mw_wind_hc,
+                          color=clrs[i], marker=marker[0])
+
+        # sgen_wind = net.sgen.index[(net.sgen.type == 'Wind') & ~net.sgen.wind_hc & net.sgen.in_service & (net.sgen.p_mw != 0 or net.sgen.p_inst_mw != 0)]
+        try:
+            p_mw_wind = net.sgen.p_inst_mw[sgen_wind].values
+        except:
+            p_mw_wind = net.sgen.p_mw[sgen_wind].values
+        ax.scatter(net.res_sgen.p_mw[sgen_wind].values / p_mw_wind,
+                   net.res_sgen.q_mvar[sgen_wind].values / p_mw_wind,
+                   color=clrs[i+1], marker=marker[1])
+
         if labels:
             line.set_label(labels[i])
 
     if labels:
         plt.legend()
+
+    plt.xlabel('$P/P_{inst}$')
+    plt.ylabel('$Q/P_{inst}$')
 
 
 def plot_qu_gridcodes():
@@ -188,9 +216,23 @@ def plot_qu_res(nets, labels=None):
     plt.ylabel('$Q_{w} / P_{w}$')
 
     for i, net in enumerate(nets):
-        line = ax.scatter(net.res_bus.vm_pu[net.sgen.bus[net.sgen.wind_hc & net.sgen.in_service]],
-                          net.res_sgen.q_mvar[net.sgen.wind_hc & net.sgen.in_service].values / net.sgen.p_mw[net.sgen.wind_hc & net.sgen.in_service].values,
-                          color=clrs[i], marker=marker[i])
+        sgens_to_plot = net.sgen.index[net.sgen.wind_hc & net.sgen.in_service & net.sgen.p_mw]
+        try:
+            p_mw = net.sgen.p_inst_mw[sgens_to_plot].values
+        except:
+            p_mw = net.sgen.p_mw[sgens_to_plot].values
+        line = ax.scatter(net.res_bus.vm_pu[net.sgen.bus[sgens_to_plot]],
+                          net.res_sgen.q_mvar[sgens_to_plot].values / p_mw,
+                          color=clrs[i], marker=marker[0])
+
+        sgen_wind = net.sgen.index[(net.sgen.type == 'Wind') & ~net.sgen.wind_hc & net.sgen.in_service & net.sgen.p_mw]
+        try:
+            p_mw_wind = net.sgen.p_inst_mw[sgen_wind].values
+        except:
+            p_mw_wind = net.sgen.p_mw[sgen_wind].values
+        ax.scatter(net.res_bus.vm_pu[net.sgen.bus[sgen_wind]],
+                   net.res_sgen.q_mvar[sgen_wind].values / p_mw_wind,
+                   color=clrs[i+1], marker=marker[1])
         if labels:
             line.set_label(labels[i])
 
