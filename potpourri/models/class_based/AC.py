@@ -8,7 +8,7 @@ class AC(Basemodel):
     def __init__(self, net):
         super().__init__(net)
 
-        self.BB_data = - self.net.shunt.q_mvar * net.shunt.step / self.baseMVA
+        self.BB_data = - self.net.shunt.q_mvar * self.net.shunt.step / self.baseMVA
 
         # line and transformer addmittances
         r = self.net._ppc["branch"][:, 2].real
@@ -30,22 +30,13 @@ class AC(Basemodel):
             **{'BiiT_data': BiiT[trafo_start:trafo_end], 'BikT_data': BikT[trafo_start:trafo_end],
                'GiiT_data': GiiT[trafo_start:trafo_end], 'GikT_data': GikT[trafo_start:trafo_end]})
 
-        # self.v_gG_data = self.generators.vm_pu[self.gen_set]  # voltage set points for generators (not static)
+        # generator and external grids voltage set points
         self.generation_data['v'] = self.net._ppc['gen'][:, 5]
-        self.v_bPV_data = pd.Series(self.generation_data['v'][self.generation_data.ref == False].values,
-                                    index=self.generation_data.bus[self.generation_data.ref == False].values)
-
-        # self.QsG_data = self.generators.q_mvar[self.sgen_set].fillna(0) * self.generators.scaling[
-        #     self.sgen_set] / self.baseMVA  # reactive generation set points for static generators
 
         qsg = (self.net.sgen.q_mvar.fillna(0) * self.net.sgen.scaling / self.baseMVA).values
         self.static_generation_data['q'] = qsg
 
         self.QD_data = self.net.load.q_mvar * self.net.load.scaling / self.baseMVA
-
-        # reference bus voltage set points
-        v_b0 = self.net._ppc["bus"][self.b0_data.index, 7]
-        self.b0_data['v'] = v_b0
 
         self.create_model()
 
@@ -75,17 +66,15 @@ class AC(Basemodel):
                                 initialize=self.trafo_data.GikT_data[self.model.TRANSF])
 
         # reactive generation
-        # self.model.QsG = Param(self.model.sG, initialize=self.QsG_data[self.model.sG])
         self.model.QsG = Param(self.model.sG, initialize=self.static_generation_data['q'][self.model.sG])
 
-        # self.model.v_gG = Param(self.model.gG, initialize=self.v_gG_data[self.model.gG])
-        self.model.v_bPV = Param(self.model.bPV, within=NonNegativeReals, initialize=self.v_bPV_data[self.model.bPV])
+        self.model.v_bPV = Param(self.model.bPV, within=NonNegativeReals, initialize=self.bus_data.v_m[self.model.bPV])
 
         # reactive demand
         self.model.QD = Param(self.model.D, initialize=self.QD_data[self.model.D])
 
         # external grid voltage
-        self.model.v_b0 = Param(self.model.b0, within=NonNegativeReals, initialize=self.b0_data.v)
+        self.model.v_b0 = Param(self.model.b0, within=NonNegativeReals, initialize=self.bus_data.v_m[self.model.b0])
 
         # --- control variables ---
         self.model.qsG = Var(self.model.sG, domain=Reals)  # reactive power of static generators

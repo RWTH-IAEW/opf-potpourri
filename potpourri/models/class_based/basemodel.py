@@ -14,8 +14,11 @@ class Basemodel:
         pp.runpp(self.net)
 
         # --- Sets ---
+        bus_set = self.net._ppc['bus'][:, [0, 1, 7, 8]]
+        bus_set[:, -1] *= pi / 180
+        self.bus_data = pd.DataFrame(bus_set[:, 1:], index=bus_set[:, 0].astype(int), columns=['type', 'v_m', 'v_a_rad'])
+
         self.bus_lookup = self.net._pd2ppc_lookups["bus"]
-        self.bus_set = self.net._ppc['bus'][:, 0].astype(int)
         self.demand_set = self.net.load.index[self.net.load.in_service]
         self.shunt_set = self.net.shunt.index[self.net.shunt.in_service]
 
@@ -46,11 +49,6 @@ class Basemodel:
             {'p': psg.values, 'in_service': self.net.sgen.in_service.values, 'bus': sgen_bus})
         self.static_generation_data['gen_bus'] = list(enumerate(self.static_generation_data['bus']))
 
-        # --- reference buses ---
-        ref_bus_set = self.net._ppc['bus'][self.net._ppc['bus'][:, 1] == 3, 0].astype(int)  # external grids and slack gens
-        delta_b0_data = self.net._ppc["bus"][ref_bus_set, 8] * pi / 180
-        self.b0_data = pd.DataFrame({'delta': delta_b0_data}, index=ref_bus_set)
-
         # --- line ---
         hv_bus = self.net._ppc['branch'][:, 0].real
         lv_bus = self.net._ppc['branch'][:, 1].real
@@ -79,15 +77,18 @@ class Basemodel:
         self.model = ConcreteModel()
 
         # --- SETS ---
-        self.model.B = Set(initialize=self.bus_set)
-        self.model.b0 = Set(initialize=self.b0_data.index, within=self.model.B)  # reference buses
-        self.model.bPV = Set(initialize=self.generation_data.bus[self.generation_data.ref == False ])  # PV buses
+        self.model.B = Set(initialize=self.bus_data.index)  # buses
+        self.model.b0 = Set(initialize=self.bus_data.index[self.bus_data.type == 3],
+                            within=self.model.B)  # reference buses
+        self.model.bPV = Set(initialize=self.bus_data.index[self.bus_data.type == 2], within=self.model.B)  # PV buses
         self.model.sG = Set(
             initialize=self.static_generation_data.index[self.static_generation_data.in_service])  # static generators
         self.model.G = Set(
             initialize=self.generation_data.index[self.generation_data.in_service])  # external grids and generators
-        self.model.eG = Set(initialize=self.generation_data.index[self.generation_data.ref], within=self.model.G)  # external grids
-        self.model.gG = Set(initialize=self.generation_data.index[self.generation_data.ref == False], within=self.model.G)  # generators (not static)
+        self.model.eG = Set(initialize=self.generation_data.index[self.generation_data.ref],
+                            within=self.model.G)  # external grids
+        self.model.gG = Set(initialize=self.generation_data.index[self.generation_data.ref == False],
+                            within=self.model.G)  # generators (not static)
         self.model.D = Set(initialize=self.demand_set)
         self.model.L = Set(initialize=self.line_data.index[self.line_data.in_service])
         self.model.SHUNT = Set(initialize=self.shunt_set)
@@ -99,7 +100,8 @@ class Basemodel:
                              initialize=self.bus_demand_set)  # set of demand-bus mapping
         self.model.SHUNTbs = Set(within=self.model.B * self.model.SHUNT,
                                  initialize=self.bus_shunt_set)  # set of shunt-bus mapping
-        self.model.Gbs = Set(within=self.model.G * self.model.B, initialize=self.generation_data['gen_bus'])
+        self.model.Gbs = Set(within=self.model.G * self.model.B,
+                             initialize=self.generation_data['gen_bus'][self.model.G])
         self.model.sGbs = Set(within=self.model.sG * self.model.B,
                               initialize=self.static_generation_data['gen_bus'][self.model.sG])
 
@@ -122,10 +124,10 @@ class Basemodel:
 
         # trafo
         self.model.shift = Param(self.model.TRANSF, within=Reals, initialize=self.trafo_data.shift_rad[
-                                     self.model.TRANSF])  # transformer phase shift in rad
+            self.model.TRANSF])  # transformer phase shift in rad
 
         # external grid voltage angle
-        self.model.delta_b0 = Param(self.model.b0, within=Reals, initialize=self.b0_data.delta)
+        self.model.delta_b0 = Param(self.model.b0, within=Reals, initialize=self.bus_data.v_a_rad[self.model.b0])
 
         # baseMVA of the net
         self.model.baseMVA = Param(within=NonNegativeReals, initialize=self.baseMVA)
@@ -135,7 +137,8 @@ class Basemodel:
                                bounds=(-pi, pi))  # voltage phase angle at bus b, rad
         self.model.pD = Var(self.model.D, domain=Reals)  # real power demand delivered
         self.model.psG = Var(self.model.sG, domain=NonNegativeReals)  # real static generator power
-        self.model.pG = Var(self.model.G, domain=Reals, initialize=self.model.PG)  # real power injection from static generators
+        self.model.pG = Var(self.model.G, domain=Reals,
+                            initialize=self.model.PG)  # real power injection from static generators
         self.model.pLfrom = Var(self.model.L, domain=Reals)  # real power injected at b onto line
         self.model.pLto = Var(self.model.L, domain=Reals)  # real power injected at b' onto line
         self.model.pThv = Var(self.model.TRANSF, domain=Reals)  # real power injected at b onto transformer
@@ -209,7 +212,7 @@ class Basemodel:
             return
         try:
             for index in component:
-                if value:
+                if value is not None:
                     component[index].fix(value)
                 else:
                     component[index].fix()

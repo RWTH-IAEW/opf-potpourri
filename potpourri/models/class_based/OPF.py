@@ -75,15 +75,6 @@ class OPF(Basemodel):
         df = self.net.line.df.values
         return max_loading_percent / 100. * max_i_ka * df * self.net.line.parallel.values * vr / self.baseMVA
 
-    def set_SLmax(self, max_loading, unit: ['percent', 'MW']):
-        if unit == 'percent':
-            SLmax = max_loading / 100. * self.line_data['SLmax_data']
-        elif unit == 'MW':
-            self.line_data['SLmax_data'] = max_loading * np.ones(len(self.model.L)) / self.baseMVA
-            SLmax = self.line_data['SLmax_data']
-        for l in self.model.L:
-            self.model.SLmax[l] = SLmax[l]
-
     def _calc_opf_parameters(self, **kwargs):
         max_load = self.net.line.max_loading_percent.values if "max_loading_percent" in self.net.line else 100.
         self.line_data['SLmax_data'] = self.__calc_SLmax(max_load)

@@ -1,7 +1,9 @@
+import pandas as pd
 from pyomo.environ import *
 from potpourri.models.class_based.AC import AC
 from potpourri.models.class_based.OPF import OPF
 import numpy as np
+import logging
 
 
 class ACOPF(AC, OPF):
@@ -35,19 +37,8 @@ class ACOPF(AC, OPF):
         else:
             self.static_generation_data['min_q'] = -lim_q / self.baseMVA
 
-        if 'wind_hc' in self.net.sgen:
-            self.static_generation_data['wind_hc'] = self.net.sgen.wind_hc.values
-            self.static_generation_data['max_q'][self.static_generation_data['wind_hc']] = 0.48 * self.static_generation_data['p'][self.static_generation_data['wind_hc']]
-            self.static_generation_data['min_q'][self.static_generation_data['wind_hc']] = -0.23 * self.static_generation_data['p'][self.static_generation_data['wind_hc']]
-        else:
-            self.static_generation_data['wind_hc'] = False
-
+        self.static_generation_wind_var_q()
         self.static_generation_data['type'] = self.net.sgen.type.values
-        if any(self.static_generation_data['type'] == 'Wind'):
-            self.static_generation_data['max_q'][self.static_generation_data['type'] == 'Wind'] = 0.48 * self.static_generation_data['p'][self.static_generation_data['type'] == 'Wind']
-            self.static_generation_data['min_q'][self.static_generation_data['type'] == 'Wind'] = -0.23 * self.static_generation_data['p'][self.static_generation_data['type'] == 'Wind']
-
-
 
     def generation_reactive_power_limits(self):
         max_q = np.full(len(self.generation_data), 1e9) / self.baseMVA
@@ -139,25 +130,48 @@ class ACOPF(AC, OPF):
         self.QDmax_data = self.net.load.max_q_mvar.fillna(self.net.load.q_mvar) / self.baseMVA
         self.QDmin_data = self.net.load.min_q_mvar.fillna(0) / self.baseMVA
 
-    def hc_wind_generation(self):
-            if 'var_q' in self.net.sgen:
-                self.static_generation_data['var_q'] = self.net.sgen.q_var
-            else:
-                var = 0
-                self.static_generation_data['var_q'] = var
+    def static_generation_wind_var_q(self):
+        x = np.array([[96, 103], [120, 127]]) / 110
+        y = np.array([[0.48, 0.41, 0.33], [-0.23, -0.33, -0.41]])
+        m = (y[1] - y[0]) / (x[0, 1] - x[0, 0])
+        b = np.array([y[0] - m * x[i, 0] for i in range(len(x))]).T
+        # self.m_v = m
+        # self.b_min = b[:, 0]
+        # self.b_max = b[:, 1]
 
-            x = np.array([[96, 103], [120, 127]]) / 110
-            y = np.array([[0.48, 0.41, 0.33], [-0.23, -0.33, -0.41]])
-            m = (y[1] - y[0]) / (x[0, 1] - x[0, 0])
-            b = np.array([y[0] - m * x[i, 0] for i in range(len(x))]).T
-            self.m = m[0]
-            self.b_min = b[0, 0]
-            self.b_max = b[0, 1]
-            self.static_generation_data['wind_slope'][self.wind_hc_set] = m[self.static_generation_data['var_q']][
-                self.wind_hc_set]
-            self.static_generation_data['wind_intercept_min'] = b[self.static_generation_data['var_q'], 0]
-            self.static_generation_data['wind_intercept_max'] = b[self.static_generation_data['var_q'], 1]
+        m_qp_max = (0.1 - y[0])/(0.1-0.2)
+        m_qp_min = (-0.1 - y[1])/(0.1-0.2)
+        b_qp_max = 0.1 - m_qp_max * 0.1
+        b_qp_min = -0.1 - m_qp_min * 0.1
 
+        self.q_limit_parameter = pd.DataFrame({'m_qv': m, 'b_qv_min': b[:,0], 'b_qv_max': b[:,1], 'm_qp_max': m_qp_max, 'm_qp_min': m_qp_min, 'b_qp_max': b_qp_max, 'b_qp_min': b_qp_min})
+
+        if 'var_q' in self.net.sgen:
+            self.static_generation_data['var_q'] = self.net.sgen.var_q.values
+            sgens_var_q = self.static_generation_data.index[self.static_generation_data.var_q.notna()]
+
+            try:
+                p_inst = self.net.sgen.p_inst_mw.values / self.baseMVA
+            except AttributeError:
+                logging.warning("No p_inst_mw attribute found in net.sgen. Using p as p_inst for wind generators power limits.")
+                p_inst = self.static_generation_data['p']
+
+            self.static_generation_data['p_inst'] = p_inst
+
+            self.static_generation_data['max_q'][sgens_var_q] = [y[0, int(self.static_generation_data.var_q[g])] * self.static_generation_data['p_inst'][g] for g in sgens_var_q]
+            self.static_generation_data['min_q'][sgens_var_q] = [y[1, int(self.static_generation_data.var_q[g])] * self.static_generation_data['p_inst'][g] for g in sgens_var_q]
+
+            self.static_generation_data['max_p'][sgens_var_q] = p_inst[sgens_var_q]
+            self.static_generation_data['min_p'][sgens_var_q] = p_inst[sgens_var_q]*0.1
+
+        else:
+            self.static_generation_data['var_q'] = None
+            self.static_generation_data['p_inst'] = None
+
+        if 'wind_hc' in self.net.sgen:
+            self.static_generation_data['wind_hc'] = self.net.sgen.wind_hc.values
+        else:
+            self.static_generation_data['wind_hc'] = False
 
     def add_OPF(self, **kwargs):
         super().add_OPF(**kwargs)
@@ -168,7 +182,10 @@ class ACOPF(AC, OPF):
         self.model.WIND_HC = Set(within=self.model.sG, initialize=self.static_generation_data.index[
             self.static_generation_data['wind_hc'] & self.static_generation_data.in_service])
         self.model.WIND = self.model.WIND_HC | Set(within=self.model.sG, initialize=self.static_generation_data.index[(self.static_generation_data['type'] == 'Wind') & self.static_generation_data.in_service])
-        self.model.WINDc = self.model.WIND & self.model.sGc
+        self.model.WINDc = self.model.WIND & self.model.sGc & Set(initialize=self.static_generation_data.index[self.static_generation_data['var_q'].values != None])
+
+        self.model.var_q = Param(self.model.WINDc, initialize=self.static_generation_data['var_q'][self.model.WINDc])
+        self.model.PsG_inst = Param(self.model.WINDc, initialize=self.static_generation_data['p_inst'][self.model.WINDc])
 
         # voltage limits
         self.model.Vmax = Param(self.model.B, within=NonNegativeReals,
@@ -181,8 +198,8 @@ class ACOPF(AC, OPF):
         self.model.QGmin = Param(self.model.G, initialize=self.generation_data['min_q'][self.model.G])
 
         # static generation reactive power limits
-        self.model.QsGmax = Param(self.model.sGc, within=Reals, initialize=self.static_generation_data['max_q'][self.model.sGc])
-        self.model.QsGmin = Param(self.model.sGc, within=Reals, initialize=self.static_generation_data['min_q'][self.model.sGc])
+        self.model.QsGmax = Param(self.model.sGc, within=Reals, initialize=self.static_generation_data['max_q'][self.model.sGc], mutable=True)
+        self.model.QsGmin = Param(self.model.sGc, within=Reals, initialize=self.static_generation_data['min_q'][self.model.sGc], mutable=True)
 
         # reactive demand
         self.model.QDmax = Param(self.model.D, initialize=self.QDmax_data[self.model.D])
@@ -249,30 +266,33 @@ class ACOPF(AC, OPF):
 
         # --- wind generation q requirements variant 3---
         def QW_pos(model, w):
-            return model.qsG[w] <= -0.28 * model.PsG[w] + 3.8 * model.psG[w]
+            return model.qsG[w] <= self.q_limit_parameter.b_qp_max[model.var_q[w]] * model.PsG_inst[w] + self.q_limit_parameter.m_qp_max[model.var_q[w]] * model.psG[w]
 
         def QW_neg(model, w):
-            return model.qsG[w] >= 0.03 * model.PsG[w] - 1.3 * model.psG[w]
+            return model.qsG[w] >= self.q_limit_parameter.b_qp_min[model.var_q[w]] * model.PsG_inst[w] + self.q_limit_parameter.m_qp_min[model.var_q[w]] * model.psG[w]
 
         self.model.QW_pos_constraint = Constraint(self.model.WINDc, rule=QW_pos)
         self.model.QW_neg_constraint = Constraint(self.model.WINDc, rule=QW_neg)
 
         #
-        x = np.array([[96, 103], [120, 127]]) / 110
-        y = np.array([[0.48, 0.41, 0.33], [-0.23, -0.33, -0.41]])
-        m = (y[1] - y[0]) / (x[0, 1] - x[0, 0])
-        b = np.array([y[0] - m * x[i, 0] for i in range(len(x))]).T
-        self.m = m[0]
-        self.b_min = b[0, 0]
-        self.b_max = b[0, 1]
-        def QU_min(model, w):
+        def QV_min(model, w):
             for (g, b) in model.sGbs:
                 if g == w:
-                    return model.qsG[w] >= (self.m * model.v[b] + self.b_min) * model.PsG[w]
-        self.model.QU_min_constraint = Constraint(self.model.WINDc, rule=QU_min)
+                    return model.qsG[w] >= (self.q_limit_parameter.m_qv[model.var_q[w]] * model.v[b] + self.q_limit_parameter.b_qv_min[model.var_q[w]]) * model.PsG_inst[w]
+        self.model.QU_min_constraint = Constraint(self.model.WINDc, rule=QV_min)
 
-        def QU_max(model, w):
+        def QV_max(model, w):
             for (g, b) in model.sGbs:
                 if g == w:
-                    return model.qsG[w] <= (self.m * model.v[b] + self.b_max) * model.PsG[w]
-        self.model.QU_max_constraint = Constraint(self.model.WINDc, rule=QU_max)
+                    return model.qsG[w] <= (self.q_limit_parameter.m_qv[model.var_q[w]] * model.v[b] + self.q_limit_parameter.b_qv_max[model.var_q[w]]) * model.PsG_inst[w]
+        self.model.QU_max_constraint = Constraint(self.model.WINDc, rule=QV_max)
+
+
+    def add_voltage_deviation_objective(self):
+        self.model.vm = Param(self.model.B, initialize=self.bus_data['v_m'][self.model.B])
+
+        def voltage_deviation_objective(model):
+            return sum((model.v[b] - 1.) ** 2 for b in model.B - model.b0) + \
+                   sum((model.v[b] - model.v_b0[b]) ** 2 for b in model.b0)
+
+        self.model.obj_v_deviation = Objective(rule=voltage_deviation_objective, sense=minimize)
