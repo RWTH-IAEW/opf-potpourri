@@ -86,9 +86,9 @@ class Basemodel:
         self.model.G = Set(
             initialize=self.generation_data.index[self.generation_data.in_service])  # external grids and generators
         self.model.eG = Set(initialize=self.generation_data.index[self.generation_data.ref],
-                            within=self.model.G)  # external grids
+                            within=self.model.G)  # external grids and slack generators
         self.model.gG = Set(initialize=self.generation_data.index[self.generation_data.ref == False],
-                            within=self.model.G)  # generators (not static)
+                            within=self.model.G)  # generators (not static) not slack
         self.model.D = Set(initialize=self.demand_set)
         self.model.L = Set(initialize=self.line_data.index[self.line_data.in_service])
         self.model.SHUNT = Set(initialize=self.shunt_set)
@@ -165,7 +165,7 @@ class Basemodel:
             self.model.delta[b].fix(self.model.delta_b0[b])
 
     def solve(self, to_net: bool = True, print_solver_output: bool = False, solver='ipopt', load_solutions: bool = True,
-              mip_solver='gurobi', max_iter=None, time_limit=600):
+              mip_solver='gurobi', max_iter=None, time_limit=600, init_strategy='rNLP'):
         optimizer = SolverFactory(solver)
 
         if solver == 'mindtpy':
@@ -177,7 +177,7 @@ class Basemodel:
 
             try:
                 self.results = optimizer.solve(self.model, mip_solver=mip_solver, nlp_solver='ipopt',
-                                               tee=print_solver_output, iteration_limit=max_iter, time_limit=time_limit)
+                                               tee=print_solver_output, iteration_limit=max_iter, time_limit=time_limit, init_strategy=init_strategy)
             except ValueError as err:
                 print(err)
 
@@ -191,8 +191,11 @@ class Basemodel:
 
             self.results = optimizer.solve(self.model, load_solutions=load_solutions, tee=print_solver_output)
 
-        if check_optimal_termination(self.results) & to_net:
-            pyo_sol_to_net_res(self.net, self.model)
+        try:
+            if check_optimal_termination(self.results) & to_net:
+                pyo_sol_to_net_res(self.net, self.model)
+        except AttributeError as err:
+            print(err)
 
     def change_vals(self, key, value):
         component = self.model.component(key)

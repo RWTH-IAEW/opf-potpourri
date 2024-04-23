@@ -179,9 +179,12 @@ class ACOPF(AC, OPF):
         self.model.name = "ACOPF"
 
         # --- sets ---
+        # generators for hc calculation
         self.model.WIND_HC = Set(within=self.model.sG, initialize=self.static_generation_data.index[
             self.static_generation_data['wind_hc'] & self.static_generation_data.in_service])
+        # all wind generators
         self.model.WIND = self.model.WIND_HC | Set(within=self.model.sG, initialize=self.static_generation_data.index[(self.static_generation_data['type'] == 'Wind') & self.static_generation_data.in_service])
+        # controllable wind generators, not for hc calculation
         self.model.WINDc = self.model.WIND & self.model.sGc & Set(initialize=self.static_generation_data.index[self.static_generation_data['var_q'].values != None])
 
         self.model.var_q = Param(self.model.WINDc, initialize=self.static_generation_data['var_q'][self.model.WINDc])

@@ -282,7 +282,7 @@ class OPF(Basemodel):
                                            self.model.TRANSF])  # transformer tap neutral position
         self.model.Tap_step = Param(self.model.TRANSF, within=Reals,
                                     initialize=self.trafo_data.tap_step[self.model.TRANSF])  # transformer tap step size
-        self.model.Tap_side = Param(self.model.TRANSF, initialize=self.trafo_data.tap_side_data[self.model.TRANSF])
+        self.model.Tap_side = Param(self.model.TRANSF, initialize=self.trafo_data.tap_side_data[self.model.TRANSF]) # transformer tap side; 0: hv, 1: lv
 
         def trafo_tap_pos_min_max(model, t):
             return model.Tap_pos_min[t], model.Tap_pos[t], model.Tap_pos_max[t]
