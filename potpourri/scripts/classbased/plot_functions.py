@@ -1,6 +1,96 @@
 import pandapower as pp
-import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.pyplot as plt
+
+from RWTHPlots import cmap
+from rwth_colors import colors
+from matplotlib import font_manager
+
+plt.style.use('rwth-word')
+
+# Update matplotlib rcParams to match Beamer font sizes and font family
+plt.rcParams.update({
+    'font.size': 16,  # Default font size matches 'normal text' in Beamer
+    'axes.labelsize': 16,  # Matches 'itemize/enumerate body'
+    'axes.titlesize': 16,  # Matches 'frametitle'
+    'xtick.labelsize': 12,  # Matches 'itemize subitem'
+    'ytick.labelsize': 12,  # Similar to 'itemize subitem'
+    'legend.fontsize': 12,  # Matches 'itemize subitem'
+    'figure.titlesize': 20,  # Matches 'title'
+})
+
+
+def set_plt_config():
+    font_manager.fontManager.addfont(r"C:\Users\f.lohse\AppData\Local\Microsoft\Windows\Fonts\lmsans10-regular.otf")
+    font_prop = font_manager.FontProperties(
+        fname=r"C:\Users\f.lohse\AppData\Local\Microsoft\Windows\Fonts\lmsans10-regular.otf")
+
+    config = {}
+    config['textbreite'] = 16
+    config['textbreite'] = config['textbreite'] / 2.54  # Umrechnung inches
+    # Schriftreihenfolge für Plots (für Boxplots evt extra noch übergeben)
+    colors = ['#00549F', '#407FB7', '#8EBAE5', '#C7DDF2', '#E8F1FA']
+    #           KL         OPF       AU          AUP       Q(U)       P(U)          BL       GR1         GR2
+    #          Blau       Hellblau   Rot       Orange     Violett   Maigrün      Gelb       Lila       Türkis
+    colors = ['#00549F', '#8EBAE5', '#CC071E', '#F6A800', '#612158', '#BDCD00', '#0098A1', '#FFED00', '#7A6FAC',
+              #       AB37        AB74        AB22        ZH
+              #          Grün    #Grün75    Grün50     Schwarz
+              '#57AB27', '#8DC060', '#B8D698', '#000000']
+    default_cycler = plt.cycler(color=colors)
+    config["plot_settings"] = {
+        # Select Backend
+        # 'backend': 'pgf',
+        # "pgf.texsystem": "pdflatex",
+        # Text and Font
+        # 'text.usetex': True,
+        'text.latex.preamble': r'\usepackage{lmodern}',
+        # 'font.family': 'sans-serif',#'serif',
+        'font.family': font_prop.get_name(),
+        'font.style': 'normal',
+        'text.color': '000000',
+        # 'axes.formatter.use_mathtext': True,
+        # Font sizes
+        'font.size': 10,
+        'axes.titlesize': 10,
+        'axes.labelsize': 10,
+        'xtick.labelsize': 10,
+        'ytick.labelsize': 10,
+        'legend.fontsize': 10,
+        'figure.titlesize': 10,
+        # Size
+        'figure.constrained_layout.use': True,
+        'savefig.dpi': 400,
+        # Grid Lines
+        'axes.axisbelow': True,
+        'grid.linestyle': '--',
+        'grid.linewidth': 0.5,
+        # Legend
+        'legend.fancybox': False,
+        'legend.edgecolor': 'black',
+        'legend.framealpha': 1,
+        'legend.labelspacing': 0.2,
+        'legend.columnspacing': 0.5,
+        ''
+        # # Colors
+        'axes.prop_cycle': default_cycler,
+        # Boxplots
+        # 'boxplot.flierprops.marker': '+',
+        'boxplot.flierprops.markersize': 3.0,
+    }
+    plt.rcParams.update(config["plot_settings"])
+
+    return config
+
+
+config = set_plt_config()
+
+
+def plot_wind_potential(net):
+    # create marker trace with marker size scaled according to wind generation
+    wind_pot_trace = pp.plotting.create_weighted_marker_trace(net, "bus",
+                                                              column_to_plot="windpot_p_mw", marker_scaling=2,
+                                                              trace_name='Wind potential')
+    pp.plotting.simple_plotly(net, bus_size=3, bus_color='black', additional_traces=wind_pot_trace, showlegend=False)
 
 
 def plot_wind_hc_results(nets, offset=None):
@@ -10,7 +100,7 @@ def plot_wind_hc_results(nets, offset=None):
 
     # get maximum wind generation from all wind generator from all nets
     max_wind_gen = max([net.sgen[net.sgen.wind_hc].p_mw.max() for net in nets])
-
+    figs = []
     for net in nets:
         wind_index = net.sgen[net.sgen.wind_hc].index
         sgen_wind_bus = net.sgen.bus[wind_index]
@@ -25,7 +115,7 @@ def plot_wind_hc_results(nets, offset=None):
 
         # create bus trace with color map for wind generation
         bt = pp.plotting.create_bus_trace(net, buses=net.res_bus.index[net.res_bus.p_wind_mw > 0], cmap='ylorrd',
-                                          colormap_column='p_wind_mw', cbar_title='Wind generation [MW]',
+                                          colormap_column='p_wind_mw', cbar_title='Winderzeugung [MW]',
                                           cmax=max_wind_gen)
 
         # add marker size information to bus trace
@@ -39,7 +129,17 @@ def plot_wind_hc_results(nets, offset=None):
             bt[0]['x'] = [x + offset for x in bt[0]['x']]
             bt[0]['y'] = [y + offset for y in bt[0]['y']]
 
-        pp.plotting.simple_plotly(net, bus_size=3, bus_color='black', additional_traces=bt, showlegend=False)
+        fig = pp.plotting.simple_plotly(net, bus_size=3, bus_color='black', additional_traces=bt, showlegend=False,
+                                        auto_open=False)
+        fig.update_layout(
+            {
+                "paper_bgcolor": "rgba(0, 0, 0, 0)",
+                "plot_bgcolor": "rgba(0, 0, 0, 0)",
+            }
+        )
+        fig.show(renderer="browser")
+        figs.append(fig)
+    return figs
 
 
 def _create_sgen_load_trace(net):
@@ -111,7 +211,6 @@ def plot_pq_gridcodes():
 
 
 def plot_pq_res(nets, labels=None):
-    plt.style.use('rwth-word')
     clrs = ['#00549F', '#E30066', '#BDCD00', '#000000', '#FFED00', '#006165',
             '#0098A1', '#57AB27', '#F6A800', '#CC071E',
             '#A11035', '#612158', '#7A6FAC']
@@ -127,18 +226,22 @@ def plot_pq_res(nets, labels=None):
 
     for i, net in enumerate(nets):
         if hasattr(net.sgen, 'p_inst_mw') and (net.sgen.p_inst_mw != 0).any():
-            sgens_to_plot = net.sgen.index[net.sgen.wind_hc & net.sgen.in_service & ((net.sgen.p_mw != 0) | (net.sgen.p_inst_mw != 0))]
-            sgen_wind = net.sgen.index[(net.sgen.type == 'Wind') & ~net.sgen.wind_hc & net.sgen.in_service & ((net.sgen.p_mw != 0) | (net.sgen.p_inst_mw != 0))]
+            net.sgen.p_inst_mw.fillna(0, inplace=True)
+            sgens_to_plot = net.sgen.index[
+                net.sgen.wind_hc & net.sgen.in_service & ((net.sgen.p_mw != 0) | (net.sgen.p_inst_mw != 0))]
+            sgen_wind = net.sgen.index[(net.sgen.type == 'Wind') & ~net.sgen.wind_hc & net.sgen.in_service & (
+                    (net.sgen.p_mw != 0) | (net.sgen.p_inst_mw != 0))]
         else:
-            sgens_to_plot = net.sgen.index[net.sgen.wind_hc & net.sgen.in_service & net.sgen.p_mw!=0]
-            sgen_wind = net.sgen.index[(net.sgen.type == 'Wind') & ~net.sgen.wind_hc & net.sgen.in_service & net.sgen.p_mw!=0]
+            sgens_to_plot = net.sgen.index[net.sgen.wind_hc & net.sgen.in_service & net.sgen.p_mw != 0]
+            sgen_wind = net.sgen.index[
+                (net.sgen.type == 'Wind') & ~net.sgen.wind_hc & net.sgen.in_service & net.sgen.p_mw != 0]
         # sgens = net.sgen.index[net.sgen.wind_hc & net.sgen.in_service & (net.sgen.p_mw != 0 or net.sgen.p_inst_mw != 0)]
         sgens = sgens_to_plot
         try:
             p_mw_wind_hc = net.sgen.p_inst_mw[sgens].fillna(net.sgen.p_mw).values
         except:
             p_mw_wind_hc = net.sgen.p_mw[sgens].values
-        line = ax.scatter(net.res_sgen.p_mw[sgens].values/ p_mw_wind_hc,
+        line = ax.scatter(net.res_sgen.p_mw[sgens].values / p_mw_wind_hc,
                           net.res_sgen.q_mvar[sgens].values / p_mw_wind_hc,
                           color=clrs[i], marker=marker[0])
 
@@ -149,7 +252,7 @@ def plot_pq_res(nets, labels=None):
             p_mw_wind = net.sgen.p_mw[sgen_wind].values
         ax.scatter(net.res_sgen.p_mw[sgen_wind].values / p_mw_wind,
                    net.res_sgen.q_mvar[sgen_wind].values / p_mw_wind,
-                   color=clrs[i+1], marker=marker[1])
+                   color=clrs[i + 1], marker=marker[1])
 
         if labels:
             line.set_label(labels[i])
@@ -193,10 +296,11 @@ def plot_qu_gridcodes():
 def plot_qu_res(nets, labels=None):
     # values for variant 1
     m_qu = (0.48 + 0.23) / (96 - 103) * 110
-    qu_min = -m_qu * 96 / 110 + 0.48
+    m_qu_min = (0.33 + 0.41) / (96 - 103) * 110
+    qu_min = -m_qu_min * 96 / 110 + 0.33
     qu_max = -m_qu * 120 / 110 + 0.48
     ymax = m_qu * 1.1 + qu_max
-    ymin = m_qu * 0.9 + qu_min
+    ymin = m_qu_min * 0.9 + qu_min
 
     plt.style.use('rwth-word')
     clrs = ['#00549F', '#E30066', '#BDCD00', '#000000', '#FFED00', '#006165',
@@ -232,7 +336,7 @@ def plot_qu_res(nets, labels=None):
             p_mw_wind = net.sgen.p_mw[sgen_wind].values
         ax.scatter(net.res_bus.vm_pu[net.sgen.bus[sgen_wind]],
                    net.res_sgen.q_mvar[sgen_wind].values / p_mw_wind,
-                   color=clrs[i+1], marker=marker[1])
+                   color=clrs[i + 1], marker=marker[1])
         if labels:
             line.set_label(labels[i])
 
@@ -276,7 +380,6 @@ def plot_all_pG(hcs):
     plt.xticks(ticks=[])
     plt.ylabel('$P_{wind}$ [MW]')
     plt.show()
-
 
 
 def plot_all_pG(hcs):

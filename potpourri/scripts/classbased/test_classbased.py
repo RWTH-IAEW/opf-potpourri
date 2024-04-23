@@ -1,10 +1,8 @@
 import copy
-import math
 import time
 import pickle
 
 import pyomo.environ as pe
-import simbench as sb
 import random
 
 from potpourri.models.class_based.ACOPF_base import ACOPF
@@ -15,7 +13,7 @@ from potpourri.models.class_based.AC import AC
 from potpourri.models.class_based.pyo_to_net import pyo_sol_to_net_res
 
 from potpourri.scripts.classbased.plot_functions import *
-from potpourri.scripts.classbased.init_pyo_from_pp_res import init_pyo_from_dcpp
+from potpourri.models.class_based.init_pyo_from_pp_res import init_pyo_from_dcpp
 
 def create_testnet():
     net = pp.create_empty_network()
@@ -74,12 +72,12 @@ def get_limiting_constraints(model, tolerance=1e-4):
                 continue
             if c[index].slack() < tolerance:
                 # don't consider wind constraints when y = 0
-                # if ('W_max_constraint' in c[index].name) | ('W_min_constraint' in c[index].name) | (
-                #         'U_max_constraint' in c[index].name) | ('U_min_constraint' in c[index].name):
-                    # if model.y[index].value == 0.:
-                    #     continue
-                    # if model.pG[index].value + model.qG[index].value <= tolerance:
-                    #     continue
+                if ('W_max_constraint' in c[index].name) | ('W_min_constraint' in c[index].name) | (
+                        'U_max_hc_constraint' in c[index].name) | ('U_min_hc_constraint' in c[index].name):
+                    if model.y[index].value == 0.:
+                        continue
+                    if model.psG[index].value + model.qsG[index].value <= tolerance:
+                        continue
                 lim_constr.append(c[index])
             # negative slack means constraint is violated
             if c[index].slack() < -tolerance:
@@ -255,7 +253,7 @@ if __name__ == '__main__':
     #
     # net = sb.get_simbench_net("1-HV-urban--0-no_sw")
     # net = pickle.load(open('C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\data\simbench_hv_grid_with_potential.pkl', 'rb'))
-    net = pickle.load(open('C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\data\windpot\simbench_hv_grid_urban_with_potential.pkl', 'rb'))
+    net = pickle.load(open('C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\data\windpot\sb_hv_grid_with_potential_34.pkl', 'rb'))
 
     # net = pp.from_excel('C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\data\\hv_grid.xlsx')
     # net = pickle.load(open('C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\data\hv_grid_with_potential_2.pkl', 'rb'))

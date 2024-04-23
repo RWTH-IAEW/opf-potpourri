@@ -26,6 +26,7 @@ from potpourri.models.class_based.ACOPF_base import ACOPF
 from potpourri.scripts.classbased.plot_functions import *
 from scipy.spatial import ConvexHull
 
+from potpourri.scripts.classbased.plot_functions import set_plt_config
 
 # ==========================
 def run_feasible_operation_region(self):
@@ -149,7 +150,7 @@ def for_setpoint_based(opf, n=36):
     return boundary_P_values, boundary_Q_values
 
 
-def for_setpoint_based_with_directions(opf, stepsize=100):
+def for_setpoint_based_with_directions(opf, stepsize=100, solver='ipopt'):
     alpha_beta = [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)]
 
     n_ext_grids = len(opf.model.eG)
@@ -177,7 +178,7 @@ def for_setpoint_based_with_directions(opf, stepsize=100):
     for (alpha, beta) in alpha_beta:
         opf.model.alpha = alpha
         opf.model.beta = beta
-        opf.solve()
+        opf.solve(solver=solver)
 
         for b0 in opf.model.eG:
             p[b0].append(value(opf.model.pG[b0]))
@@ -265,7 +266,7 @@ def for_setpoint_based_with_directions(opf, stepsize=100):
 
         opf.model.p_eg_min.deactivate()
         opf.model.p_eg_max.deactivate()
-        opf.solve()
+        opf.solve(solver=solver)
 
         nets.append(copy.deepcopy(opf.net))
 
@@ -281,7 +282,7 @@ def for_setpoint_based_with_directions(opf, stepsize=100):
         for i in range(len(p_sp[0])):
             for g in opf.model.eG:
                 opf.model.p_sp[g] = p_sp[g, i]
-            opf.solve()
+            opf.solve(solver=solver)
 
             if check_optimal_termination(opf.results):
                 for g in opf.model.eG:
@@ -316,7 +317,7 @@ def for_setpoint_based_with_directions(opf, stepsize=100):
 
         opf.model.q_eg_min.deactivate()
         opf.model.q_eg_max.deactivate()
-        opf.solve()
+        opf.solve(solver=solver)
 
         nets.append(copy.deepcopy(opf.net))
 
@@ -328,7 +329,7 @@ def for_setpoint_based_with_directions(opf, stepsize=100):
         for i in range(len(q_sp[0])):
             for g in opf.model.eG:
                 opf.model.q_sp[g] = q_sp[g, i]
-            opf.solve()
+            opf.solve(solver=solver)
             for i in opf.model.eG:
                 print(value(opf.model.pG[i]))
             if check_optimal_termination(opf.results):
@@ -545,6 +546,18 @@ def node_for_setpoint_based_with_directions(opf, w, stepsize=100):
     return boundary_P_values, boundary_Q_values, boundary_V_values, nets
 
 
+def get_pq_to_plot(p, q):
+    pq = []
+    for i in range(len(p)):
+        p_i = [p_mw for p_list in p[i] for p_mw in p_list]
+        q_i = [q_mw for q_list in q[i] for q_mw in q_list]
+        pq.append(np.array((p_i, q_i)).T)
+
+    pq_tot = sum(pq_i for pq_i in pq)
+
+    return pq, pq_tot
+
+
 def plot_hull(p, q, ratio=0.1):
     pq = []
     for i in range(len(p)):
@@ -561,24 +574,30 @@ def plot_hull(p, q, ratio=0.1):
     fig, ax = plt.subplots()
 
     clr = clrs[5]
-    ax.plot(pq_tot[:, 0], pq_tot[:, 1], '.', label='Total', color=clr)
-    try:
-        hull = concave_hull(MultiPoint(pq_tot), ratio)
-    except Exception as e:
-        print('Creating convex hull instead of concave hull: ' + str(e))
-        hull = convex_hull(MultiPoint(pq_tot))
-    polygon = gpd.GeoSeries(hull)
-    polygon.plot(ax=ax, alpha=0.2, color=clr)
-    polygon.boundary.plot(ax=ax, edgecolor=clr, linewidth=2)
+    # ax.plot(pq_tot[:, 0], pq_tot[:, 1], '.', label='Total', color=clr)
+    # try:
+    #     hull = concave_hull(MultiPoint(pq_tot), ratio)
+    # except Exception as e:
+    #     print('Creating convex hull instead of concave hull: ' + str(e))
+    #     hull = convex_hull(MultiPoint(pq_tot))
+    # polygon = gpd.GeoSeries(hull)
+    # polygon.plot(ax=ax, alpha=0.2, color=clr)
+    # polygon.boundary.plot(ax=ax, edgecolor=clr, linewidth=2)
 
     # alpha_shape = alphashape.alphashape(pq_tot, 0.001)
     # ax.add_patch(PolygonPatch(alpha_shape, alpha=1, fill=False, edgecolor=clr, linewidth=2, color=clr))
     # ax.add_patch(PolygonPatch(alpha_shape, alpha=0.2, edgecolor=clr, linewidth=2, color=clr))
-
+    figs = [fig]
+    axs = [ax]
     for i, points in enumerate(pq):
+        fig_i, ax_i = plt.subplots()
+
         clr = clrs[i + 6]
         ax.plot(points[:, 0], points[:, 1], '.', label='Slack #' + str(i), color=clr)
         ax.legend()
+
+        # plot convex hull for slack alone
+        ax_i.plot(points[:, 0], points[:, 1], '.', label='Slack #' + str(i), color=clr)
 
         try:
             hull = concave_hull(MultiPoint(points), ratio)
@@ -590,6 +609,12 @@ def plot_hull(p, q, ratio=0.1):
         polygon.plot(ax=ax, alpha=0.2, color=clr)
         polygon.boundary.plot(ax=ax, edgecolor=clr, linewidth=2)
 
+        polygon.plot(ax=ax_i, alpha=0.2, color=clr)
+        polygon.boundary.plot(ax=ax_i, edgecolor=clr, linewidth=2)
+        ax_i.set_xlabel('P [MW]')
+        ax_i.set_ylabel('Q [MVar]')
+        figs.append(fig_i)
+        axs.append(ax_i)
         # hull = ConvexHull(pq[i])
         # for simplex in hull.simplices:
         #     plt.plot(points[simplex, 0], points[simplex, 1], color=clr)
@@ -602,11 +627,33 @@ def plot_hull(p, q, ratio=0.1):
         ax.set_xlabel('P [MW]')
         ax.set_ylabel('Q [MVar]')
 
+    config = set_plt_config()
+    fig.set_size_inches((config['textbreite'] * 0.8, 0.6 * config['textbreite']))
+    ax.set_aspect('equal')
+    # plt.legend(bbox_to_anchor=(1.03, 1.0), loc='upper left')
+    # plt.tight_layout()
+
+    for axes in axs:
+        axes.grid()
+        axes.set_aspect('equal')
+        # axes.set_ylim(-240, 415)
+        # axes.set_xlim(-750, 30)
+
+    # axs[0].set_ylim(-700, 1200)
+    # axs[0].set_xlim(-2140, 80)
+
+    # dir = 'C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\\results\\for\\sb_hv_grid_with_potential_3MW_230m\\'
+    # for i, figure in enumerate(figs):
+    #     figure.set_size_inches((config['textbreite'] * 0.6, 0.4 * config['textbreite']))
+    #     figure.savefig(dir + 'for_'+ str(i) +'.pdf', format='pdf', bbox_inches='tight')
+
+    return figs, axs
+
 
 if __name__ == "__main__":
     # net = pp.networks.create_cigre_network_mv()
 
-    with open('C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\data\simbench_hv_grid_with_potential.pkl',
+    with open('C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\data\windpot\sb_hv_grid_with_potential_3MW_230m.pkl',
               'rb') as f:
         net = pickle.load(f)
 
@@ -614,44 +661,52 @@ if __name__ == "__main__":
 
     case = 'lW'
     factors = net.loadcases.loc[case]
-    # net.load.p_mw *= factors['pload']
-    # net.load.q_mvar *= factors['qload']
-    # net.sgen.scaling[net.sgen.type == 'Wind'] = factors['Wind_p']
-    # net.sgen.scaling[net.sgen.type == 'PV'] = factors['PV_p']
-    # net.sgen.scaling[(net.sgen.type != 'Wind') & (net.sgen.type != 'Solar')] = factors['RES_p']
+    net.load.p_mw *= factors['pload']
+    net.load.q_mvar *= factors['qload']
+    net.sgen.scaling[net.sgen.type == 'Wind'] = factors['Wind_p']
+    net.sgen.scaling[net.sgen.type == 'PV'] = factors['PV_p']
+    net.sgen.scaling[(net.sgen.type != 'Wind') & (net.sgen.type != 'Solar')] = factors['RES_p']
     net.ext_grid.vm_pu = factors['Slack_vm']
 
     hc = HC_ACOPF(net)
     hc.solve()
     hc.add_OPF(SWmin=10)
+    hc.add_tap_changer_linear()
+    hc.solve(solver='mindtpy')
 
-    hc.solve(solver='mindtpy', mip_solver='gurobi')
+    with open('C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\data\windpot\sb_hv_grid_with_potential_3MW_230m.pkl',
+              'rb') as f:
+        net_wind = pickle.load(f)
+    net_wind.ext_grid.vm_pu = factors['Slack_vm']
 
-    net_wind = copy.deepcopy(hc.net)
-    net_wind.sgen.in_service[net_wind.res_sgen.y_wind == 0 & net_wind.sgen.wind_hc] = False
+    input_hc_net_dir ='C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\\results\\node_potential\\sb_hv_grid_with_potential_3MW_230m_var_1_hc_net.pkl'
+    with open (input_hc_net_dir, 'rb') as f:
+        net_hc = pickle.load(f)
+    wind_hc_index = net_hc.sgen.index[net_hc.res_sgen.y_wind == 1]
+    pp.create_sgens(net_wind, net_hc.sgen.bus[wind_hc_index], p_mw=net_hc.sgen.p_mw[wind_hc_index], var_q=0, type='Wind', wind_hc=True)
 
-    net_wind.sgen['controllable'] = True
-    net_wind.load['controllable'] = True
-
-    net_wind = copy.deepcopy(net)
+    # net_wind = copy.deepcopy(net)
     # create wind generators in original net
-    wind_hc_index = hc.net.sgen.index[hc.net.res_sgen.y_wind == 1]
-    pp.create_sgens(net_wind, hc.net.sgen.bus[wind_hc_index], p_mw=hc.net.sgen.p_mw[wind_hc_index], var_q=0,
-                    type='Wind', wind_hc=True)
+    # wind_hc_index = hc.net.sgen.index[hc.net.res_sgen.y_wind == 1]
+    # pp.create_sgens(net_wind, hc.net.sgen.bus[wind_hc_index], p_mw=hc.net.sgen.p_mw[wind_hc_index], var_q=0,
+    #                 type='Wind', wind_hc=True)
 
     net_wind.sgen['wind_hc'].fillna(False, inplace=True)
 
     # -- ext grids for
-    net_wind.sgen['controllable'] = False
+    net_wind.sgen['controllable'] = True
     net_wind.sgen['controllable'][net_wind.sgen.type == 'Wind'] = True
     net_wind.sgen['p_inst_mw'] = net_wind.sgen['p_mw']
     net_wind.sgen['var_q'][net_wind.sgen.type == 'Wind'] = 1
     net_wind.sgen['var_q'][net_wind.sgen.wind_hc] = 0
+    net_wind.load['controllable'] = True
 
     acopf = ACOPF(net_wind)
     acopf.add_OPF()
+    acopf.add_tap_changer_linear()
 
-    p, q, u, nets = for_setpoint_based_with_directions(acopf, stepsize=60)
+    p, q, u, nets = for_setpoint_based_with_directions(acopf, stepsize=40)
+
     #
     # # -- node for
     # net_wind.sgen['controllable'] = False

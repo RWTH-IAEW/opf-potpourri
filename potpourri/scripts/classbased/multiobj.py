@@ -9,6 +9,7 @@ from tqdm import tqdm
 from potpourri.models.class_based.HC_ACOPF import HC_ACOPF
 from potpourri.scripts.classbased.plot_functions import plot_wind_hc_results
 from potpourri.scripts.classbased.run_scenarios import create_output_writer
+from potpourri.scripts.classbased.plot_functions import set_plt_config
 
 
 def max_wind_min_loss(net, n=11, **kwargs):
@@ -33,7 +34,7 @@ def max_wind_min_loss(net, n=11, **kwargs):
 
         if pe.check_optimal_termination(hc.results):
             obj.append(pe.value(hc.model.OBJ_with_loss))
-            p_wind.append(pe.value(sum(hc.model.psG[w] for w in hc.model.WIND)))
+            p_wind.append(pe.value(sum(hc.model.psG[w] for w in hc.model.WIND_HC)))
             p_loss.append(pe.value(sum(hc.model.pLfrom[l] + hc.model.pLto[l] for l in hc.model.L)))
         else:
             obj.append(None)
@@ -68,7 +69,7 @@ def weighted_sum(net, n=11, **kwargs):
     hc.model.w_loss = pe.Param(within=pe.Reals, initialize=1., mutable=True)
 
     def objective_pwind_loss(model):
-        return model.w_wind * sum(model.psG[w] for w in model.WIND) + model.w_loss * (
+        return model.w_wind * sum(model.psG[w] for w in model.WIND_HC) + model.w_loss * (
             - sum(model.pLfrom[l] + model.pLto[l] for l in model.L))
 
     hc.model.obj_hc.deactivate()
@@ -90,7 +91,7 @@ def weighted_sum(net, n=11, **kwargs):
 
         if pe.check_optimal_termination(hc.results):
             obj.append(pe.value(hc.model.OBJ_with_loss))
-            p_wind.append(pe.value(sum(hc.model.psG[w] for w in hc.model.WIND)))
+            p_wind.append(pe.value(sum(hc.model.psG[w] for w in hc.model.WIND_HC)))
             p_loss.append(pe.value(sum(hc.model.pLfrom[l] + hc.model.pLto[l] for l in hc.model.L)))
             hcs.append(copy.deepcopy(hc))
         else:
@@ -103,6 +104,7 @@ def weighted_sum(net, n=11, **kwargs):
 
 
 def pareto_front(net, n=10, **kwargs):
+    # initialize HC model
     hc = HC_ACOPF(net)
     hc.solve()
     hc.add_OPF()
@@ -113,6 +115,7 @@ def pareto_front(net, n=10, **kwargs):
     if kwargs.get('SWmin', False):
         hc.change_vals('SWmin', kwargs.get('SWmin'))
 
+    # calculate maximum wind power, without considering losses
     hc.model.obj.deactivate()
 
     def objective(model):
@@ -126,7 +129,7 @@ def pareto_front(net, n=10, **kwargs):
 
     hc.model.obj_hc.deactivate()
 
-    # get minimum losses
+    # calculate minimum losses, without considering wind power
     def obj_min_loss(model):
         return sum(model.pLfrom[l] + model.pLto[l] for l in model.L)
 
@@ -134,7 +137,7 @@ def pareto_front(net, n=10, **kwargs):
 
     hc.solve(solver='mindtpy', mip_solver='gurobi')
     p_loss_min = pe.value(hc.model.OBJ_loss)
-    p_wind_min = pe.value(sum(hc.model.psG[w] for w in hc.model.WIND))
+    p_wind_min = pe.value(sum(hc.model.psG[w] for w in hc.model.WIND_HC))
 
     if kwargs.get('tap_discrete', False):
         hc.add_tap_changer_discrete()
@@ -158,7 +161,7 @@ def pareto_front(net, n=10, **kwargs):
 
     results = pd.DataFrame({'p_wind': p_wind, 'p_loss': p_loss})
 
-    return p_wind, p_loss, nets, results
+    return p_wind, p_loss, nets, results, hc
 
 
 def p_wind_loss_opt(net, n=10, **kwargs):
@@ -201,7 +204,7 @@ def p_wind_loss_opt(net, n=10, **kwargs):
     # get minimum losses
     hc.solve(solver='mindtpy', mip_solver='gurobi')
     p_loss_min = pe.value(hc.model.OBJ_loss)
-    p_wind_min = pe.value(sum(hc.model.psG[w] for w in hc.model.WIND))
+    p_wind_min = pe.value(sum(hc.model.psG[w] for w in hc.model.WIND_HC))
 
     hc.model.OBJ_loss.deactivate()
     hc.model.obj_hc.activate()
@@ -315,7 +318,7 @@ def epsilon_constraint(hc, steps, p_w, p_l, mode=None, ow=None):
         hc.model.eps = eps
         hc.solve(solver='mindtpy', mip_solver='gurobi')
 
-        p_wind.append(pe.value(sum(hc.model.psG[w] for w in hc.model.WIND)))
+        p_wind.append(pe.value(sum(hc.model.psG[w] for w in hc.model.WIND_HC)))
         p_loss.append(pe.value(sum(hc.model.pLfrom[l] + hc.model.pLto[l] for l in hc.model.L)))
         nets.append(copy.deepcopy(hc.net))
 
@@ -383,11 +386,61 @@ def check_slope(p_wind, p_loss):
 
     return p_wind_opt, p_loss_opt, p_wind_next, p_loss_next
 
+def calc_hc_with_and_without_losses(net, results_dir, net_name):
+    hc = HC_ACOPF(net)
+    hc.solve()
+    hc.add_OPF(SWmin=10)
+    hc.add_tap_changer_linear()
+
+    # calcultate hc considering losses
+    hc.solve(solver='mindtpy', mip_solver='gurobi')
+    net_hc_losses = copy.deepcopy(hc.net)
+    with open(results_dir + net_name + '/net_hc_with_losses', 'wb') as f:
+        pickle.dump(hc.net, f)
+
+    # calculate hc without considering losses
+    def obj_without_losses(model):
+        return sum(model.psG[w] for w in model.WIND_HC)
+    hc.model.obj.deactivate()
+    hc.model.obj_hc = pe.Objective(rule=obj_without_losses, sense=pe.maximize)
+
+    hc.solve(solver='mindtpy', mip_solver='gurobi')
+    net_hc = copy.deepcopy(hc.net)
+    with open(results_dir + net_name + '/net_hc_without_losses', 'wb') as f:
+        pickle.dump(hc.net, f)
+
+    # plot results
+    figs = plot_wind_hc_results([net_hc_losses, net_hc])
+    x = 350
+    figs[0].update_layout(width=x, height=x * 3 / 5)
+    figs[1].update_layout(width=x, height=x * 3 / 5)
+    figs[0].write_image(results_dir + net_name + '/hc_with_losses.pdf')
+    figs[1].write_image(results_dir + net_name + '/hc_without_losses.pdf')
+
+def plot_pareto_front(dir):
+    p_loss = pickle.load(open(dir + 'sb_hv_grid_with_potential_3MW_230m/' + 'p_loss_pareto_40', 'rb'))
+    p_wind = pickle.load(open(dir + 'sb_hv_grid_with_potential_3MW_230m/' + 'p_wind_pareto_40', 'rb'))
+    # plot pareto front
+    config = set_plt_config()
+    fig, ax = plt.subplots()
+    ax.plot(p_loss, p_wind, 'o-.')
+    ax.set_xlabel('$P_{Übertragungsverluste}$ [MW]')
+    ax.set_ylabel('$P_{Winderzeugung}$ [MW]')
+    fig.savefig(dir + 'sb_hv_grid_with_potential_3MW_230m/' + 'pareto_front_40.pdf', format='pdf')
+
+    # closer view, to show linear relation
+    ax.set_xlim(25, 65)
+    ax.set_ylim(795, 820)
+    ax.set_aspect('equal')
+    fig.savefig(dir + 'sb_hv_grid_with_potential_3MW_230m/' + 'pareto_front_3_230_40_zoom.pdf', format='pdf')
+
 
 if __name__ == '__main__':
-    with open('../../data/simbench_hv_grid_with_potential_2.pkl',
+    with open('../../data/windpot/sb_hv_grid_with_potential_3MW_230m.pkl',
               'rb') as f:
         net = pickle.load(f)
+
+    results_dir = 'C:/Users/f.lohse/PycharmProjects/potpourri/potpourri/results/losses/'
 
     # with open('C:/Users/f.lohse/PycharmProjects/potpourri/potpourri/windpot/simbench_hv_grid_with_potential.pkl',
     #           'rb') as f:
@@ -405,12 +458,20 @@ if __name__ == '__main__':
     net.sgen.scaling[(net.sgen.type != 'Wind') & (net.sgen.type != 'Solar')] = factors['RES_p']
     net.ext_grid.vm_pu = factors['Slack_vm']
 
-    # p_wind, p_loss, nets, results, p_wind_opt, p_loss_opt, net_opt = p_wind_loss_opt(net, SWmin=10.)
+    net.sgen['controllable'] = False
+    net.sgen['controllable'][net.sgen.type == 'Wind'] = True
+    net.sgen['p_inst_mw'] = net.sgen['p_mw']
+    net.sgen['var_q'] = None
+    net.sgen['var_q'][net.sgen.type == 'Wind'] = 0
 
-    p_wind, p_loss, nets, results = pareto_front(net, n=30)
+    p_wind, p_loss, nets, results, p_wind_opt, p_loss_opt, net_opt = p_wind_loss_opt(net, SWmin=10.)
 
+    p_wind, p_loss, nets, results, hc = pareto_front(net, n=40, tap_linear=True, SWmin=10)
+    #
     # # plot pareto front
     # fig, ax = plt.subplots()
     # ax.plot(p_loss, p_wind, 'o-.')
     # ax.set_xlabel('$P_{losses}$ [MW]')
     # ax.set_ylabel('$P_{wind}$ [MW]')
+
+    net_name = 'sb_hv_grid_with_potential_3MW_230m'
