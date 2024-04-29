@@ -1,0 +1,7 @@
+Thu, 25 May 2023 12:46:42 INFO     OATS log file
+Thu, 25 May 2023 12:46:42 INFO     Program started
+Thu, 25 May 2023 12:46:42 INFO     Solver selected: glpk
+Thu, 25 May 2023 12:46:42 INFO     Testcase selected: testcases/matpower/case24_ieee_rts.xlsx
+Thu, 25 May 2023 12:46:42 INFO     Model selected: UC
+Thu, 25 May 2023 12:46:42 INFO     Given model file found and selected from the models library
+Thu, 25 May 2023 12:46:43 INFO     Given testcase file found and selected from the testcase library

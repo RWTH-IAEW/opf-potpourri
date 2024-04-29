@@ -1,0 +1,19 @@
+Thu, 06 Jul 2023 20:59:40 INFO     OATS log file
+Thu, 06 Jul 2023 20:59:40 INFO     Program started
+Thu, 06 Jul 2023 20:59:40 INFO     Set parameter WLSAccessID
+Thu, 06 Jul 2023 20:59:40 INFO     Set parameter WLSSecret
+Thu, 06 Jul 2023 20:59:40 INFO     Set parameter LicenseID to value 949857
+Thu, 06 Jul 2023 20:59:40 INFO     Set parameter WLSAccessID
+Thu, 06 Jul 2023 20:59:40 INFO     Set parameter WLSSecret
+Thu, 06 Jul 2023 20:59:40 INFO     Academic license - for non-commercial use only - registered to steffen.kortmann@rwth-aachen.de
+Thu, 06 Jul 2023 20:59:40 INFO     Solver selected: ipopt
+Thu, 06 Jul 2023 20:59:40 INFO     Testcase selected: testcases/simbench/1-MV-urban--2-no_sw.xlsx
+Thu, 06 Jul 2023 20:59:40 INFO     Model selected: ACOPF_multiperiod_battery_simplified
+Thu, 06 Jul 2023 20:59:40 INFO     Given model file found and selected from the models library
+Thu, 06 Jul 2023 20:59:40 INFO     Given testcase file found and selected from the testcase library
+Thu, 06 Jul 2023 20:59:40 INFO     Start writing multi-period for demand
+Thu, 06 Jul 2023 20:59:49 INFO     Start writing battery model
+Thu, 06 Jul 2023 20:59:50 INFO     Dat-file written, start optimisation
+Thu, 06 Jul 2023 20:59:50 ERROR    Constructing component 'Sbs' from data={None: [1, 1, 2, 2]} failed:
+    ValueError: Cannot add value (1, 1) to Set Sbs.
+	The value is not in the domain Sbs_domain

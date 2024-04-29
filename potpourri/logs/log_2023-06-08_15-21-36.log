@@ -1,0 +1,6 @@
+Thu, 08 Jun 2023 15:21:36 INFO     OATS log file
+Thu, 08 Jun 2023 15:21:36 INFO     Program started
+Thu, 08 Jun 2023 15:21:36 INFO     Solver selected: ipopt
+Thu, 08 Jun 2023 15:21:36 INFO     Testcase selected: testcases/matpower/case14_battery.xlsx
+Thu, 08 Jun 2023 15:21:36 INFO     Model selected: ACOPF_multiperiod_battery
+Thu, 08 Jun 2023 15:21:36 ERROR    Given model file not found in the 'models' library

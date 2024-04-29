@@ -1,0 +1,161 @@
+Mon, 22 May 2023 13:34:30 INFO     OATS log file
+Mon, 22 May 2023 13:34:30 INFO     Program started
+Mon, 22 May 2023 13:34:30 INFO     Solver selected: gurobi
+Mon, 22 May 2023 13:34:30 INFO     Testcase selected: testcases/matpower/case3375wp.xlsx
+Mon, 22 May 2023 13:34:30 INFO     Model selected: DCOPF
+Mon, 22 May 2023 13:34:30 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 13:34:31 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 13:34:45 WARNING  Could not locate the 'gurobi' executable, which is required for solver gurobi
+Mon, 22 May 2023 13:34:45 INFO     Solver selected: gurobi
+Mon, 22 May 2023 13:34:45 INFO     Testcase selected: testcases/matpower/case2746wp.xlsx
+Mon, 22 May 2023 13:34:45 INFO     Model selected: DCOPF
+Mon, 22 May 2023 13:34:45 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 13:34:46 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 13:34:55 WARNING  Could not locate the 'gurobi' executable, which is required for solver gurobi
+Mon, 22 May 2023 13:34:55 INFO     Solver selected: gurobi
+Mon, 22 May 2023 13:34:55 INFO     Testcase selected: testcases/matpower/case9241pegase.xlsx
+Mon, 22 May 2023 13:34:55 INFO     Model selected: DCOPF
+Mon, 22 May 2023 13:34:55 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 13:34:58 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 13:37:11 WARNING  Could not locate the 'gurobi' executable, which is required for solver gurobi
+Mon, 22 May 2023 13:37:11 INFO     Solver selected: gurobi
+Mon, 22 May 2023 13:37:11 INFO     Testcase selected: testcases/matpower/case1951rte.xlsx
+Mon, 22 May 2023 13:37:11 INFO     Model selected: DCOPF
+Mon, 22 May 2023 13:37:11 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 13:37:12 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 13:37:12 INFO     Solver selected: gurobi
+Mon, 22 May 2023 13:37:12 INFO     Testcase selected: testcases/matpower/case30.xlsx
+Mon, 22 May 2023 13:37:12 INFO     Model selected: DCOPF
+Mon, 22 May 2023 13:37:12 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 13:37:12 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 13:37:12 WARNING  Could not locate the 'gurobi' executable, which is required for solver gurobi
+Mon, 22 May 2023 13:37:12 INFO     Solver selected: gurobi
+Mon, 22 May 2023 13:37:12 INFO     Testcase selected: testcases/matpower/case2868rte.xlsx
+Mon, 22 May 2023 13:37:12 INFO     Model selected: DCOPF
+Mon, 22 May 2023 13:37:12 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 13:37:13 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 13:37:13 INFO     Solver selected: gurobi
+Mon, 22 May 2023 13:37:13 INFO     Testcase selected: testcases/matpower/case2869pegase.xlsx
+Mon, 22 May 2023 13:37:13 INFO     Model selected: DCOPF
+Mon, 22 May 2023 13:37:13 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 13:37:14 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 13:37:26 WARNING  Could not locate the 'gurobi' executable, which is required for solver gurobi
+Mon, 22 May 2023 13:37:26 INFO     Solver selected: gurobi
+Mon, 22 May 2023 13:37:26 INFO     Testcase selected: testcases/matpower/case3120sp.xlsx
+Mon, 22 May 2023 13:37:26 INFO     Model selected: DCOPF
+Mon, 22 May 2023 13:37:26 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 13:37:27 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 13:37:38 WARNING  Could not locate the 'gurobi' executable, which is required for solver gurobi
+Mon, 22 May 2023 13:37:38 INFO     Solver selected: gurobi
+Mon, 22 May 2023 13:37:38 INFO     Testcase selected: testcases/matpower/case6ww.xlsx
+Mon, 22 May 2023 13:37:38 INFO     Model selected: DCOPF
+Mon, 22 May 2023 13:37:38 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 13:37:38 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 13:37:39 WARNING  Could not locate the 'gurobi' executable, which is required for solver gurobi
+Mon, 22 May 2023 13:37:39 INFO     Solver selected: gurobi
+Mon, 22 May 2023 13:37:39 INFO     Testcase selected: testcases/matpower/case30Q.xlsx
+Mon, 22 May 2023 13:37:39 INFO     Model selected: DCOPF
+Mon, 22 May 2023 13:37:39 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 13:37:39 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 13:37:39 WARNING  Could not locate the 'gurobi' executable, which is required for solver gurobi
+Mon, 22 May 2023 13:37:39 INFO     Solver selected: gurobi
+Mon, 22 May 2023 13:37:39 INFO     Testcase selected: testcases/matpower/case6495rte.xlsx
+Mon, 22 May 2023 13:37:39 INFO     Model selected: DCOPF
+Mon, 22 May 2023 13:37:39 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 13:37:41 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 13:37:42 INFO     Solver selected: gurobi
+Mon, 22 May 2023 13:37:42 INFO     Testcase selected: testcases/matpower/case9Q.xlsx
+Mon, 22 May 2023 13:37:42 INFO     Model selected: DCOPF
+Mon, 22 May 2023 13:37:42 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 13:37:42 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 13:37:42 WARNING  Could not locate the 'gurobi' executable, which is required for solver gurobi
+Mon, 22 May 2023 13:37:42 INFO     Solver selected: gurobi
+Mon, 22 May 2023 13:37:42 INFO     Testcase selected: testcases/matpower/case2746wop.xlsx
+Mon, 22 May 2023 13:37:42 INFO     Model selected: DCOPF
+Mon, 22 May 2023 13:37:42 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 13:37:42 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 13:37:52 WARNING  Could not locate the 'gurobi' executable, which is required for solver gurobi
+Mon, 22 May 2023 13:37:52 INFO     Solver selected: gurobi
+Mon, 22 May 2023 13:37:52 INFO     Testcase selected: testcases/matpower/case2736sp.xlsx
+Mon, 22 May 2023 13:37:52 INFO     Model selected: DCOPF
+Mon, 22 May 2023 13:37:52 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 13:37:53 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 13:38:03 WARNING  Could not locate the 'gurobi' executable, which is required for solver gurobi
+Mon, 22 May 2023 13:38:03 INFO     Solver selected: gurobi
+Mon, 22 May 2023 13:38:03 INFO     Testcase selected: testcases/matpower/case3012wp.xlsx
+Mon, 22 May 2023 13:38:03 INFO     Model selected: DCOPF
+Mon, 22 May 2023 13:38:03 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 13:38:04 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 13:38:15 WARNING  Could not locate the 'gurobi' executable, which is required for solver gurobi
+Mon, 22 May 2023 13:38:15 INFO     Solver selected: gurobi
+Mon, 22 May 2023 13:38:15 INFO     Testcase selected: testcases/matpower/case2737sop.xlsx
+Mon, 22 May 2023 13:38:15 INFO     Model selected: DCOPF
+Mon, 22 May 2023 13:38:15 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 13:38:16 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 13:38:26 WARNING  Could not locate the 'gurobi' executable, which is required for solver gurobi
+Mon, 22 May 2023 13:38:26 INFO     Solver selected: gurobi
+Mon, 22 May 2023 13:38:26 INFO     Testcase selected: testcases/matpower/case6515rte.xlsx
+Mon, 22 May 2023 13:38:26 INFO     Model selected: DCOPF
+Mon, 22 May 2023 13:38:26 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 13:38:27 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 13:38:28 INFO     Solver selected: gurobi
+Mon, 22 May 2023 13:38:28 INFO     Testcase selected: testcases/matpower/case145.xlsx
+Mon, 22 May 2023 13:38:28 INFO     Model selected: DCOPF
+Mon, 22 May 2023 13:38:28 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 13:38:29 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 13:38:29 WARNING  Could not locate the 'gurobi' executable, which is required for solver gurobi
+Mon, 22 May 2023 13:38:29 INFO     Solver selected: gurobi
+Mon, 22 May 2023 13:38:29 INFO     Testcase selected: testcases/matpower/case6468rte.xlsx
+Mon, 22 May 2023 13:38:29 INFO     Model selected: DCOPF
+Mon, 22 May 2023 13:38:29 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 13:38:31 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 13:38:32 INFO     Solver selected: gurobi
+Mon, 22 May 2023 13:38:32 INFO     Testcase selected: testcases/matpower/case13659pegase.xlsx
+Mon, 22 May 2023 13:38:32 INFO     Model selected: DCOPF
+Mon, 22 May 2023 13:38:32 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 13:38:36 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 13:43:07 WARNING  Could not locate the 'gurobi' executable, which is required for solver gurobi
+Mon, 22 May 2023 13:43:07 INFO     Solver selected: gurobi
+Mon, 22 May 2023 13:43:07 INFO     Testcase selected: testcases/matpower/case300.xlsx
+Mon, 22 May 2023 13:43:07 INFO     Model selected: DCOPF
+Mon, 22 May 2023 13:43:07 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 13:43:08 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 13:43:08 WARNING  Could not locate the 'gurobi' executable, which is required for solver gurobi
+Mon, 22 May 2023 13:43:08 INFO     Solver selected: gurobi
+Mon, 22 May 2023 13:43:08 INFO     Testcase selected: testcases/matpower/case9.xlsx
+Mon, 22 May 2023 13:43:08 INFO     Model selected: DCOPF
+Mon, 22 May 2023 13:43:08 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 13:43:08 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 13:43:08 WARNING  Could not locate the 'gurobi' executable, which is required for solver gurobi
+Mon, 22 May 2023 13:43:08 INFO     Solver selected: gurobi
+Mon, 22 May 2023 13:43:08 INFO     Testcase selected: testcases/matpower/case6470rte.xlsx
+Mon, 22 May 2023 13:43:08 INFO     Model selected: DCOPF
+Mon, 22 May 2023 13:43:08 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 13:43:10 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 13:43:11 INFO     Solver selected: gurobi
+Mon, 22 May 2023 13:43:11 INFO     Testcase selected: testcases/matpower/case2848rte.xlsx
+Mon, 22 May 2023 13:43:11 INFO     Model selected: DCOPF
+Mon, 22 May 2023 13:43:11 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 13:43:12 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 13:43:12 INFO     Solver selected: gurobi
+Mon, 22 May 2023 13:43:12 INFO     Testcase selected: testcases/matpower/case1888rte.xlsx
+Mon, 22 May 2023 13:43:12 INFO     Model selected: DCOPF
+Mon, 22 May 2023 13:43:12 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 13:43:13 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 13:43:13 INFO     Solver selected: gurobi
+Mon, 22 May 2023 13:43:13 INFO     Testcase selected: testcases/matpower/case24_ieee_rts.xlsx
+Mon, 22 May 2023 13:43:13 INFO     Model selected: DCOPF
+Mon, 22 May 2023 13:43:13 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 13:43:13 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 13:43:13 WARNING  Could not locate the 'gurobi' executable, which is required for solver gurobi
+Mon, 22 May 2023 13:43:13 INFO     Solver selected: gurobi
+Mon, 22 May 2023 13:43:13 INFO     Testcase selected: testcases/matpower/case1354pegase.xlsx
+Mon, 22 May 2023 13:43:13 INFO     Model selected: DCOPF
+Mon, 22 May 2023 13:43:13 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 13:43:14 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 13:43:17 WARNING  Could not locate the 'gurobi' executable, which is required for solver gurobi
+Mon, 22 May 2023 13:43:17 INFO     Solver selected: gurobi
+Mon, 22 May 2023 13:43:17 INFO     Testcase selected: testcases/matpower/case2383wp.xlsx
+Mon, 22 May 2023 13:43:17 INFO     Model selected: DCOPF
+Mon, 22 May 2023 13:43:17 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 13:43:17 INFO     Given testcase file found and selected from the testcase library

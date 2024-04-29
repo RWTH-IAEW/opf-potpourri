@@ -1,0 +1,39 @@
+Fri, 30 Jun 2023 01:14:08 INFO     OATS log file
+Fri, 30 Jun 2023 01:14:08 INFO     Program started
+Fri, 30 Jun 2023 01:14:08 INFO     Solver selected: ipopt
+Fri, 30 Jun 2023 01:14:08 INFO     Testcase selected: testcases/matpower/test_simbench.xlsx
+Fri, 30 Jun 2023 01:14:08 INFO     Model selected: ACOPF_multiperiod_battery_exact
+Fri, 30 Jun 2023 01:14:08 INFO     Given model file found and selected from the models library
+Fri, 30 Jun 2023 01:14:08 INFO     Given testcase file found and selected from the testcase library
+Fri, 30 Jun 2023 01:14:08 INFO     Start writing multi-period for demand
+Fri, 30 Jun 2023 01:14:09 INFO     Start writing battery model
+Fri, 30 Jun 2023 01:14:09 INFO     Dat-file written, start optimisation
+Fri, 30 Jun 2023 01:14:09 WARNING  Element LV1.101 already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:14:09 WARNING  Element Load already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:14:09 WARNING  Element LV1.101 already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:14:09 WARNING  Element Load already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:14:09 WARNING  Element LV1.101 already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:14:09 WARNING  Element Load already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:14:09 WARNING  Element LV1.101 already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:14:09 WARNING  Element Load already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:14:09 WARNING  Element LV1.101 already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:14:09 WARNING  Element Load already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:14:09 WARNING  Element LV1.101 already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:14:09 WARNING  Element Load already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:14:09 WARNING  Element LV1.101 already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:14:09 WARNING  Element Load already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:14:09 WARNING  Element LV1.101 already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:14:09 WARNING  Element Load already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:14:09 WARNING  Element LV1.101 already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:14:09 WARNING  Element Load already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:14:09 WARNING  Element LV1.101 already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:14:09 WARNING  Element Load already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:14:09 WARNING  Element LV1.101 already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:14:09 WARNING  Element Load already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:14:09 WARNING  Element LV1.101 already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:14:09 WARNING  Element Load already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:14:09 WARNING  Element LV1.101 already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:14:09 WARNING  Element Load already exists in Set BATTERY; no action taken
+Fri, 30 Jun 2023 01:14:09 ERROR    Constructing component 'Bbs' from data={None: [0, 'LV1.101', 'Load', '1_bat', 1, 'LV1.101', 'Load', '2_bat', 2, 'LV1.101', 'Load', '3_bat', 3, 'LV1.101', 'Load', '4_bat', 4, 'LV1.101', 'Load', '5_bat', 5, 'LV1.101', 'Load', '6_bat', 6, 'LV1.101', 'Load', '7_bat', 7, 'LV1.101', 'Load', '8_bat', 8, 'LV1.101', 'Load', '9_bat', 9, 'LV1.101', 'Load', '10_bat', 10, 'LV1.101', 'Load', '11_bat', 11, 'LV1.101', 'Load', '12_bat', 12, 'LV1.101', 'Load', '13_bat', 13, 'LV1.101', 'Load', '14_bat']} failed:
+    ValueError: Cannot add value ('Load', '1_bat') to Set Bbs.
+	The value is not in the domain Bbs_domain

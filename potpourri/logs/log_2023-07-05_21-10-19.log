@@ -1,0 +1,7 @@
+Wed, 05 Jul 2023 21:10:19 INFO     OATS log file
+Wed, 05 Jul 2023 21:10:19 INFO     Program started
+Wed, 05 Jul 2023 21:10:19 INFO     Solver selected: ipopt
+Wed, 05 Jul 2023 21:10:19 INFO     Testcase selected: testcases/simbench/case14_battery2.xlsx
+Wed, 05 Jul 2023 21:10:19 INFO     Model selected: ACOPF_multiperiod_battery_simplified
+Wed, 05 Jul 2023 21:10:19 INFO     Given model file found and selected from the models library
+Wed, 05 Jul 2023 21:10:19 ERROR    Given testcase  not found in the 'testcases' library

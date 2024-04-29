@@ -1,0 +1,32 @@
+Mon, 22 May 2023 20:21:36 INFO     OATS log file
+Mon, 22 May 2023 20:21:36 INFO     Program started
+Mon, 22 May 2023 20:21:36 INFO     Solver selected: glpk
+Mon, 22 May 2023 20:21:36 INFO     Testcase selected: testcases/matpower/case89pegase.xlsx
+Mon, 22 May 2023 20:21:36 INFO     Model selected: DCOPF
+Mon, 22 May 2023 20:21:36 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 20:21:36 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 20:21:37 INFO     Done!
+Mon, 22 May 2023 20:21:37 INFO     Solver selected: ipopt
+Mon, 22 May 2023 20:21:37 INFO     Testcase selected: testcases/matpower/case89pegase.xlsx
+Mon, 22 May 2023 20:21:37 INFO     Model selected: ACOPF
+Mon, 22 May 2023 20:21:37 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 20:21:37 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 20:21:38 INFO     Done!
+Mon, 22 May 2023 20:21:38 INFO     Solver selected: ipopt
+Mon, 22 May 2023 20:21:38 INFO     Testcase selected: testcases/matpower/case89pegase.xlsx
+Mon, 22 May 2023 20:21:38 INFO     Model selected: ACOPF_min_gen
+Mon, 22 May 2023 20:21:38 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 20:21:38 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 20:21:39 INFO     Done!
+Mon, 22 May 2023 20:21:39 INFO     Solver selected: ipopt
+Mon, 22 May 2023 20:21:39 INFO     Testcase selected: testcases/matpower/case89pegase.xlsx
+Mon, 22 May 2023 20:21:39 INFO     Model selected: ACOPF_max_cost
+Mon, 22 May 2023 20:21:39 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 20:21:39 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 20:21:45 INFO     Done!
+Mon, 22 May 2023 20:21:45 INFO     Solver selected: ipopt
+Mon, 22 May 2023 20:21:45 INFO     Testcase selected: testcases/matpower/case89pegase.xlsx
+Mon, 22 May 2023 20:21:45 INFO     Model selected: ACOPF_multiperiod
+Mon, 22 May 2023 20:21:45 INFO     Given model file found and selected from the models library
+Mon, 22 May 2023 20:21:45 INFO     Given testcase file found and selected from the testcase library
+Mon, 22 May 2023 20:21:51 INFO     Done!

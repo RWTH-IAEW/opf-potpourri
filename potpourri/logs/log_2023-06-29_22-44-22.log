@@ -1,0 +1,8 @@
+Thu, 29 Jun 2023 22:44:22 INFO     OATS log file
+Thu, 29 Jun 2023 22:44:22 INFO     Program started
+Thu, 29 Jun 2023 22:44:53 INFO     Solver selected: ipopt
+Thu, 29 Jun 2023 22:44:53 INFO     Testcase selected: testcases/matpower/case14_battery2.xlsx
+Thu, 29 Jun 2023 22:44:53 INFO     Model selected: ACOPF_multiperiod_battery
+Thu, 29 Jun 2023 22:44:53 INFO     Given model file found and selected from the models library
+Thu, 29 Jun 2023 22:44:54 INFO     Given testcase file found and selected from the testcase library
+Thu, 29 Jun 2023 22:45:02 WARNING  Could not locate the 'ipopt' executable, which is required for solver ipopt

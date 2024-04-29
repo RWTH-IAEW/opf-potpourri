@@ -1,0 +1,19 @@
+Fri, 30 Jun 2023 02:12:59 INFO     OATS log file
+Fri, 30 Jun 2023 02:12:59 INFO     Program started
+Fri, 30 Jun 2023 02:12:59 INFO     Solver selected: SHOT
+Fri, 30 Jun 2023 02:12:59 INFO     Testcase selected: testcases/matpower/test_simbench.xlsx
+Fri, 30 Jun 2023 02:12:59 INFO     Model selected: ACOPF_multiperiod_battery_exact
+Fri, 30 Jun 2023 02:12:59 INFO     Given model file found and selected from the models library
+Fri, 30 Jun 2023 02:13:00 INFO     Given testcase file found and selected from the testcase library
+Fri, 30 Jun 2023 02:13:00 INFO     Start writing multi-period for demand
+Fri, 30 Jun 2023 02:13:00 INFO     Start writing battery model
+Fri, 30 Jun 2023 02:13:00 INFO     Dat-file written, start optimisation
+Fri, 30 Jun 2023 03:00:40 WARNING  Loading a SolverResults object with a warning status into model.name="unknown";
+  - termination condition: infeasible
+  - message from solver: SHOT\x3a No solution found since dual problem is infeasible
+Fri, 30 Jun 2023 03:00:40 WARNING  Loading a SolverResults object with a warning status into model.name="unknown";
+  - termination condition: infeasible
+  - message from solver: SHOT\x3a No solution found since dual problem is infeasible
+Fri, 30 Jun 2023 03:00:40 WARNING  Loading a SolverResults object with a warning status into model.name="unknown";
+  - termination condition: infeasible
+  - message from solver: SHOT\x3a No solution found since dual problem is infeasible

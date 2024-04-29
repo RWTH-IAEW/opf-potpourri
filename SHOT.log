@@ -1,0 +1,99 @@
+
+╶ Supporting Hyperplane Optimization Toolkit (SHOT) ──────────────────────────────────────────────────────────────────╴
+
+ Andreas Lundell and Jan Kronqvist, Åbo Akademi University, Finland.
+ See documentation for full list of contributors and utilized software libraries.
+
+ Version: 1.1. Git hash: 3557f60e. Released: May 22 2023.
+
+ For more information visit https://shotsolver.dev
+
+╶ Modeling system ────────────────────────────────────────────────────────────────────────────────────────────────────╴
+
+ Modeling system:            AMPL
+ Problem read from file:     /tmp/tmpc8vecyhq.pyomo.nl
+
+- Bound tightening ───────────────────────────────────────────────────────────────────────────────────────────────────╴
+
+ Performing bound tightening on original problem.
+  - Bounds for 15086 variables tightened in 1.11 s and 2 passes.
+  - Objective bounds are: [-3.26989e+58, 5.5296e+108]
+
+ Performing bound tightening on reformulated problem.
+  - Bounds for 5280 variables tightened in 0.77 s and 2 passes.
+  - Objective bounds are: [-3.26989e+08, 2.71003e+08]
+
+╶ Problem instance ───────────────────────────────────────────────────────────────────────────────────────────────────╴
+
+                                    Original             Reformulated
+
+ Problem classification:            MINLP, nonconvex     MINLP, nonconvex
+
+ Objective function direction:      minimize             minimize
+ Objective function type:           quadratic, convex    linear
+
+ Number of constraints:             35754                43338
+  - linear:                         22314                25002
+  - convex quadratic:               2688                 0
+  - convex nonlinear:               0                    7584
+  - nonconvex nonlinear:            10752                10752
+
+ Number of variables:               19214                26798
+  - real:                           16526                24110
+  - binary:                         2688                 2688
+  - nonlinear:                      9024                 9024
+
+ Number of transformations performed:                    7584
+  - square terms partitioning:                           7584
+
+╶ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╴
+
+ No options file specified.
+
+ Options specified:
+
+  - Dual.ESH.InteriorPoint.CuttingPlane.IterationLimit = 50
+  - Dual.HyperplaneCuts.ConstraintSelectionFactor = 1
+  - Dual.HyperplaneCuts.UseIntegerCuts = true
+  - Dual.MIP.Presolve.UpdateObtainedBounds = false
+  - Dual.MIP.SolutionLimit.Initial = 2147483647
+  - Dual.Relaxation.Use = false
+  - Dual.TreeStrategy = 0
+  - Model.BoundTightening.FeasibilityBased.TimeLimit = 5
+  - Model.Reformulation.Quadratics.Strategy = 0
+  - Output.OutputDirectory = 0
+  - Primal.FixedInteger.CallStrategy = 0
+  - Primal.FixedInteger.OnlyUniqueIntegerCombinations = false
+  - Primal.FixedInteger.Source = 0
+  - Primal.Tolerance.TrustLinearConstraintValues = false
+
+ Dual strategy:              Multi-tree
+  - cut algorithm:           ESH
+  - solver:                  Cbc 2.10.7
+
+ Primal NLP solver:          Ipopt 3.14.12 (with default linear solver)
+
+
+╶ Interior point search ──────────────────────────────────────────────────────────────────────────────────────────────╴
+
+ Strategy selected:          cutting plane minimax
+
+    Iteration     │  Time  │    Cuts     │     Objective value     │  Objective diff.   
+     #: type      │  tot.  │   + | tot.  │    problem | line srch  │    abs. | rel.    
+╶─────────────────┴────────┴─────────────┴─────────────────────────┴──────────────────╴
+     1: LP           3.95                      -1e+12 | -1e+12          inf. | inf.    
+     2: LP           8.51   4584 | 4584      -154.342 | 3.67428e+06  3.7e+06 | 2.4e+04 
+     3: LP          12.87   4584 | 9168      -123.467 | 2.17487e+06  2.2e+06 | 1.8e+04 
+
+ Maximum deviation in interior point is too large: 2174870.081
+
+ No interior point found!                            
+
+╶ Main iteration step ────────────────────────────────────────────────────────────────────────────────────────────────╴
+
+    Iteration     │  Time  │  Dual cuts  │     Objective value     │   Objective gap   │     Current solution
+     #: type      │  tot.  │   + | tot.  │       dual | primal     │    abs. | rel.    │    obj.fn. | max.err.
+╶─────────────────┴────────┴─────────────┴─────────────────────────┴───────────────────┴──────────────────────────────╴
+
+     1: MILP-O      15.60                       29969 | inf.            inf. | 1.0e+00        29969 | 42843: 1.08e+07  
+     1: NLPNEWDB-O  94.41                       29969 | inf.            inf. | 1.0e+00              | inf.             

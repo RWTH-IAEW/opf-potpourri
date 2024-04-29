@@ -1,0 +1,23 @@
+Thu, 25 May 2023 18:59:10 INFO     OATS log file
+Thu, 25 May 2023 18:59:10 INFO     Program started
+Thu, 25 May 2023 18:59:10 INFO     Set parameter WLSAccessID
+Thu, 25 May 2023 18:59:10 INFO     Set parameter WLSSecret
+Thu, 25 May 2023 18:59:10 INFO     Set parameter LicenseID to value 949857
+Thu, 25 May 2023 18:59:10 INFO     Academic license - for non-commercial use only - registered to steffen.kortmann@rwth-aachen.de
+Thu, 25 May 2023 18:59:10 INFO     Solver selected: glpk
+Thu, 25 May 2023 18:59:10 INFO     Testcase selected: /home/skortmann/potpourri/testcases/matpower/case13659pegase.xlsx
+Thu, 25 May 2023 18:59:10 INFO     Model selected: DCOPF
+Thu, 25 May 2023 18:59:10 INFO     Given model file found and selected from the models library
+Thu, 25 May 2023 18:59:14 INFO     Given testcase file found and selected from the testcase library
+Thu, 25 May 2023 19:07:24 INFO     Done!
+Thu, 25 May 2023 19:07:24 INFO     Solver selected: gurobi
+Thu, 25 May 2023 19:07:24 INFO     Testcase selected: /home/skortmann/potpourri/testcases/matpower/case13659pegase.xlsx
+Thu, 25 May 2023 19:07:24 INFO     Model selected: DCOPF_quadratic
+Thu, 25 May 2023 19:07:24 INFO     Given model file found and selected from the models library
+Thu, 25 May 2023 19:07:28 INFO     Given testcase file found and selected from the testcase library
+Thu, 25 May 2023 19:15:36 INFO     Done!
+Thu, 25 May 2023 19:15:36 INFO     Solver selected: ipopt
+Thu, 25 May 2023 19:15:36 INFO     Testcase selected: /home/skortmann/potpourri/testcases/matpower/case13659pegase.xlsx
+Thu, 25 May 2023 19:15:36 INFO     Model selected: ACOPF
+Thu, 25 May 2023 19:15:36 INFO     Given model file found and selected from the models library
+Thu, 25 May 2023 19:15:40 INFO     Given testcase file found and selected from the testcase library

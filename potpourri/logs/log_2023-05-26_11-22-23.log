@@ -1,0 +1,11 @@
+Fri, 26 May 2023 11:22:23 INFO     OATS log file
+Fri, 26 May 2023 11:22:23 INFO     Program started
+Fri, 26 May 2023 11:22:23 INFO     Solver selected: ipopt
+Fri, 26 May 2023 11:22:23 INFO     Testcase selected: testcases/matpower/case14.xlsx
+Fri, 26 May 2023 11:22:23 INFO     Model selected: ACOPF_multiperiod
+Fri, 26 May 2023 11:22:23 INFO     Given model file found and selected from the models library
+Fri, 26 May 2023 11:22:23 INFO     Given testcase file found and selected from the testcase library
+Fri, 26 May 2023 11:22:23 ERROR    Rule failed when generating expression for Constraint KVL_real_toTransf with index ('T1-47', 0):
+KeyError: "Index '4' is not valid for indexed component 'delta'"
+Fri, 26 May 2023 11:22:23 ERROR    Constructing component 'KVL_real_toTransf' from data=None failed:
+    KeyError: "Index '4' is not valid for indexed component 'delta'"
