@@ -21,6 +21,8 @@ import pickle
 from shapely import concave_hull, MultiPoint, convex_hull
 import geopandas as gpd
 import simbench as sb
+import numpy as np
+import pandapower as pp
 
 from potpourri.models.HC_ACOPF import HC_ACOPF
 from potpourri.models.ACOPF_base import ACOPF
@@ -651,13 +653,13 @@ def plot_hull(p, q, ratio=0.1):
 
 
 if __name__ == "__main__":
-     net = pp.networks.create_cigre_network_mv()
+     #net = pp.networks.create_cigre_network_mv()
 
-     with open('potpourri/data/windpot/sb_hv_grid_with_potential_3MW_230m.pkl',
+    with open('../potpourri/data/windpot/sb_hv_grid_with_potential_3MW_230m.pkl',
                'rb') as f:
-         net = pickle.load(f)
+        net = pickle.load(f)
 
-    net = sb.get_simbench_net("1-HV-mixed--0-no_sw")
+    #net = sb.get_simbench_net("1-HV-mixed--0-no_sw")
 
     case = 'lW'
     factors = net.loadcases.loc[case]
@@ -679,7 +681,7 @@ if __name__ == "__main__":
         net_wind = pickle.load(f)
     net_wind.ext_grid.vm_pu = factors['Slack_vm']
 
-    input_hc_net_dir ='potpourri/data/windpot/sb_hv_grid_with_potential_3MW_230m.pkl'
+    input_hc_net_dir ='../potpourri/data/windpot/sb_hv_grid_with_potential_3MW_230m.pkl'
     #'input_hc_net_dir = sb.get_simbench_net("1-HV-mixed--0-no_sw") #test input
     with open (input_hc_net_dir, 'rb') as f:
         net_hc = pickle.load(f)
