@@ -20,6 +20,7 @@ from pyomo.environ import *
 import pickle
 from shapely import concave_hull, MultiPoint, convex_hull
 import geopandas as gpd
+import simbench as sb
 
 from potpourri.models.HC_ACOPF import HC_ACOPF
 from potpourri.models.ACOPF_base import ACOPF
@@ -673,12 +674,13 @@ if __name__ == "__main__":
     hc.add_tap_changer_linear()
     hc.solve(solver='mindtpy')
 
-    with open('C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\data\windpot\sb_hv_grid_with_potential_3MW_230m.pkl',
+    with open('misc/LM_Sans_10/lmsans10-regular.otf',
               'rb') as f:
         net_wind = pickle.load(f)
     net_wind.ext_grid.vm_pu = factors['Slack_vm']
 
-    input_hc_net_dir ='C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\\results\\node_potential\\sb_hv_grid_with_potential_3MW_230m_var_1_hc_net.pkl'
+    #input_hc_net_dir ='C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\\results\\node_potential\\sb_hv_grid_with_potential_3MW_230m_var_1_hc_net.pkl'
+    input_hc_net_dir = sb.get_simbench_net("1-HV-mixed--0-no_sw") #test input
     with open (input_hc_net_dir, 'rb') as f:
         net_hc = pickle.load(f)
     wind_hc_index = net_hc.sgen.index[net_hc.res_sgen.y_wind == 1]
