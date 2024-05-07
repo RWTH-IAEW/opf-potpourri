@@ -8,7 +8,7 @@ from potpourri.models.AC import AC
 
 
 if __name__ == "__main__":
-    results_dir = 'potpourri/results'
+    results_dir = '../potpourri/results'
 
     delta_keys = {'res_bus': ['vm_pu', 'va_degree'], 'res_line': ['pl_mw', 'ql_mvar']}
 

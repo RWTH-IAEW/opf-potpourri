@@ -85,11 +85,11 @@ def plot_hc_results(hc_results, path = None):
 
 if __name__ == "__main__":
 
-    net_input_dir = 'potpourri/data/windpot/sb_hv_grid_with_potential_3MW_230m.pkl'
+    net_input_dir = '../potpourri/data/windpot/sb_hv_grid_with_potential_3MW_230m.pkl'
     with open(net_input_dir, 'rb') as f:
         net = pickle.load(f)
 
-    results_dir = 'potpourri/results'
+    results_dir = '../potpourri/results'
 
     # apply loadcase 'lW' to net
     case = 'lW'

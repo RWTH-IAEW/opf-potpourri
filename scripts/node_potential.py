@@ -129,4 +129,4 @@ if __name__ == "__main__":
     write_wind_node_potential_to_buses(hc_node, node_potentials)
     plot_node_potential_and_hc(hc_node.net)
 
-    results_dir = 'potpourri/results/node_potential'
+    results_dir= '../potpourri/results/node_potential'

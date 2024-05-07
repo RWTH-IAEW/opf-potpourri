@@ -21,11 +21,9 @@ import pickle
 from shapely import concave_hull, MultiPoint, convex_hull
 import geopandas as gpd
 import simbench as sb
-import numpy as np
 
 from potpourri.models.HC_ACOPF import HC_ACOPF
 from potpourri.models.ACOPF_base import ACOPF
-import pandapower as pp
 # from scripts.plot_functions import *
 
 # from scripts.plot_functions import set_plt_config
@@ -653,13 +651,13 @@ def plot_hull(p, q, ratio=0.1):
 
 
 if __name__ == "__main__":
-    net = pp.networks.create_cigre_network_mv()
+     net = pp.networks.create_cigre_network_mv()
 
-with open('../potpourri/data/windpot/sb_hv_grid_with_potential_3MW_230m.pkl',
+     with open('potpourri/data/windpot/sb_hv_grid_with_potential_3MW_230m.pkl',
                'rb') as f:
-    net = pickle.load(f)
+         net = pickle.load(f)
 
- #   net = sb.get_simbench_net("1-HV-mixed--0-no_sw")
+    net = sb.get_simbench_net("1-HV-mixed--0-no_sw")
 
     case = 'lW'
     factors = net.loadcases.loc[case]
@@ -688,7 +686,7 @@ with open('../potpourri/data/windpot/sb_hv_grid_with_potential_3MW_230m.pkl',
     wind_hc_index = net_hc.sgen.index[net_hc.res_sgen.y_wind == 1]
     pp.create_sgens(net_wind, net_hc.sgen.bus[wind_hc_index], p_mw=net_hc.sgen.p_mw[wind_hc_index], var_q=0, type='Wind', wind_hc=True)
 
-    #net_wind = copy.deepcopy(net)
+    net_wind = copy.deepcopy(net)
     # create wind generators in original net
     # wind_hc_index = hc.net.sgen.index[hc.net.res_sgen.y_wind == 1]
     # pp.create_sgens(net_wind, hc.net.sgen.bus[wind_hc_index], p_mw=hc.net.sgen.p_mw[wind_hc_index], var_q=0,

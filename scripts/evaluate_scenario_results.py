@@ -159,4 +159,4 @@ def create_weighted_p_wind(probabilities, p_wind):
 
 
 if __name__ == "__main__":
-    results_dir = 'potpourri/results'
+    results_dir = '../potpourri/results'
