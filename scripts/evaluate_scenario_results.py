@@ -159,4 +159,4 @@ def create_weighted_p_wind(probabilities, p_wind):
 
 
 if __name__ == "__main__":
-    results_dir = 'C:\\Users\\f.lohse\\PycharmProjects\potpourri\potpourri\\results\scenarios_multiobj\simbench_hv_grid_with_potential_pkl.pkl_assumption\\'
+    results_dir = 'potpourri/results'

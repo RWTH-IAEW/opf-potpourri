@@ -651,11 +651,11 @@ def plot_hull(p, q, ratio=0.1):
 
 
 if __name__ == "__main__":
-    # net = pp.networks.create_cigre_network_mv()
+     net = pp.networks.create_cigre_network_mv()
 
-    # with open('C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\data\windpot\sb_hv_grid_with_potential_3MW_230m.pkl',
-    #           'rb') as f:
-    #     net = pickle.load(f)
+     with open('potpourri/data/windpot/sb_hv_grid_with_potential_3MW_230m.pkl',
+               'rb') as f:
+         net = pickle.load(f)
 
     net = sb.get_simbench_net("1-HV-mixed--0-no_sw")
 
@@ -679,14 +679,14 @@ if __name__ == "__main__":
         net_wind = pickle.load(f)
     net_wind.ext_grid.vm_pu = factors['Slack_vm']
 
-    #input_hc_net_dir ='C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\\results\\node_potential\\sb_hv_grid_with_potential_3MW_230m_var_1_hc_net.pkl'
-    input_hc_net_dir = sb.get_simbench_net("1-HV-mixed--0-no_sw") #test input
+    input_hc_net_dir ='potpourri/data/windpot/sb_hv_grid_with_potential_3MW_230m.pkl'
+    #'input_hc_net_dir = sb.get_simbench_net("1-HV-mixed--0-no_sw") #test input
     with open (input_hc_net_dir, 'rb') as f:
         net_hc = pickle.load(f)
     wind_hc_index = net_hc.sgen.index[net_hc.res_sgen.y_wind == 1]
     pp.create_sgens(net_wind, net_hc.sgen.bus[wind_hc_index], p_mw=net_hc.sgen.p_mw[wind_hc_index], var_q=0, type='Wind', wind_hc=True)
 
-    # net_wind = copy.deepcopy(net)
+    net_wind = copy.deepcopy(net)
     # create wind generators in original net
     # wind_hc_index = hc.net.sgen.index[hc.net.res_sgen.y_wind == 1]
     # pp.create_sgens(net_wind, hc.net.sgen.bus[wind_hc_index], p_mw=hc.net.sgen.p_mw[wind_hc_index], var_q=0,
