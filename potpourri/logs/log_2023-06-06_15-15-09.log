@@ -1,9 +1,0 @@
-Tue, 06 Jun 2023 15:15:09 INFO     OATS log file
-Tue, 06 Jun 2023 15:15:09 INFO     Program started
-Tue, 06 Jun 2023 15:15:09 INFO     Solver selected: ipopt
-Tue, 06 Jun 2023 15:15:09 INFO     Testcase selected: testcases/matpower/case14_battery.xlsx
-Tue, 06 Jun 2023 15:15:09 INFO     Model selected: ACOPF_multiperiod_battery
-Tue, 06 Jun 2023 15:15:09 WARNING  Implicitly replacing the Component attribute pDis (type=<class 'pyomo.core.base.var.IndexedVar'>) on block unknown with a new Component (type=<class 'pyomo.core.base.var.IndexedVar'>).
-This is usually indicative of a modelling error.
-To avoid this warning, use block.del_component() and block.add_component().
-Tue, 06 Jun 2023 15:15:09 ERROR    Given model file not found in the 'models' library

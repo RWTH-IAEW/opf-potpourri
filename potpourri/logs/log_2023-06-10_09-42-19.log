@@ -1,7 +1,0 @@
-Sat, 10 Jun 2023 09:42:19 INFO     OATS log file
-Sat, 10 Jun 2023 09:42:19 INFO     Program started
-Sat, 10 Jun 2023 09:42:19 INFO     Solver selected: ipopt
-Sat, 10 Jun 2023 09:42:19 INFO     Testcase selected: testcases/matpower/case14_battery.xlsx
-Sat, 10 Jun 2023 09:42:19 INFO     Model selected: ACOPF_multiperiod_battery
-Sat, 10 Jun 2023 09:42:19 INFO     Given model file found and selected from the models library
-Sat, 10 Jun 2023 09:42:19 INFO     Given testcase file found and selected from the testcase library

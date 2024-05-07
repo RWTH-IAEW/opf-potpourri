@@ -1,7 +1,0 @@
-Thu, 18 May 2023 20:03:46 INFO     OATS log file
-Thu, 18 May 2023 20:03:46 INFO     Program started
-Thu, 18 May 2023 20:03:46 INFO     Solver selected: gurobi
-Thu, 18 May 2023 20:03:46 INFO     Testcase selected: case24_ieee_rts.xlsx
-Thu, 18 May 2023 20:03:46 INFO     Model selected: DCOPF
-Thu, 18 May 2023 20:03:46 INFO     Given model file found and selected from the models library
-Thu, 18 May 2023 20:03:46 ERROR    Given testcase  not found in the 'testcases' library

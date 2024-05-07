@@ -1,8 +1,0 @@
-Sat, 27 May 2023 20:43:40 INFO     OATS log file
-Sat, 27 May 2023 20:43:40 INFO     Program started
-Sat, 27 May 2023 20:43:40 INFO     Solver selected: ipopt
-Sat, 27 May 2023 20:43:40 INFO     Testcase selected: testcases/matpower/case14.xlsx
-Sat, 27 May 2023 20:43:40 INFO     Model selected: ACOPF_multiperiod
-Sat, 27 May 2023 20:43:40 INFO     Given model file found and selected from the models library
-Sat, 27 May 2023 20:43:40 INFO     Given testcase file found and selected from the testcase library
-Sat, 27 May 2023 20:43:41 INFO     Done!

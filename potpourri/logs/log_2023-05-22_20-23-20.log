@@ -1,8 +1,0 @@
-Mon, 22 May 2023 20:23:20 INFO     OATS log file
-Mon, 22 May 2023 20:23:20 INFO     Program started
-Mon, 22 May 2023 20:23:20 INFO     Solver selected: glpk
-Mon, 22 May 2023 20:23:20 INFO     Testcase selected: testcases/matpower/case89pegase.xlsx
-Mon, 22 May 2023 20:23:20 INFO     Model selected: DCOPF
-Mon, 22 May 2023 20:23:20 INFO     Given model file found and selected from the models library
-Mon, 22 May 2023 20:23:20 INFO     Given testcase file found and selected from the testcase library
-Mon, 22 May 2023 20:23:20 WARNING  Could not locate the 'glpsol' executable, which is required for solver 'glpk'
