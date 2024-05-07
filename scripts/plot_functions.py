@@ -21,9 +21,9 @@ plt.rcParams.update({
 
 
 def set_plt_config():
-    font_manager.fontManager.addfont(r"misc/LM_Sans_10/lmsans10-regular.otf")
+    font_manager.fontManager.addfont(r"../misc/LM_Sans_10/lmsans10-regular.otf")
     font_prop = font_manager.FontProperties(
-        fname=r"misc/LM_Sans_10/lmsans10-regular.otf")
+        fname=r"../misc/LM_Sans_10/lmsans10-regular.otf")
 
     config = {}
     config['textbreite'] = 16

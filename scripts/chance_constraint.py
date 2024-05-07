@@ -539,10 +539,10 @@ def create_model_cc_sum(net, scenarios, case, eps, Delta):
 if __name__ == '__main__':
     net = pickle.load(
         open(
-            'potpourri / data / windpot / sb_hv_grid_with_potential_3MW_230m.pkl',
+            '../potpourri/data/windpot/sb_hv_grid_with_potential_3MW_230m.pkl',
         'rb'))
     scenarios = pickle.load(open(
-        '/potpourri/data/scenarios/sb_hv_grid_loadcases_assumption_scenarios_with_q.pkl',
+        '../potpourri/data/scenarios/sb_hv_grid_loadcases_assumption_scenarios_with_q.pkl',
         'rb'))
 
     # net.sgen['in_service'] = False

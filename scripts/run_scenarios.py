@@ -247,7 +247,7 @@ if __name__ == '__main__':
     type = "distribution"
 
     # net_name = 'simbench_hv_grid_with_potential.pkl'
-    # with open('C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\data\\' + net_name,
+    # with open('../potpourri/data' + net_name,
     #           'rb') as f:
     #     net = pickle.load(f)
     #
@@ -256,12 +256,12 @@ if __name__ == '__main__':
     #     net = pickle.load(f)
     # results_dir = '../../results/test_scenarios/' + grid + '_loadcases_' + type + '_scenarios/'
 
-    with open("potpourri/data/scenarios/sb_hv_grid_loadcases_distribution_scenarios_with_q.pkl", "rb") as f:
+    with open("../potpourri/data/scenarios/sb_hv_grid_loadcases_distribution_scenarios_with_q.pkl", "rb") as f:
         scenarios = pickle.load(f)
 
     net_name = 'sb_hv_grid_urban'
     net_name = 'sb_hv_grid_with_potential_3MW_230m'
-    with open('potpourri/data/windpot' + net_name + '.pkl',
+    with open('../potpourri/data/windpot' + net_name + '.pkl',
               'rb') as f:
         net = pickle.load(f)
 
@@ -269,7 +269,7 @@ if __name__ == '__main__':
     factors = net.loadcases.loc[case]
     net.ext_grid.vm_pu = factors['Slack_vm']
 
-    results_dir = 'potpourri/results' + net_name + '\\' + type + '\\'
+    results_dir = '../potpourri/results' + net_name + '\\' + type + '\\'
 
     cases = [3]
     # obj = run_scenarios(net, scenarios, results_dir, cases=cases, SWmin=10)
