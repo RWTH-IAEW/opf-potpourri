@@ -440,7 +440,7 @@ if __name__ == '__main__':
               'rb') as f:
         net = pickle.load(f)
 
-    results_dir = 'C:/Users/f.lohse/PycharmProjects/potpourri/potpourri/results/losses/'
+    results_dir = 'potpourri/results'
 
     # with open('C:/Users/f.lohse/PycharmProjects/potpourri/potpourri/windpot/simbench_hv_grid_with_potential.pkl',
     #           'rb') as f:
