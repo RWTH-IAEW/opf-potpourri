@@ -69,9 +69,9 @@ def calc_hc_for_loading(hc, loading_steps):
     return results_list
 
 if __name__ == "__main__":
-    results_dir = 'C:\\Users\\f.lohse\\PycharmProjects\\potpourri\\potpourri\\results\\sensi\\'
+    results_dir = 'potpourri/results/node_potential/sensi'
 
-    net_input_dir = 'C:/Users/f.lohse/pycharmprojects/potpourri/potpourri/data/windpot/sb_hv_grid_with_potential_3MW_230m.pkl'
+    net_input_dir = 'potpourri/data/windpot/sb_hv_grid_with_potential_3MW_230m.pkl'
     net = pickle.load(open(net_input_dir, 'rb'))
 
     # apply loadcase 'lW' to net

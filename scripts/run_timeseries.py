@@ -136,12 +136,11 @@ def add_wind_profile_to_net(net):
 
 
 if __name__ == "__main__":
-    input_hc_net_dir ='C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\\results\\node_potential\\sb_hv_grid_with_potential_3MW_230m_var_1_hc_net.pkl'
+    input_hc_net_dir = 'potpourri/results/node_potential/sb_hv_grid_with_potential_3MW_230m_var_1_hc_net.pkl'
     with open (input_hc_net_dir, 'rb') as f:
         net_hc = pickle.load(f)
-
     net = pickle.load(
-        open('C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\data\windpot\sb_hv_grid_with_potential_3MW_230m.pkl', 'rb'))
+        open('potpourri/data/windpot/sb_hv_grid_with_potential_3MW_230m.pkl', 'rb'))
     pp.runpp(net)
 
     absolute_values = sb.get_absolute_values(net, False)  # get absolute values for loadcases
@@ -201,7 +200,7 @@ if __name__ == "__main__":
     time_steps = range(0, 35136)
     sb.apply_const_controllers(opf.net, absolute_values)
 
-    output_dir = 'C:\\Users\\f.lohse\\PycharmProjects\\potpourri\\potpourri\\results\\timeseries\\sb_hv_grid_with_potential_3MW_230m'
+    output_dir = 'potpourri/results/timeseries/sb_hv_grid_with_potential_3MW_230m'
     ow = create_output_writer(opf.net, time_steps, output_dir=output_dir)
 
     ts.run_timeseries(opf.net, time_steps, run=run_timeseries_pyomo_opf, opf=opf, continue_on_divergence=True)

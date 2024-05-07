@@ -249,11 +249,11 @@ def diff_trafos(net):
 
 if __name__ == '__main__':
     # net = create_testnet()
-    # net = pp.networks.simple_four_bus_system()
+    net = pp.networks.simple_four_bus_system()
     #
     # net = sb.get_simbench_net("1-HV-urban--0-no_sw")
     # net = pickle.load(open('C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\data\simbench_hv_grid_with_potential.pkl', 'rb'))
-    net = pickle.load(open('C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\data\windpot\sb_hv_grid_with_potential_34.pkl', 'rb'))
+    # net = pickle.load(open('C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\data\windpot\sb_hv_grid_with_potential_34.pkl', 'rb'))
 
     # net = pp.from_excel('C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\data\\hv_grid.xlsx')
     # net = pickle.load(open('C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\data\hv_grid_with_potential_2.pkl', 'rb'))

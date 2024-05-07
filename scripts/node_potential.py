@@ -68,7 +68,7 @@ def plot_node_potential_and_hc(net, wind_pot=False):
 
 if __name__ == "__main__":
     net = pickle.load(
-        open('C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\data\windpot\sb_hv_grid_with_potential_3MW_230m.pkl', 'rb'))
+        open('potpourri/data/windpot/sb_hv_grid_with_potential_3MW_230m.pkl', 'rb'))
 
     case = 'lW'
     net = apply_loadcase_to_sb_net(net, case)
@@ -129,5 +129,4 @@ if __name__ == "__main__":
     write_wind_node_potential_to_buses(hc_node, node_potentials)
     plot_node_potential_and_hc(hc_node.net)
 
-
-    results_dir = 'C:\\Users\\f.lohse\\PycharmProjects\\potpourri\\potpourri\\results\\node_potential\\'
+    results_dir = 'potpourri/results/node_potential'
