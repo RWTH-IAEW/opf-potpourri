@@ -4,12 +4,13 @@ from math import pi
 import copy
 import numpy as np
 import pandapower as pp
+import simbench as sb
 
 from potpourri.models.pyo_to_net import pyo_sol_to_net_res
 
 
-class Basemodel:
-    def __init__(self, net):
+class Basemodel_multi_period:
+    def __init__(self, net, T=None):
         self.net = copy.deepcopy(net)
         pp.runpp(self.net)
 
@@ -73,6 +74,14 @@ class Basemodel:
         self.bus_trafo_dict = dict(zip(list(zip(trafo_ind, [1] * len(trafo_ind))) + list(
             zip(trafo_ind, [2] * len(trafo_ind))), np.concatenate([hv_bus_trafo[trafo_ind], lv_bus_trafo[trafo_ind]])))
 
+        # make multi-period
+        self.T = T
+        if T != None and not hasattr(self.net, "profiles"):
+            raise ValueError("The net object does not have profiles. Please provide a net object with profiles.")
+        self.profiles = sb.get_absolute_values(self.net, profiles_instead_of_study_cases=True)
+        for profile in self.profiles.keys():
+            self.profiles[profile] = self.profiles[profile].iloc[:self.T]
+
     def create_model(self):
         self.model = ConcreteModel()
 
@@ -105,6 +114,8 @@ class Basemodel:
         self.model.sGbs = Set(within=self.model.sG * self.model.B,
                               initialize=self.static_generation_data['gen_bus'][self.model.sG])
 
+        self.model.T = Set(initialize=range(self.T))
+
         # --- parameters ---
         # line and trafo matrix
         self.model.A = Param(self.model.L * self.model.LE, initialize=self.bus_line_dict)  # bus-line matrix
@@ -112,8 +123,12 @@ class Basemodel:
                               initialize=self.bus_trafo_dict)  # bus-transformer matrix
 
         # generation
-        self.model.PsG = Param(self.model.sG, initialize=self.static_generation_data.p[self.model.sG])
-        self.model.PG = Param(self.model.G, initialize=self.generation_data.pg[self.model.G])
+        if self.T == None:
+            self.model.PsG = Param(self.model.sG, initialize=self.static_generation_data.p[self.model.sG])
+            self.model.PG = Param(self.model.G, initialize=self.generation_data.pg[self.model.G])
+        else:
+            self.model.PsG = Param(self.model.sG, self.model.T, initialize=self.static_generation_data.p[self.model.sG])
+            self.model.PG = Param(self.model.G, self.model.T, initialize=self.generation_data.pg[self.model.G])
 
         # demand
         self.model.PD = Param(self.model.D, initialize=self.PD_data[self.model.D])

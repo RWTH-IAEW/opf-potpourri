@@ -23,12 +23,10 @@ import geopandas as gpd
 import simbench as sb
 import numpy as np
 import pandapower as pp
+import matplotlib.pyplot as plt
 
 from potpourri.models.HC_ACOPF import HC_ACOPF
 from potpourri.models.ACOPF_base import ACOPF
-# from scripts.plot_functions import *
-
-# from scripts.plot_functions import set_plt_config
 
 # ==========================
 def run_feasible_operation_region(self):
