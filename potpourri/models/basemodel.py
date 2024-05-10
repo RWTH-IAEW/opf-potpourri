@@ -133,7 +133,7 @@ class Basemodel:
         self.model.baseMVA = Param(within=NonNegativeReals, initialize=self.baseMVA)
 
         # --- variables ---
-        self.model.delta = Var(self.model.B, self.model.T, domain=Reals, initialize=0.0,
+        self.model.delta = Var(self.model.B, domain=Reals, initialize=0.0,
                                bounds=(-pi, pi))  # voltage phase angle at bus b, rad
         self.model.pD = Var(self.model.D, domain=Reals)  # real power demand delivered
         self.model.psG = Var(self.model.sG, domain=NonNegativeReals)  # real static generator power
