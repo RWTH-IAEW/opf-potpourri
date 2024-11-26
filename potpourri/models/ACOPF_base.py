@@ -299,3 +299,11 @@ class ACOPF(AC, OPF):
                    sum((model.v[b] - model.v_b0[b]) ** 2 for b in model.b0)
 
         self.model.obj_v_deviation = Objective(rule=voltage_deviation_objective, sense=minimize)
+
+    def add_reactive_power_flow_objective(self):
+
+        def reactive_objective(model):
+            return sum((model.qLfrom[l] - model.qLto[l]) ** 2 for l in model.L) + \
+                   sum((model.qThv[t] - model.qTlv[t]) ** 2
+
+        self.model.obj_reactive = Objective(rule=reactive_objective, sense=minimize)

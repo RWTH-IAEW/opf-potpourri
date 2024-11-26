@@ -4,6 +4,7 @@ from math import pi
 import copy
 import numpy as np
 import pandapower as pp
+import os
 
 from potpourri.models.pyo_to_net import pyo_sol_to_net_res
 
@@ -165,10 +166,10 @@ class Basemodel:
             self.model.delta[b].fix(self.model.delta_b0[b])
 
     def solve(self, to_net: bool = True, print_solver_output: bool = False, solver='ipopt', load_solutions: bool = True,
-              mip_solver='gurobi', max_iter=None, time_limit=600, init_strategy='rNLP'):
-        optimizer = SolverFactory(solver)
+              mip_solver='gurobi', max_iter=None, time_limit=600, init_strategy='rNLP', neos_opt='ipopt'):
 
         if solver == 'mindtpy':
+            optimizer = SolverFactory(solver)
             if not max_iter:
                 max_iter = 50
 
@@ -177,7 +178,8 @@ class Basemodel:
 
             try:
                 self.results = optimizer.solve(self.model, mip_solver=mip_solver, nlp_solver='ipopt',
-                                               tee=print_solver_output, iteration_limit=max_iter, time_limit=time_limit, init_strategy=init_strategy)
+                                               tee=print_solver_output, iteration_limit=max_iter, time_limit=time_limit,
+                                               init_strategy=init_strategy)
             except ValueError as err:
                 print(err)
 
@@ -185,6 +187,10 @@ class Basemodel:
             #     print('Model is feasible but not optimal. Trying to solve a second time.')
             #     self.results = optimizer.solve(self.model, mip_solver=mip_solver, nlp_solver='ipopt',
             #                                    tee=print_solver_output, iteration_limit=max_iter, time_limit=time_limit)
+        elif solver == 'neos':
+            os.environ['NEOS_EMAIL'] = "tim.sandermann@rwth-aachen.de"
+            solver_manager = SolverManagerFactory('neos')
+            self.results = solver_manager.solve(self.model, opt=neos_opt, tee=True)
         else:
             if max_iter:
                 optimizer.options['max_iter'] = max_iter

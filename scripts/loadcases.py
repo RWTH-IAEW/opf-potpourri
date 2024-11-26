@@ -3,7 +3,7 @@ import copy
 import simbench as sb
 import pyomo.environ as pe
 
-from potpourri.models.HC_ACOPF import HC_ACOPF
+from potpourri.models.ACOPF_base import ACOPF
 
 if __name__ == '__main__':
     net = sb.get_simbench_net("1-HV-mixed--0-no_sw")
@@ -26,11 +26,16 @@ if __name__ == '__main__':
 
         net_case.ext_grid.vm_pu = factors['Slack_vm']
 
-        hc = HC_ACOPF(net_case)
-        hc.solve()
-        hc.add_OPF()
-        hc.solve(solver='mindtpy', mip_solver='gurobi')
+        hc = ACOPF(net_case)
+        hc.add_voltage_deviation_objective()
+        hc.solve(solver='neos')
 
         hcs.append(copy.deepcopy(hc))
         obj.append(pe.value(hc.model.obj))
 
+        for g in hc.model.sG:
+            print(f"Gen {g}: {pe.value(hc.model.pG[g])}")
+            print(f"Gen {g}: {pe.value(hc.model.qG[g])}")
+
+
+        line_flow = pe.value(hc.model.pLfrom[0])
