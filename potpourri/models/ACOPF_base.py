@@ -303,7 +303,8 @@ class ACOPF(AC, OPF):
     def add_reactive_power_flow_objective(self):
 
         def reactive_objective(model):
-            return sum((model.qLfrom[l] - model.qLto[l]) ** 2 for l in model.L) + \
-                   sum((model.qThv[t] - model.qTlv[t]) ** 2
+            # return sum((model.qLfrom[l] - model.qLto[l]) ** 2 for l in model.L) + \
+            #        sum((model.qThv[t] - model.qTlv[t]) ** 2 )
+            return 0
 
         self.model.obj_reactive = Objective(rule=reactive_objective, sense=minimize)

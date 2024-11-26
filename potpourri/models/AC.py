@@ -213,8 +213,8 @@ class AC(Basemodel):
         self.model.KVL_reactive_toTransf = Constraint(self.model.TRANSF, rule=KVL_reactive_toendTransf)
 
         # --- reactive generator power limits ---
-        for g in self.model.sG:
-            self.model.qsG[g].fix(self.model.QsG[g])  # reactive power of static generators fixed
+        # for g in self.model.sG:
+        #    self.model.qsG[g].fix(self.model.QsG[g])  # reactive power of static generators fixed
 
         # --- reactive demand limits ---
         for d in self.model.D:
