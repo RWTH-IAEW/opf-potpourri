@@ -29,13 +29,13 @@ if __name__ == '__main__':
     net.load["p_mw"] = profiles[('load', 'p_mw')].iloc[select_profile_idx]
     net.load["q_mvar"] = profiles[('load', 'q_mvar')].iloc[select_profile_idx]
 
-    # power_factor = 0.95
-    # q_max = np.sqrt((net_case.sgen["p_mw"] / power_factor) ** 2 - net_case.sgen["p_mw"] ** 2)
-    # net_case.sgen["max_q_mvar"] = q_max
-    # net_case.sgen["min_q_mvar"] = -q_max
-    #
-    # net_case.sgen["max_p_mw"] = net_case.sgen["p_mw"]
-    # net_case.sgen["min_p_mw"] = net_case.sgen["p_mw"]
+    power_factor = 0.95
+    q_max = np.sqrt((net.sgen["p_mw"] / power_factor) ** 2 - net.sgen["p_mw"] ** 2)
+    net.sgen["max_q_mvar"] = q_max
+    net.sgen["min_q_mvar"] = -q_max
+
+    net.sgen["max_p_mw"] = net.sgen["p_mw"]
+    net.sgen["min_p_mw"] = net.sgen["p_mw"]
     net.sgen['controllable'] = True
     pp.runpp(net)
 
@@ -47,11 +47,22 @@ if __name__ == '__main__':
     # net_case.ext_grid["min_q_mvar"] = -0.05
 
     hc = ACOPF(net_case_opf)
-    hc.add_voltage_deviation_objective()
+    hc.add_OPF()
+    hc.add_reactive_power_flow_objective()
+    print("Grid-state before OPF:")
+    print(net.sgen[["p_mw", "q_mvar"]])
+    print("Grid-state before OPF:")
+    print("SGEN P:")
+    for g in hc.model.sG:
+        print(pe.value(hc.model.PsG[g]))
+    print("SGEN Q:")
+    for g in hc.model.sG:
+        print(pe.value(hc.model.QsG[g]))
+
     hc.solve(solver='neos', print_solver_output=True)
 
     # Print summary of changes
-    print("Grid-state before OPF:")
+    print("Grid-state after OPF:")
     print(net.sgen[["p_mw", "q_mvar"]])
     print("Grid-state after OPF:")
     print("SGEN P:")
@@ -60,7 +71,7 @@ if __name__ == '__main__':
     print("SGEN Q:")
     for g in hc.model.sG:
         print(pe.value(hc.model.qsG[g]))
-
+    print(1)
 
     # for case in case_keys:
     #     net_case = copy.deepcopy(net)

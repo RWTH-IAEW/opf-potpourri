@@ -41,17 +41,20 @@ class ACOPF(AC, OPF):
         self.static_generation_data['type'] = self.net.sgen.type.values
 
     def generation_reactive_power_limits(self):
-        max_q = np.full(len(self.generation_data), 1e9) / self.baseMVA
-        min_q = np.full(len(self.generation_data), -1e9) / self.baseMVA
+        # max_q = np.full(len(self.generation_data), 1e9) / self.baseMVA
+        # min_q = np.full(len(self.generation_data), -1e9) / self.baseMVA
+        #
+        # for element, (f, t) in self.net._gen_order.items():
+        #     if 'max_q_mvar' in self.net[element]:
+        #         max_q[f:t] = self.net[element].max_q_mvar.fillna(1e9) / self.baseMVA
+        #     if 'min_q_mvar' in self.net[element]:
+        #         min_q[f:t] = self.net[element].min_q_mvar.fillna(-1e9) / self.baseMVA
+        #
+        # self.generation_data['max_q'] = max_q
+        # self.generation_data['min_q'] = min_q
 
-        for element, (f, t) in self.net._gen_order.items():
-            if 'max_q_mvar' in self.net[element]:
-                max_q[f:t] = self.net[element].max_q_mvar.fillna(1e9) / self.baseMVA
-            if 'min_q_mvar' in self.net[element]:
-                min_q[f:t] = self.net[element].min_q_mvar.fillna(-1e9) / self.baseMVA
-
-        self.generation_data['max_q'] = max_q
-        self.generation_data['min_q'] = min_q
+        self.generation_data['max_q'] = self.net.sgen['max_q_mvar']
+        self.generation_data['min_q'] = self.net.sgen['min_q_mvar']
 
     def get_v_limits(self):
         if 'max_vm_pu' in self.net.bus:
@@ -303,8 +306,7 @@ class ACOPF(AC, OPF):
     def add_reactive_power_flow_objective(self):
 
         def reactive_objective(model):
-            # return sum((model.qLfrom[l] - model.qLto[l]) ** 2 for l in model.L) + \
-            #        sum((model.qThv[t] - model.qTlv[t]) ** 2 )
-            return 0
+            # Minimize the reactive power
+            return sum(model.qsG[g] ** 2 for g in model.sG)
 
         self.model.obj_reactive = Objective(rule=reactive_objective, sense=minimize)
