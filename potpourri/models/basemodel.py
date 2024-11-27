@@ -188,7 +188,7 @@ class Basemodel:
             #     self.results = optimizer.solve(self.model, mip_solver=mip_solver, nlp_solver='ipopt',
             #                                    tee=print_solver_output, iteration_limit=max_iter, time_limit=time_limit)
         elif solver == 'neos':
-            os.environ['NEOS_EMAIL'] = "tim.sandermann@rwth-aachen.de"
+            os.environ['NEOS_EMAIL'] = "ben.jamin@bluem-chen.de"
             solver_manager = SolverManagerFactory('neos')
             self.results = solver_manager.solve(self.model, opt=neos_opt, tee=True)
         else:

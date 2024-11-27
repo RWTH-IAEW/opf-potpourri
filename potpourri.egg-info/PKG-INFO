@@ -1,0 +1,8 @@
+Metadata-Version: 2.1
+Name: potpourri
+Version: 1.0
+Summary: [Python] Tool for power system analysis with pandapower
+Home-page: https://gitlab.iaew.rwth-aachen.de/aev/potpourri/
+Author: s.kortmann
+Author-email: s.kortmann@iaew.rwth-aachen.de
+License: MIT
