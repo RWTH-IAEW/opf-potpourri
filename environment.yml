@@ -1,7 +1,7 @@
 name: potpourri_env
 channels:
-  - gurobi
   - conda-forge
+  - gurobi
 dependencies:
   - _libgcc_mutex=0.1=conda_forge
   - _openmp_mutex=4.5=2_gnu
@@ -108,4 +108,3 @@ dependencies:
       - tqdm==4.65.0
       - xlrd==2.0.1
       - xlsxwriter==3.1.0
-prefix: /home/skortmann/miniconda3/envs/potpourri_env
