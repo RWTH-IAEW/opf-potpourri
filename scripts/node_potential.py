@@ -1,10 +1,11 @@
 import pickle
 import pyomo.environ as pe
+import pandas as pd
 import pandapower as pp
 from tqdm import tqdm
 
 from potpourri.models.HC_ACOPF import HC_ACOPF
-from potpourri.net_augmentation.prepare_net import apply_loadcase_to_sb_net
+from potpourri.net_augmentation.prepare_net import apply_loadcase_to_sb_net, upgrade_pandapower_net
 
 def write_wind_node_potential_to_buses(opf, node_potentials):
     # Step 1: Initialize a new column in hc.net.bus named 'node_potential' with default values as NaN.
@@ -67,7 +68,9 @@ def plot_node_potential_and_hc(net, wind_pot=False):
 
 if __name__ == "__main__":
     net = pickle.load(
-        open('potpourri/data/windpot/sb_hv_grid_with_potential_3MW_230m.pkl', 'rb'))
+        open('../data/windpot/sb_hv_grid_with_potential_3MW_230m.pkl', 'rb'))
+
+    net = upgrade_pandapower_net(net)
 
     case = 'lW'
     net = apply_loadcase_to_sb_net(net, case)
