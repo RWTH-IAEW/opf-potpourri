@@ -11,6 +11,8 @@ dependencies = [
   "pyomo",
   "pandapower",
   "simbench",
+  "matplotlib",
+  "tqdm",
 ]
 requires-python = ">=3.8"
 authors = [

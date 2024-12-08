@@ -1,12 +1,8 @@
 import copy
-
 import numpy as np
 import simbench as sb
 import pyomo.environ as pe
 import pandapower as pp
-
-import warnings
-warnings.filterwarnings('ignore')
 
 from potpourri.models.ACOPF_base import ACOPF
 
@@ -73,16 +69,16 @@ if __name__ == '__main__':
         print(pe.value(hc.model.qsG[g]))
 
     for case in case_keys:
-        net_case = copy.deepcopy(net)
+        net_case = net.deepcopy()
 
         factors = net_case.loadcases.loc[case]
 
         net_case.load.p_mw *= factors['pload']
         net_case.load.q_mvar *= factors['qload']
 
-        net_case.sgen.scaling[net_case.sgen.type == 'Wind'] = factors['Wind_p']
-        net_case.sgen.scaling[net_case.sgen.type == 'PV'] = factors['PV_p']
-        net_case.sgen.scaling[(net_case.sgen.type != 'Wind') & (net_case.sgen.type != 'PV')] = factors['RES_p']
+        net_case.sgen.loc[net_case.sgen.type == 'Wind', 'scaling'] = factors['Wind_p']
+        net_case.sgen.loc[net_case.sgen.type == 'PV', 'scaling'] = factors['PV_p']
+        net_case.sgen.loc[(net_case.sgen.type != 'Wind') & (net_case.sgen.type != 'PV'), 'scaling'] = factors['RES_p']
 
         net_case.ext_grid.vm_pu = factors['Slack_vm']
 
