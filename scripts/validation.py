@@ -27,7 +27,7 @@ if __name__ == "__main__":
         pp.runpp(net)
         pp.nets_equal(net, ac.net)
 
-        pickle.dump(ac.net, open(results_dir + net_name + '_ac.pkl', 'wb'))
+        # pickle.dump(ac.net, open(results_dir + net_name + '_ac.pkl', 'wb'))
 
         for res_element, keys in delta_keys.items():
             for key in keys:
@@ -35,8 +35,9 @@ if __name__ == "__main__":
                 mean_delta = abs(delta).mean()
                 results_df.loc[net_name, key] = mean_delta
 
-    print(results_df.to_latex(float_format="{:.2e}".format,
-                              header=['Amplitude [p.u.]', 'Winkel [°]', 'Wirkleistung [MW]', 'Blindleistung [MVar]']))
+    print(results_df)
+    # print(results_df.to_latex(float_format="{:.2e}".format,
+    #                           header=['Amplitude [p.u.]', 'Winkel [°]', 'Wirkleistung [MW]', 'Blindleistung [MVar]']))
     # # Reset the index
     # results_df.reset_index(inplace=True)
     #

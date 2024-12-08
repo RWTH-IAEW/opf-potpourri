@@ -11,7 +11,7 @@ COPY . $APP_HOME
 
 # Update Conda in the base environment, create the specified environment
 RUN conda update --name base --yes conda && \
-    conda env create --name potpourri_env --file environment.yml
+    conda env create --name potpourri_env --file environment.yaml
 
 # Use conda run to execute commands within the Conda environment
 RUN echo "source activate potpourri_env" > ~/.bashrc
@@ -20,7 +20,7 @@ ENV PATH /opt/conda/envs/potpourri_env/bin:$PATH
 # Update and install system dependencies including CBC
 RUN apt-get update && \
     apt-get install -y build-essential cmake git && \
-    apt-get install -y coinor-cbc coinor-libcbc-dev
+    apt-get install -y coinor-cbc coinor-libcbc-dev zlib1g-dev
 
 RUN apt-get update && apt-get install -y \
     build-essential \
@@ -49,12 +49,10 @@ RUN git clone https://www.github.com/coin-or/SHOT --recursive && \
     mkdir build && \
     cd build && \
     cmake .. -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr/local \
         -DHAS_CBC=on -DCBC_DIR=/opt/cbc \
         -DHAS_IPOPT=on -DIPOPT_DIR=/opt/Ipopt && \
     make && make install
 
 # Set the default shell to run inside the 'potpourri_env' environment
 SHELL ["conda", "run", "--name", "potpourri_env", "/bin/bash", "-c"]
-
-# Add any additional commands or operations below
-# Example: CMD ["python", "your_script.py"]

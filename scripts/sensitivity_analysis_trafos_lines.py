@@ -1,40 +1,52 @@
 import numpy as np
-import seaborn as sns
 import pickle
 from tqdm import tqdm
-from RWTHPlots import cmap
+
 from potpourri.models.HC_ACOPF import HC_ACOPF
+from potpourri.plotting.plot_functions import set_plt_config
+import matplotlib.pyplot as plt
 
-from scripts.plot_functions import set_plt_config
 
-def plot_cmap_loadings(hc_results, step=5, x_ticks_max=120, y_ticks_max=120, decimals=0, unit='percent', ticks_step= 2):
+def plot_cmap_loadings(hc_results, step=5, x_ticks_max=120, y_ticks_max=120, decimals=0, unit='percent', ticks_step=2):
     config = set_plt_config()
-    ax = sns.heatmap(hc_results, cmap=cmap.rwth_cmap('blue_RWTH').reversed())
 
+    # Create the figure and axis
+    fig, ax = plt.subplots()
+
+    # Plot the heatmap
+    cax = ax.imshow(hc_results, cmap='viridis', aspect='equal', origin='lower')
+
+    # Set up the ticks
     yticks_len = len(hc_results)
     yticks_min = y_ticks_max - yticks_len * step
     xticks_len = len(hc_results[0])
     xticks_min = x_ticks_max - xticks_len * step
 
-    yticks = np.around(np.linspace(y_ticks_max, yticks_min+step, yticks_len), decimals)
-    xticks = np.around(np.linspace(xticks_min+step, x_ticks_max, xticks_len), decimals)
+    yticks = np.around(np.linspace(y_ticks_max, yticks_min + step, yticks_len), decimals)
+    xticks = np.around(np.linspace(xticks_min + step, x_ticks_max, xticks_len), decimals)
 
     if unit == 'percent':
-        ax.set(xlabel="Max. Transformator Auslastung [%]", ylabel="Max. Leitungsauslastung [%]")
+        ax.set_xlabel("Max. Transformator Auslastung [%]")
+        ax.set_ylabel("Max. Leitungsauslastung [%]")
         xticks = xticks.astype(int)
         yticks = yticks.astype(int)
     else:
-        ax.set(xlabel="Max. Transformator Auslastung [p.u.]", ylabel="Max. Leitungsauslastung [p.u.]")
+        ax.set_xlabel("Max. Transformator Auslastung [p.u.]")
+        ax.set_ylabel("Max. Leitungsauslastung [p.u.]")
 
-    ax.set_aspect('equal')
-    ax.collections[0].colorbar.set_label('Netzintegrationspotenzial [MW]')
-    ax.figure.set_size_inches((config['textbreite'] * 0.9, 0.5 * config['textbreite']))
+    # Customize the ticks
+    ax.set_xticks(np.arange(0, xticks_len, ticks_step))
+    ax.set_xticklabels(xticks[::ticks_step])
+    ax.set_yticks(np.arange(0, yticks_len, ticks_step))
+    ax.set_yticklabels(yticks[::ticks_step])
 
-    ax.set_yticklabels(yticks)
-    ax.set_xticklabels(xticks)
+    # Add colorbar
+    cbar = fig.colorbar(cax, ax=ax)
+    cbar.set_label('Netzintegrationspotenzial [MW]')
 
-    ax.set_xticks(np.arange(0, xticks_len, ticks_step) + 0.5)
-    ax.set_yticks(np.arange(0, yticks_len, ticks_step) + 0.5)
+    # Adjust figure size
+    fig.set_size_inches((config['textbreite'] * 0.9, 0.5 * config['textbreite']))
+
     return ax
 
 def calc_hc_for_loading(hc, loading_steps):

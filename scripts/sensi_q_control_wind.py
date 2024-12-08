@@ -1,11 +1,10 @@
 from potpourri.models.HC_ACOPF import HC_ACOPF
-from scripts.prepare_net import *
+from potpourri.net_augmentation.prepare_net import *
+from potpourri.plotting.plot_functions import set_plt_config
 
 import pyomo.environ as pe
 import pickle
 import matplotlib.pyplot as plt
-
-from scripts.plot_functions import set_plt_config
 
 
 def add_wind_generation_box_constraints(hc):

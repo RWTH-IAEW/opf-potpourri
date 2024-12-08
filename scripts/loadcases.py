@@ -6,7 +6,6 @@ import pyomo.environ as pe
 import pandapower as pp
 
 import warnings
-
 warnings.filterwarnings('ignore')
 
 from potpourri.models.ACOPF_base import ACOPF
@@ -41,10 +40,10 @@ if __name__ == '__main__':
 
     net_case_opf = net.deepcopy()
 
-    # net_case.ext_grid["max_p_mw"] = net_case.res_ext_grid["p_mw"]
-    # net_case.ext_grid["min_p_mw"] = net_case.res_ext_grid["p_mw"]
-    # net_case.ext_grid["max_q_mvar"] = 0.05
-    # net_case.ext_grid["min_q_mvar"] = -0.05
+    net_case_opf.ext_grid["max_p_mw"] = net_case_opf.res_ext_grid["p_mw"]
+    net_case_opf.ext_grid["min_p_mw"] = net_case_opf.res_ext_grid["p_mw"]
+    net_case_opf.ext_grid["max_q_mvar"] = 0.05
+    net_case_opf.ext_grid["min_q_mvar"] = -0.05
 
     hc = ACOPF(net_case_opf)
     hc.add_OPF()
@@ -59,7 +58,8 @@ if __name__ == '__main__':
     for g in hc.model.sG:
         print(pe.value(hc.model.QsG[g]))
 
-    hc.solve(solver='neos', print_solver_output=True)
+    # hc.solve(solver='neos', print_solver_output=True)
+    hc.solve(solver='ipopt', print_solver_output=False)
 
     # Print summary of changes
     print("Grid-state after OPF:")
@@ -71,31 +71,31 @@ if __name__ == '__main__':
     print("SGEN Q:")
     for g in hc.model.sG:
         print(pe.value(hc.model.qsG[g]))
-    print(1)
 
-    # for case in case_keys:
-    #     net_case = copy.deepcopy(net)
-    #
-    #     factors = net_case.loadcases.loc[case]
-    #
-    #     net_case.load.p_mw *= factors['pload']
-    #     net_case.load.q_mvar *= factors['qload']
-    #
-    #     net_case.sgen.scaling[net_case.sgen.type == 'Wind'] = factors['Wind_p']
-    #     net_case.sgen.scaling[net_case.sgen.type == 'PV'] = factors['PV_p']
-    #     net_case.sgen.scaling[(net_case.sgen.type != 'Wind') & (net_case.sgen.type != 'PV')] = factors['RES_p']
-    #
-    #     net_case.ext_grid.vm_pu = factors['Slack_vm']
-    #
-    #     hc = ACOPF(net_case)
-    #     hc.add_voltage_deviation_objective()
-    #     hc.solve(solver='neos')
-    #
-    #     hcs.append(copy.deepcopy(hc))
-    #     #obj.append(pe.value(hc.model.obj))
-    #
-    #     #for g in hc.model.sG:
-    #     #    print(f"Gen {g}: {pe.value(hc.model.pG[g])}")
-    #     #    print(f"Gen {g}: {pe.value(hc.model.qG[g])}")
-    #
-    #     line_flow = pe.value(hc.model.pLfrom[0])
+    for case in case_keys:
+        net_case = copy.deepcopy(net)
+
+        factors = net_case.loadcases.loc[case]
+
+        net_case.load.p_mw *= factors['pload']
+        net_case.load.q_mvar *= factors['qload']
+
+        net_case.sgen.scaling[net_case.sgen.type == 'Wind'] = factors['Wind_p']
+        net_case.sgen.scaling[net_case.sgen.type == 'PV'] = factors['PV_p']
+        net_case.sgen.scaling[(net_case.sgen.type != 'Wind') & (net_case.sgen.type != 'PV')] = factors['RES_p']
+
+        net_case.ext_grid.vm_pu = factors['Slack_vm']
+
+        hc = ACOPF(net_case)
+        hc.add_voltage_deviation_objective()
+        hc.solve(solver='neos')
+
+        # hcs.append(copy.deepcopy(hc))
+        # obj.append(pe.value(hc.model.obj))
+
+        # for g in hc.model.sG:
+        #    print(f"Gen {g}: {pe.value(hc.model.pG[g])}")
+        #    print(f"Gen {g}: {pe.value(hc.model.qG[g])}")
+
+        line_flow = pe.value(hc.model.pLfrom[0])
+        print(f"Line flow: {line_flow}")

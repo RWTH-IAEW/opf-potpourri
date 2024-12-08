@@ -4,8 +4,7 @@ import pandapower as pp
 from tqdm import tqdm
 
 from potpourri.models.HC_ACOPF import HC_ACOPF
-from scripts.prepare_net import apply_loadcase_to_sb_net
-from rwth_colors import colors
+from potpourri.net_augmentation.prepare_net import apply_loadcase_to_sb_net
 
 def write_wind_node_potential_to_buses(opf, node_potentials):
     # Step 1: Initialize a new column in hc.net.bus named 'node_potential' with default values as NaN.
@@ -32,25 +31,25 @@ def plot_node_potential_and_hc(net, wind_pot=False):
                                                                       column_to_plot="p_wind_mw",
                                                                       trace_name='Maximum hosting capacity',
                                                                       scale_legend_unit='MW',
-                                                                      color=colors['red'])
+                                                                      color="r")
 
     node_potential_trace = pp.plotting.create_weighted_marker_trace(net, "bus", elm_ids=net.bus.index[
         net.bus.node_potential_p_mw.notna()],
                                                                     column_to_plot="node_potential_p_mw",
-                                                                    trace_name='Node potential', color=colors['blue'],
+                                                                    trace_name='Node potential', color="b",
                                                                     scale_legend_unit='MW')
 
     if wind_pot:
         wind_potential_trace = pp.plotting.create_weighted_marker_trace(net, "bus", elm_ids=net.bus.index[
             net.bus.windpot_p_mw.notna()],
                                                                         column_to_plot="windpot_p_mw",
-                                                                        trace_name='Wind potential', color=colors['green'],
+                                                                        trace_name='Wind potential', color="g",
                                                                         scale_legend_unit='MW')
         fig = pp.plotting.simple_plotly(net, bus_size=3, bus_color='black',
                                   additional_traces=[wind_potential_trace, node_potential_trace, hosting_capacity_trace], showlegend=True, auto_open=False)
     else:
         fig = pp.plotting.simple_plotly(net, bus_size=3, bus_color='black',
-                              additional_traces=[node_potential_trace, hosting_capacity_trace], showlegend=True, auto_open=False, ext_grid_color=colors['green'])
+                              additional_traces=[node_potential_trace, hosting_capacity_trace], showlegend=True, auto_open=False, ext_grid_color="g")
     fig.update_layout(
             {
                 "paper_bgcolor": "rgba(0, 0, 0, 0)",
@@ -58,8 +57,8 @@ def plot_node_potential_and_hc(net, wind_pot=False):
             }
         )
 
-    fig.data[-2].marker.color = colors['blue']
-    fig.data[-1].marker.color = colors['red']
+    fig.data[-2].marker.color = "b"
+    fig.data[-1].marker.color = "r"
     fig.data[-1].marker.opacity = 1.0
     fig.data[-2].marker.opacity = 1.0
 

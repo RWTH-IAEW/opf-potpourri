@@ -1,0 +1,20 @@
+name: potpourri_env
+channels:
+  - conda-forge
+dependencies:
+  - glpk
+  - ipopt
+  - ipython
+  - numba
+  - numpy
+  - pandas
+  - pip
+  - python=3.10
+  - setuptools
+  - pip:
+      - gurobipy
+      - matplotlib
+      - pandapower
+      - pyomo
+      - scipy
+      - simbench

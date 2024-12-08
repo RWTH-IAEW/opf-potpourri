@@ -11,7 +11,7 @@ from pandapower.control.run_control import get_controller_order
 
 from potpourri.models.HC_ACOPF import HC_ACOPF
 from potpourri.models.init_pyo_from_pp_res import init_pyo_from_dcpp
-from scripts.plot_functions import *
+from potpourri.plotting.plot_functions import *
 
 
 def create_run_pyomo_opf(net, **kwargs):

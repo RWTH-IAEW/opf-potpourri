@@ -11,9 +11,10 @@ from potpourri.models.DC import DC
 from potpourri.models.AC import AC
 
 from potpourri.models.pyo_to_net import pyo_sol_to_net_res
-
-from scripts.plot_functions import *
+from potpourri.plotting.plot_functions import *
 from potpourri.models.init_pyo_from_pp_res import init_pyo_from_dcpp
+
+import pandapower as pp
 
 def create_testnet():
     net = pp.create_empty_network()

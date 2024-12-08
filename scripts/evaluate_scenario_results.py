@@ -4,7 +4,7 @@ import pandas as pd
 import os
 import pickle
 
-from scripts.plot_functions import plot_wind_hc_results
+from potpourri.plotting.plot_functions import plot_wind_hc_results
 
 
 def scenario_supply(scenarios):

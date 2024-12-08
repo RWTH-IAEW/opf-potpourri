@@ -1,7 +1,7 @@
 import numpy as np
 import pandapower as pp
 import pandas as pd
-
+pd.set_option('future.no_silent_downcasting', True)
 
 def pyo_sol_to_net_res(net, model):
     if 'HC' in model.name:
@@ -167,20 +167,21 @@ def _load_results_to_net(net, model):
         # load
         net.res_load.q_mvar = model.qD.get_values()
         net.res_load.q_mvar *= model.baseMVA.value
-        net.res_load.q_mvar.fillna(net.load.q_mvar * net.load.scaling * net.load.in_service, inplace=True)
+        net.res_load["q_mvar"] = net.res_load["q_mvar"].fillna(net.load["q_mvar"] * net.load["scaling"] * net.load["in_service"])
+
 
     net.res_load.set_index(net.load.index, inplace=True)
-    net.res_load.p_mw.fillna(net.load.p_mw * net.load.scaling * net.load.in_service, inplace=True)
+    net.res_load["p_mw"] = net.res_load["p_mw"].fillna(net.load["p_mw"] * net.load["scaling"] * net.load["in_service"])
 
 
 def _sgen_results_to_net(net, model):
     # --- sgen ---
     net.res_sgen = pd.DataFrame(columns=['p_mw', 'q_mvar'], index=net.sgen.index)
     for g in model.sG:
-        net.res_sgen.iloc[g]['p_mw'] = model.psG[g].value * model.baseMVA.value
+        net.res_sgen.loc[g, 'p_mw'] = model.psG[g].value * model.baseMVA.value
 
         if 'AC' in model.name:
-            net.res_sgen.iloc[g]['q_mvar'] = model.qsG[g].value * model.baseMVA.value
+            net.res_sgen.loc[g, 'q_mvar'] = model.qsG[g].value * model.baseMVA.value
 
     if 'HC' in model.name:
         y = model.y.get_values()
@@ -189,9 +190,10 @@ def _sgen_results_to_net(net, model):
             net.res_sgen['y_wind'].iloc[w] = y[w]
 
     net.res_sgen.set_index(net.sgen.index, inplace=True)
-    net.res_sgen.p_mw.fillna(net.sgen.p_mw * net.sgen.scaling * net.sgen.in_service, inplace=True)
+    net.res_sgen["p_mw"] = net.res_sgen["p_mw"].fillna(net.sgen["p_mw"] * net.sgen["scaling"] * net.sgen["in_service"])
+
     if 'AC' in model.name:
-        net.res_sgen.q_mvar.fillna(net.sgen.q_mvar * net.sgen.scaling * net.sgen.in_service, inplace=True)
+        net.res_sgen["q_mvar"] = net.res_sgen["q_mvar"].fillna(net.sgen["q_mvar"] * net.sgen["scaling"] * net.sgen["in_service"])
 
 
 def _gen_results_to_net(net, model):

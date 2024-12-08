@@ -210,7 +210,6 @@ def plt_diff_SLmax(dicts, keys_to_plt=None, save: bool = False, folder='../hc_te
 
 
 def plt_pq_wind_from_res(res, save: bool = False, folder=None):
-    plt.style.use('rwth-word')
 
     markers = ['.', '*', '+', 'o', ',']
     clrs = ['#00549F', '#000000', '#E30066', '#FFED00', '#006165',
@@ -294,7 +293,6 @@ def plt_results(res, x, xlabel, suptitle):
 
 
 def plt_pq_wind_from_hc(hc):
-    plt.style.use('rwth-word')
 
     x = np.arange(0, 1.1, 0.1)
     fig, ax = plt.subplots()
@@ -311,7 +309,6 @@ def plt_pq_wind_from_hc(hc):
     plt.ylabel('Q_wind / S_wind_max')
     plt.legend()
     plt.show()
-
 
 
 if __name__ == '__main__':

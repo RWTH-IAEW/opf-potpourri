@@ -3,7 +3,8 @@ import copy
 from potpourri.models.HC_ACOPF import HC_ACOPF
 from potpourri.models.pyo_to_net import pyo_sol_to_net_res
 from potpourri.models.init_pyo_from_pp_res import init_pyo_from_dcpp
-from scripts.plot_functions import set_plt_config
+from potpourri.plotting.plot_functions import set_plt_config
+config = set_plt_config()
 
 import pandapower as pp
 import pickle
@@ -13,9 +14,6 @@ from pandapower.timeseries import OutputWriter
 import numpy as np
 import matplotlib.pyplot as plt
 
-from rwth_colors import colors
-
-config = set_plt_config()
 
 
 def add_scenario_load_sgen_to_net(net, busses):
@@ -325,8 +323,8 @@ def plot_supply_task_sc(nets, scenarios, case):
     hc_sum = np.array(hc_sum)[sorted_indices]
 
     fig, ax = plt.subplots()
-    ax.bar(range(len(load_sum_sc)), load_sum_sc, label='Last', color=colors['red'])
-    ax.bar(range(len(hc_sum)), hc_sum, label='Netzintegrationspotenzial', color=colors['blue'])
+    ax.bar(range(len(load_sum_sc)), load_sum_sc, label='Last', color="r")
+    ax.bar(range(len(hc_sum)), hc_sum, label='Netzintegrationspotenzial', color="b")
     ax.plot(hc_sum+load_sum_sc, color='black', label='Residuum')
 
     ax.set_xlabel('Szenario')

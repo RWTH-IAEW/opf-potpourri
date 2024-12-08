@@ -7,9 +7,8 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 from potpourri.models.HC_ACOPF import HC_ACOPF
-from scripts.plot_functions import plot_wind_hc_results
+from potpourri.plotting.plot_functions import plot_wind_hc_results, set_plt_config
 from scripts.run_scenarios import create_output_writer
-from scripts.plot_functions import set_plt_config
 
 
 def max_wind_min_loss(net, n=11, **kwargs):

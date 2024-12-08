@@ -2,6 +2,64 @@ import pandapower as pp
 import numpy as np
 import matplotlib.pyplot as plt
 
+def set_plt_config():
+
+    config = {}
+    config['textbreite'] = 16
+    config['textbreite'] = config['textbreite'] / 2.54  # Umrechnung inches
+    # Schriftreihenfolge für Plots (für Boxplots evt extra noch übergeben)
+    colors = ['#00549F', '#407FB7', '#8EBAE5', '#C7DDF2', '#E8F1FA']
+    #           KL         OPF       AU          AUP       Q(U)       P(U)          BL       GR1         GR2
+    #          Blau       Hellblau   Rot       Orange     Violett   Maigrün      Gelb       Lila       Türkis
+    colors = ['#00549F', '#8EBAE5', '#CC071E', '#F6A800', '#612158', '#BDCD00', '#0098A1', '#FFED00', '#7A6FAC',
+              #       AB37        AB74        AB22        ZH
+              #          Grün    #Grün75    Grün50     Schwarz
+              '#57AB27', '#8DC060', '#B8D698', '#000000']
+    default_cycler = plt.cycler(color=colors)
+    config["plot_settings"] = {
+        # Select Backend
+        # 'backend': 'pgf',
+        # "pgf.texsystem": "pdflatex",
+        # Text and Font
+        # 'text.usetex': True,
+        'text.latex.preamble': r'\usepackage{lmodern}',
+        'font.family': 'sans-serif',#'serif',
+        'font.style': 'normal',
+        'text.color': '000000',
+        # 'axes.formatter.use_mathtext': True,
+        # Font sizes
+        'font.size': 10,
+        'axes.titlesize': 10,
+        'axes.labelsize': 10,
+        'xtick.labelsize': 10,
+        'ytick.labelsize': 10,
+        'legend.fontsize': 10,
+        'figure.titlesize': 10,
+        # Size
+        'figure.constrained_layout.use': True,
+        'savefig.dpi': 400,
+        # Grid Lines
+        'axes.axisbelow': True,
+        'grid.linestyle': '--',
+        'grid.linewidth': 0.5,
+        # Legend
+        'legend.fancybox': False,
+        'legend.edgecolor': 'black',
+        'legend.framealpha': 1,
+        'legend.labelspacing': 0.2,
+        'legend.columnspacing': 0.5,
+        ''
+        # # Colors
+        'axes.prop_cycle': default_cycler,
+        # Boxplots
+        # 'boxplot.flierprops.marker': '+',
+        'boxplot.flierprops.markersize': 3.0,
+    }
+    plt.rcParams.update(config["plot_settings"])
+
+    return config
+
+
 def plot_wind_potential(net):
     # create marker trace with marker size scaled according to wind generation
     wind_pot_trace = pp.plotting.create_weighted_marker_trace(net, "bus",
@@ -93,7 +151,6 @@ def plot_sgen_load(net):
 
 
 def plot_pq_gridcodes():
-    plt.style.use('rwth-word')
 
     clrs = ['#00549F', '#000000', '#E30066', '#FFED00', '#006165',
             '#0098A1', '#57AB27', '#BDCD00', '#F6A800', '#CC071E',
@@ -182,7 +239,6 @@ def plot_pq_res(nets, labels=None):
 
 
 def plot_qu_gridcodes():
-    plt.style.use('rwth-word')
 
     clrs = ['#00549F', '#000000', '#E30066', '#FFED00', '#006165',
             '#0098A1', '#57AB27', '#BDCD00', '#F6A800', '#CC071E',

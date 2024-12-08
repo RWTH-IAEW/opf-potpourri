@@ -192,6 +192,8 @@ class Basemodel:
             solver_manager = SolverManagerFactory('neos')
             self.results = solver_manager.solve(self.model, opt=neos_opt, tee=True)
         else:
+            optimizer = SolverFactory(solver)
+
             if max_iter:
                 optimizer.options['max_iter'] = max_iter
 
