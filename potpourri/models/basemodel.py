@@ -1,5 +1,5 @@
 import pandas as pd
-from pyomo.environ import *
+import pyomo.environ as pyo
 from math import pi
 import copy
 import numpy as np
@@ -14,7 +14,7 @@ class Basemodel:
         self.net = copy.deepcopy(net)
         pp.runpp(self.net)
 
-        # --- Sets ---
+        # --- pyo.Sets ---
         bus_set = self.net._ppc['bus'][:, [0, 1, 7, 8]]
         bus_set[:, -1] *= pi / 180
         self.bus_data = pd.DataFrame(bus_set[:, 1:], index=bus_set[:, 0].astype(int), columns=['type', 'v_m', 'v_a_rad'])
@@ -26,7 +26,7 @@ class Basemodel:
         self.bus_demand_set = list(zip(self.bus_lookup[self.net.load.bus[self.demand_set].values], self.demand_set))
         self.bus_shunt_set = list(zip(self.bus_lookup[self.net.shunt.bus[self.shunt_set].values], self.shunt_set))
 
-        # --- Param Data ---
+        # --- pyo.Param Data ---
         self.baseMVA = self.net.sn_mva
 
         self.PD_data = self.net.load.p_mw * self.net.load.scaling / self.baseMVA
@@ -75,76 +75,76 @@ class Basemodel:
             zip(trafo_ind, [2] * len(trafo_ind))), np.concatenate([hv_bus_trafo[trafo_ind], lv_bus_trafo[trafo_ind]])))
 
     def create_model(self):
-        self.model = ConcreteModel()
+        self.model = pyo.ConcreteModel()
 
-        # --- SETS ---
-        self.model.B = Set(initialize=self.bus_data.index)  # buses
-        self.model.b0 = Set(initialize=self.bus_data.index[self.bus_data.type == 3],
+        # --- pyo.SetS ---
+        self.model.B = pyo.Set(initialize=self.bus_data.index)  # buses
+        self.model.b0 = pyo.Set(initialize=self.bus_data.index[self.bus_data.type == 3],
                             within=self.model.B)  # reference buses
-        self.model.bPV = Set(initialize=self.bus_data.index[self.bus_data.type == 2], within=self.model.B)  # PV buses
-        self.model.sG = Set(
+        self.model.bPV = pyo.Set(initialize=self.bus_data.index[self.bus_data.type == 2], within=self.model.B)  # PV buses
+        self.model.sG = pyo.Set(
             initialize=self.static_generation_data.index[self.static_generation_data.in_service])  # static generators
-        self.model.G = Set(
+        self.model.G = pyo.Set(
             initialize=self.generation_data.index[self.generation_data.in_service])  # external grids and generators
-        self.model.eG = Set(initialize=self.generation_data.index[self.generation_data.ref],
+        self.model.eG = pyo.Set(initialize=self.generation_data.index[self.generation_data.ref],
                             within=self.model.G)  # external grids and slack generators
-        self.model.gG = Set(initialize=self.generation_data.index[self.generation_data.ref == False],
+        self.model.gG = pyo.Set(initialize=self.generation_data.index[self.generation_data.ref == False],
                             within=self.model.G)  # generators (not static) not slack
-        self.model.D = Set(initialize=self.demand_set)
-        self.model.L = Set(initialize=self.line_data.index[self.line_data.in_service])
-        self.model.SHUNT = Set(initialize=self.shunt_set)
-        self.model.LE = Set(initialize=[1, 2])
-        self.model.TRANSF = Set(initialize=self.trafo_data.index[self.trafo_data.in_service])
+        self.model.D = pyo.Set(initialize=self.demand_set)
+        self.model.L = pyo.Set(initialize=self.line_data.index[self.line_data.in_service])
+        self.model.SHUNT = pyo.Set(initialize=self.shunt_set)
+        self.model.LE = pyo.Set(initialize=[1, 2])
+        self.model.TRANSF = pyo.Set(initialize=self.trafo_data.index[self.trafo_data.in_service])
 
         # generators, buses, loads linked to each bus b
-        self.model.Dbs = Set(within=self.model.B * self.model.D,
-                             initialize=self.bus_demand_set)  # set of demand-bus mapping
-        self.model.SHUNTbs = Set(within=self.model.B * self.model.SHUNT,
-                                 initialize=self.bus_shunt_set)  # set of shunt-bus mapping
-        self.model.Gbs = Set(within=self.model.G * self.model.B,
+        self.model.Dbs = pyo.Set(within=self.model.B * self.model.D,
+                             initialize=self.bus_demand_set)  # pyo.Set of demand-bus mapping
+        self.model.SHUNTbs = pyo.Set(within=self.model.B * self.model.SHUNT,
+                                 initialize=self.bus_shunt_set)  # pyo.Set of shunt-bus mapping
+        self.model.Gbs = pyo.Set(within=self.model.G * self.model.B,
                              initialize=self.generation_data['gen_bus'][self.model.G])
-        self.model.sGbs = Set(within=self.model.sG * self.model.B,
+        self.model.sGbs = pyo.Set(within=self.model.sG * self.model.B,
                               initialize=self.static_generation_data['gen_bus'][self.model.sG])
 
-        # --- parameters ---
+        # --- pyo.Parameters ---
         # line and trafo matrix
-        self.model.A = Param(self.model.L * self.model.LE, initialize=self.bus_line_dict)  # bus-line matrix
-        self.model.AT = Param(self.model.TRANSF * self.model.LE,
+        self.model.A = pyo.Param(self.model.L * self.model.LE, initialize=self.bus_line_dict)  # bus-line matrix
+        self.model.AT = pyo.Param(self.model.TRANSF * self.model.LE,
                               initialize=self.bus_trafo_dict)  # bus-transformer matrix
 
         # generation
-        self.model.PsG = Param(self.model.sG, initialize=self.static_generation_data.p[self.model.sG])
-        self.model.PG = Param(self.model.G, initialize=self.generation_data.pg[self.model.G])
+        self.model.PsG = pyo.Param(self.model.sG, initialize=self.static_generation_data.p[self.model.sG])
+        self.model.PG = pyo.Param(self.model.G, initialize=self.generation_data.pg[self.model.G])
 
         # demand
-        self.model.PD = Param(self.model.D, initialize=self.PD_data[self.model.D])
+        self.model.PD = pyo.Param(self.model.D, initialize=self.PD_data[self.model.D])
 
         # shunt
-        self.model.GB = Param(self.model.SHUNT, within=Reals,
+        self.model.GB = pyo.Param(self.model.SHUNT, within=pyo.Reals,
                               initialize=self.GB_data[self.model.SHUNT])  # shunt conductance
 
         # trafo
-        self.model.shift = Param(self.model.TRANSF, within=Reals, initialize=self.trafo_data.shift_rad[
+        self.model.shift = pyo.Param(self.model.TRANSF, within=pyo.Reals, initialize=self.trafo_data.shift_rad[
             self.model.TRANSF])  # transformer phase shift in rad
 
         # external grid voltage angle
-        self.model.delta_b0 = Param(self.model.b0, within=Reals, initialize=self.bus_data.v_a_rad[self.model.b0])
+        self.model.delta_b0 = pyo.Param(self.model.b0, within=pyo.Reals, initialize=self.bus_data.v_a_rad[self.model.b0])
 
         # baseMVA of the net
-        self.model.baseMVA = Param(within=NonNegativeReals, initialize=self.baseMVA)
+        self.model.baseMVA = pyo.Param(within=pyo.NonNegativeReals, initialize=self.baseMVA)
 
-        # --- variables ---
-        self.model.delta = Var(self.model.B, domain=Reals, initialize=0.0,
+        # --- Variables ---
+        self.model.delta = pyo.Var(self.model.B, domain=pyo.Reals, initialize=0.0,
                                bounds=(-pi, pi))  # voltage phase angle at bus b, rad
-        self.model.pD = Var(self.model.D, domain=Reals)  # real power demand delivered
-        self.model.psG = Var(self.model.sG, domain=NonNegativeReals)  # real static generator power
-        self.model.pG = Var(self.model.G, domain=Reals,
+        self.model.pD = pyo.Var(self.model.D, domain=pyo.Reals)  # real power demand delivered
+        self.model.psG = pyo.Var(self.model.sG, domain=pyo.NonNegativeReals)  # real static generator power
+        self.model.pG = pyo.Var(self.model.G, domain=pyo.Reals,
                             initialize=self.model.PG)  # real power injection from static generators
-        self.model.pLfrom = Var(self.model.L, domain=Reals)  # real power injected at b onto line
-        self.model.pLto = Var(self.model.L, domain=Reals)  # real power injected at b' onto line
-        self.model.pThv = Var(self.model.TRANSF, domain=Reals)  # real power injected at b onto transformer
-        self.model.pTlv = Var(self.model.TRANSF, domain=Reals)  # real power injected at b' onto transformer
-        self.model.Tap = Var(self.model.TRANSF, domain=Reals,
+        self.model.pLfrom = pyo.Var(self.model.L, domain=pyo.Reals)  # real power injected at b onto line
+        self.model.pLto = pyo.Var(self.model.L, domain=pyo.Reals)  # real power injected at b' onto line
+        self.model.pThv = pyo.Var(self.model.TRANSF, domain=pyo.Reals)  # real power injected at b onto transformer
+        self.model.pTlv = pyo.Var(self.model.TRANSF, domain=pyo.Reals)  # real power injected at b' onto transformer
+        self.model.Tap = pyo.Var(self.model.TRANSF, domain=pyo.Reals,
                              initialize=self.trafo_data.tap[self.model.TRANSF])  # transformer tap ratio
 
         # transformer tap ratio
@@ -169,7 +169,7 @@ class Basemodel:
               mip_solver='gurobi', max_iter=None, time_limit=600, init_strategy='rNLP', neos_opt='ipopt'):
 
         if solver == 'mindtpy':
-            optimizer = SolverFactory(solver)
+            optimizer = pyo.SolverFactory(solver)
             if not max_iter:
                 max_iter = 50
 
@@ -189,10 +189,10 @@ class Basemodel:
             #                                    tee=print_solver_output, iteration_limit=max_iter, time_limit=time_limit)
         elif solver == 'neos':
             os.environ['NEOS_EMAIL'] = "ben.jamin@bluem-chen.de"
-            solver_manager = SolverManagerFactory('neos')
+            solver_manager = pyo.SolverManagerFactory('neos')
             self.results = solver_manager.solve(self.model, opt=neos_opt, tee=True)
         else:
-            optimizer = SolverFactory(solver)
+            optimizer = pyo.SolverFactory(solver)
 
             if max_iter:
                 optimizer.options['max_iter'] = max_iter
@@ -200,7 +200,7 @@ class Basemodel:
             self.results = optimizer.solve(self.model, load_solutions=load_solutions, tee=print_solver_output)
 
         try:
-            if check_optimal_termination(self.results) & to_net:
+            if pyo.check_optimal_termination(self.results) & to_net:
                 pyo_sol_to_net_res(self.net, self.model)
         except AttributeError as err:
             print(err)

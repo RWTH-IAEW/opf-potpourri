@@ -1,5 +1,5 @@
 import pandas as pd
-from pyomo.environ import *
+import pyomo.environ as pyo
 from potpourri.models.AC import AC
 from potpourri.models.OPF import OPF
 import numpy as np
@@ -81,10 +81,10 @@ class ACOPF(AC, OPF):
                 bound_gens = self.net["gen"].index.values[v_max_bound]
                 print("gen max_vm_pu > bus max_vm_pu for gens {}. "
                       "Setting bus limit for these gens.".format(bound_gens))
-                # set only vm of gens which do not violate the limits
+                # pyo.Set only vm of gens which do not violate the limits
                 max_vm_pu[gen_buses[~v_max_bound]] = self.net["gen"]["max_vm_pu"].values[~v_max_bound]
             else:
-                # set vm of all gens
+                # pyo.Set vm of all gens
                 max_vm_pu[gen_buses] = self.net["gen"]["max_vm_pu"].values
 
         if "min_vm_pu" in self.net["gen"].columns:
@@ -93,17 +93,17 @@ class ACOPF(AC, OPF):
                 bound_gens = self.net["gen"].index.values[v_min_bound]
                 print("gen min_vm_pu < bus min_vm_pu for gens {}. "
                       "Setting bus limit for these gens.".format(bound_gens))
-                # set only vm of gens which do not violate the limits
+                # pyo.Set only vm of gens which do not violate the limits
                 min_vm_pu[gen_buses[~v_min_bound]] = self.net["gen"]["min_vm_pu"].values[~v_min_bound]
             else:
-                # set vm of all gens
+                # pyo.Set vm of all gens
                 min_vm_pu[gen_buses] = self.net["gen"]["min_vm_pu"].values
 
         if 'controllable' in self.net.gen:
             controllable = self.net["gen"]["controllable"].values
             not_controllable = ~controllable.astype(bool)
 
-            # get voltage setpoints for not controllable generators
+            # get voltage pyo.Setpoints for not controllable generators
             if np.any(not_controllable):
                 bus = self.net["gen"]["bus"].values[not_controllable]
                 vm_pu = self.net["gen"]["vm_pu"].values[not_controllable]
@@ -181,35 +181,35 @@ class ACOPF(AC, OPF):
 
         self.model.name = "ACOPF"
 
-        # --- sets ---
+        # --- pyo.Sets ---
         # generators for hc calculation
-        self.model.WIND_HC = Set(within=self.model.sG, initialize=self.static_generation_data.index[
+        self.model.WIND_HC = pyo.Set(within=self.model.sG, initialize=self.static_generation_data.index[
             self.static_generation_data['wind_hc'] & self.static_generation_data.in_service])
         # all wind generators
-        self.model.WIND = self.model.WIND_HC | Set(within=self.model.sG, initialize=self.static_generation_data.index[(self.static_generation_data['type'] == 'Wind') & self.static_generation_data.in_service])
+        self.model.WIND = self.model.WIND_HC | pyo.Set(within=self.model.sG, initialize=self.static_generation_data.index[(self.static_generation_data['type'] == 'Wind') & self.static_generation_data.in_service])
         # controllable wind generators, not for hc calculation
-        self.model.WINDc = self.model.WIND & self.model.sGc & Set(initialize=self.static_generation_data.index[self.static_generation_data['var_q'].values != None])
+        self.model.WINDc = self.model.WIND & self.model.sGc & pyo.Set(initialize=self.static_generation_data.index[self.static_generation_data['var_q'].values != None])
 
-        self.model.var_q = Param(self.model.WINDc, initialize=self.static_generation_data['var_q'][self.model.WINDc])
-        self.model.PsG_inst = Param(self.model.WINDc, initialize=self.static_generation_data['p_inst'][self.model.WINDc])
+        self.model.var_q = pyo.Param(self.model.WINDc, initialize=self.static_generation_data['var_q'][self.model.WINDc])
+        self.model.PsG_inst = pyo.Param(self.model.WINDc, initialize=self.static_generation_data['p_inst'][self.model.WINDc])
 
         # voltage limits
-        self.model.Vmax = Param(self.model.B, within=NonNegativeReals,
+        self.model.Vmax = pyo.Param(self.model.B, within =pyo.NonNegativeReals,
                                 initialize=self.v_limits[0][self.model.B])  # max voltage (p.u.)
-        self.model.Vmin = Param(self.model.B, within=NonNegativeReals,
+        self.model.Vmin = pyo.Param(self.model.B, within =pyo.NonNegativeReals,
                                 initialize=self.v_limits[1][self.model.B])  # min voltage (p.u.)
 
         # generation reactive power limits
-        self.model.QGmax = Param(self.model.G, initialize=self.generation_data['max_q'][self.model.G])
-        self.model.QGmin = Param(self.model.G, initialize=self.generation_data['min_q'][self.model.G])
+        self.model.QGmax = pyo.Param(self.model.G, initialize=self.generation_data['max_q'][self.model.G])
+        self.model.QGmin = pyo.Param(self.model.G, initialize=self.generation_data['min_q'][self.model.G])
 
         # static generation reactive power limits
-        self.model.QsGmax = Param(self.model.sGc, within=Reals, initialize=self.static_generation_data['max_q'][self.model.sGc], mutable=True)
-        self.model.QsGmin = Param(self.model.sGc, within=Reals, initialize=self.static_generation_data['min_q'][self.model.sGc], mutable=True)
+        self.model.QsGmax = pyo.Param(self.model.sGc, within =pyo.Reals, initialize=self.static_generation_data['max_q'][self.model.sGc], mutable=True)
+        self.model.QsGmin = pyo.Param(self.model.sGc, within =pyo.Reals, initialize=self.static_generation_data['min_q'][self.model.sGc], mutable=True)
 
         # reactive demand
-        self.model.QDmax = Param(self.model.D, initialize=self.QDmax_data[self.model.D])
-        self.model.QDmin = Param(self.model.D, initialize=self.QDmin_data[self.model.D])
+        self.model.QDmax = pyo.Param(self.model.D, initialize=self.QDmax_data[self.model.D])
+        self.model.QDmin = pyo.Param(self.model.D, initialize=self.QDmin_data[self.model.D])
 
         # --- cost function ---
         # def objective(model):
@@ -228,8 +228,8 @@ class ACOPF(AC, OPF):
         def line_lim_to_def(model, l):
             return model.pLto[l] ** 2 + model.qLto[l] ** 2 <= model.SLmax[l] ** 2 * model.v[model.A[l, 2]] ** 2
 
-        self.model.line_lim_from = Constraint(self.model.L, rule=line_lim_from_def)
-        self.model.line_lim_to = Constraint(self.model.L, rule=line_lim_to_def)
+        self.model.line_lim_from = pyo.Constraint(self.model.L, rule=line_lim_from_def)
+        self.model.line_lim_to = pyo.Constraint(self.model.L, rule=line_lim_to_def)
 
         # --- power flow limits on transformer lines---
         def transf_lim1_def(model, l):
@@ -238,37 +238,37 @@ class ACOPF(AC, OPF):
         def transf_lim2_def(model, l):
             return model.pTlv[l] ** 2 + model.qTlv[l] ** 2 <= model.SLmaxT[l] ** 2 * model.v[model.AT[l, 2]] ** 2
 
-        self.model.transf_lim1 = Constraint(self.model.TRANSF, rule=transf_lim1_def)
-        self.model.transf_lim2 = Constraint(self.model.TRANSF, rule=transf_lim2_def)
+        self.model.transf_lim1 = pyo.Constraint(self.model.TRANSF, rule=transf_lim1_def)
+        self.model.transf_lim2 = pyo.Constraint(self.model.TRANSF, rule=transf_lim2_def)
 
         # --- static generation reactive power limits ---
         def static_generation_reactive_power_bounds(model, g):
             model.qsG[g].unfix()
             return model.QsGmin[g], model.qsG[g], model.QsGmax[g]
 
-        self.model.QsG_Constraint = Constraint(self.model.sGc, rule=static_generation_reactive_power_bounds)
+        self.model.QsG_pyo.Constraint = pyo.Constraint(self.model.sGc, rule=static_generation_reactive_power_bounds)
 
         # --- reactive generator power limits ---
         def reactive_power_bounds(model, g):
             model.qG[g].unfix()
             return model.QGmin[g], model.qG[g], model.QGmax[g]
 
-        self.model.QG_Constraint = Constraint(self.model.G, rule=reactive_power_bounds)
+        self.model.QG_pyo.Constraint = pyo.Constraint(self.model.G, rule=reactive_power_bounds)
 
         # --- reactive demand limits ---
         def reactive_demand_bounds(model, d):
             model.qD[d].unfix()
             return model.QDmin[d], model.qD[d], model.QDmax[d]
 
-        self.model.QD_Constraint = Constraint(self.model.Dc, rule=reactive_demand_bounds)
+        self.model.QD_pyo.Constraint = pyo.Constraint(self.model.Dc, rule=reactive_demand_bounds)
 
-        # --- voltage constraints ---
+        # --- voltage pyo.Constraints ---
         self.model.v_bPV_setpoint.deactivate()
 
         def v_bounds(model, b):
             return model.Vmin[b], model.v[b], model.Vmax[b]
 
-        self.model.v_constraint = Constraint(self.model.B, rule=v_bounds)
+        self.model.v_pyo.Constraint = pyo.Constraint(self.model.B, rule=v_bounds)
 
         # --- wind generation q requirements variant 3---
         def QW_pos(model, w):
@@ -277,31 +277,31 @@ class ACOPF(AC, OPF):
         def QW_neg(model, w):
             return model.qsG[w] >= self.q_limit_parameter.b_qp_min[model.var_q[w]] * model.PsG_inst[w] + self.q_limit_parameter.m_qp_min[model.var_q[w]] * model.psG[w]
 
-        self.model.QW_pos_constraint = Constraint(self.model.WINDc, rule=QW_pos)
-        self.model.QW_neg_constraint = Constraint(self.model.WINDc, rule=QW_neg)
+        self.model.QW_pos_pyo.Constraint = pyo.Constraint(self.model.WINDc, rule=QW_pos)
+        self.model.QW_neg_pyo.Constraint = pyo.Constraint(self.model.WINDc, rule=QW_neg)
 
         #
         def QV_min(model, w):
             for (g, b) in model.sGbs:
                 if g == w:
                     return model.qsG[w] >= (self.q_limit_parameter.m_qv[model.var_q[w]] * model.v[b] + self.q_limit_parameter.b_qv_min[model.var_q[w]]) * model.PsG_inst[w]
-        self.model.QU_min_constraint = Constraint(self.model.WINDc, rule=QV_min)
+        self.model.QU_min_pyo.Constraint = pyo.Constraint(self.model.WINDc, rule=QV_min)
 
         def QV_max(model, w):
             for (g, b) in model.sGbs:
                 if g == w:
                     return model.qsG[w] <= (self.q_limit_parameter.m_qv[model.var_q[w]] * model.v[b] + self.q_limit_parameter.b_qv_max[model.var_q[w]]) * model.PsG_inst[w]
-        self.model.QU_max_constraint = Constraint(self.model.WINDc, rule=QV_max)
+        self.model.QU_max_pyo.Constraint = pyo.Constraint(self.model.WINDc, rule=QV_max)
 
 
     def add_voltage_deviation_objective(self):
-        self.model.vm = Param(self.model.B, initialize=self.bus_data['v_m'][self.model.B])
+        self.model.vm = pyo.Param(self.model.B, initialize=self.bus_data['v_m'][self.model.B])
 
         def voltage_deviation_objective(model):
             return sum((model.v[b] - 1.) ** 2 for b in model.B - model.b0) + \
                    sum((model.v[b] - model.v_b0[b]) ** 2 for b in model.b0)
 
-        self.model.obj_v_deviation = Objective(rule=voltage_deviation_objective, sense=minimize)
+        self.model.obj_v_deviation = pyo.Objective(rule=voltage_deviation_objective, sense=pyo.minimize)
 
     def add_reactive_power_flow_objective(self):
 
@@ -309,4 +309,4 @@ class ACOPF(AC, OPF):
             # Minimize the reactive power
             return sum(model.qsG[g] ** 2 for g in model.sG)
 
-        self.model.obj_reactive = Objective(rule=reactive_objective, sense=minimize)
+        self.model.obj_reactive = pyo.Objective(rule=reactive_objective, sense=pyo.minimize)

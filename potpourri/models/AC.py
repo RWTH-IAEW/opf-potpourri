@@ -1,4 +1,4 @@
-from pyomo.environ import *
+import pyomo.environ as pyo
 from potpourri.models.basemodel import Basemodel
 
 
@@ -44,49 +44,49 @@ class AC(Basemodel):
         self.model.name = "AC"
 
         # shunt
-        self.model.BB = Param(self.model.SHUNT, within=Reals,
+        self.model.BB = pyo.Param(self.model.SHUNT, within=pyo.Reals,
                               initialize=self.BB_data[self.model.SHUNT])  # shunt susceptance
 
-        # derived line parameters
-        self.model.Bii = Param(self.model.L, within=Reals, initialize=self.line_data.Bii_data[self.model.L])
-        self.model.Bik = Param(self.model.L, within=Reals, initialize=self.line_data.Bik_data[self.model.L])
-        self.model.Gii = Param(self.model.L, within=Reals, initialize=self.line_data.Gii_data[self.model.L])
-        self.model.Gik = Param(self.model.L, within=Reals, initialize=self.line_data.Gik_data[self.model.L])
+        # derived line pyo.Parameters
+        self.model.Bii = pyo.Param(self.model.L, within=pyo.Reals, initialize=self.line_data.Bii_data[self.model.L])
+        self.model.Bik = pyo.Param(self.model.L, within=pyo.Reals, initialize=self.line_data.Bik_data[self.model.L])
+        self.model.Gii = pyo.Param(self.model.L, within=pyo.Reals, initialize=self.line_data.Gii_data[self.model.L])
+        self.model.Gik = pyo.Param(self.model.L, within=pyo.Reals, initialize=self.line_data.Gik_data[self.model.L])
 
-        ## derived transformer parameters
-        self.model.BiiT = Param(self.model.TRANSF, within=Reals,
+        ## derived transformer pyo.Parameters
+        self.model.BiiT = pyo.Param(self.model.TRANSF, within=pyo.Reals,
                                 initialize=self.trafo_data.BiiT_data[self.model.TRANSF])
-        self.model.BikT = Param(self.model.TRANSF, within=Reals,
+        self.model.BikT = pyo.Param(self.model.TRANSF, within=pyo.Reals,
                                 initialize=self.trafo_data.BikT_data[self.model.TRANSF])
-        self.model.GiiT = Param(self.model.TRANSF, within=Reals,
+        self.model.GiiT = pyo.Param(self.model.TRANSF, within=pyo.Reals,
                                 initialize=self.trafo_data.GiiT_data[self.model.TRANSF])
-        self.model.GikT = Param(self.model.TRANSF, within=Reals,
+        self.model.GikT = pyo.Param(self.model.TRANSF, within=pyo.Reals,
                                 initialize=self.trafo_data.GikT_data[self.model.TRANSF])
 
         # reactive generation
-        self.model.QsG = Param(self.model.sG, initialize=self.static_generation_data['q'][self.model.sG])
+        self.model.QsG = pyo.Param(self.model.sG, initialize=self.static_generation_data['q'][self.model.sG])
 
-        self.model.v_bPV = Param(self.model.bPV, within=NonNegativeReals, initialize=self.bus_data.v_m[self.model.bPV])
+        self.model.v_bPV = pyo.Param(self.model.bPV, within=pyo.NonNegativeReals, initialize=self.bus_data.v_m[self.model.bPV])
 
         # reactive demand
-        self.model.QD = Param(self.model.D, initialize=self.QD_data[self.model.D])
+        self.model.QD = pyo.Param(self.model.D, initialize=self.QD_data[self.model.D])
 
         # external grid voltage
-        self.model.v_b0 = Param(self.model.b0, within=NonNegativeReals, initialize=self.bus_data.v_m[self.model.b0])
+        self.model.v_b0 = pyo.Param(self.model.b0, within=pyo.NonNegativeReals, initialize=self.bus_data.v_m[self.model.b0])
 
-        # --- control variables ---
-        self.model.qsG = Var(self.model.sG, domain=Reals)  # reactive power of static generators
+        # --- control pyo.Variables ---
+        self.model.qsG = pyo.Var(self.model.sG, domain=pyo.Reals)  # reactive power of static generators
 
-        self.model.qD = Var(self.model.D, domain=Reals)  # reactive power absorbed by demand
+        self.model.qD = pyo.Var(self.model.D, domain=pyo.Reals)  # reactive power absorbed by demand
 
-        self.model.qLfrom = Var(self.model.L, domain=Reals)  # reactive power injected at b onto line
-        self.model.qLto = Var(self.model.L, domain=Reals)  # reactive power injected at b' onto line
-        self.model.qThv = Var(self.model.TRANSF, domain=Reals)  # reactive power injected at b onto transformer
-        self.model.qTlv = Var(self.model.TRANSF, domain=Reals)  # reactive power injected at b' onto transformer
+        self.model.qLfrom = pyo.Var(self.model.L, domain=pyo.Reals)  # reactive power injected at b onto line
+        self.model.qLto = pyo.Var(self.model.L, domain=pyo.Reals)  # reactive power injected at b' onto line
+        self.model.qThv = pyo.Var(self.model.TRANSF, domain=pyo.Reals)  # reactive power injected at b onto transformer
+        self.model.qTlv = pyo.Var(self.model.TRANSF, domain=pyo.Reals)  # reactive power injected at b' onto transformer
 
-        self.model.v = Var(self.model.B, domain=NonNegativeReals, initialize=1.0)  # voltage magnitude at bus b, rad
+        self.model.v = pyo.Var(self.model.B, domain=pyo.NonNegativeReals, initialize=1.0)  # voltage magnitude at bus b, rad
 
-        self.model.qG = Var(self.model.G, domain=Reals)
+        self.model.qG = pyo.Var(self.model.G, domain=pyo.Reals)
 
         # --- Kirchoff's current law at each bus b ---
         def KCL_real_def(model, b):
@@ -100,7 +100,7 @@ class AC(Basemodel):
                   sum(model.GB[s] * model.v[b] ** 2 for s in model.SHUNT if
                       (b, s) in model.SHUNTbs and model.GB[s] != 0)
             if isinstance(kcl, bool):
-                return Constraint.Skip
+                return pyo.Constraint.Skip
             return kcl
 
         def KCL_reactive_def(model, b):
@@ -114,103 +114,103 @@ class AC(Basemodel):
                   sum(model.BB[s] * model.v[b] ** 2 for s in model.SHUNT if
                       (b, s) in model.SHUNTbs and model.BB[s] != 0)
             if isinstance(kcl, bool):
-                return Constraint.Skip
+                return pyo.Constraint.Skip
             return kcl
 
-        self.model.KCL_real = Constraint(self.model.B, rule=KCL_real_def)
-        self.model.KCL_reactive = Constraint(self.model.B, rule=KCL_reactive_def)
+        self.model.KCL_real = pyo.Constraint(self.model.B, rule=KCL_real_def)
+        self.model.KCL_reactive = pyo.Constraint(self.model.B, rule=KCL_reactive_def)
 
         # --- Kirchoff's voltage law on each line ---
         def KVL_real_fromend(model, l):
             return model.pLfrom[l] == model.Gii[l] * (model.v[model.A[l, 1]] ** 2) + \
                 model.v[model.A[l, 1]] * model.v[model.A[l, 2]] * (
-                        model.Bik[l] * sin(model.delta[model.A[l, 1]] - model.delta[model.A[l, 2]]) +
-                        model.Gik[l] * cos(model.delta[model.A[l, 1]] - model.delta[model.A[l, 2]]))
+                        model.Bik[l] * pyo.sin(model.delta[model.A[l, 1]] - model.delta[model.A[l, 2]]) +
+                        model.Gik[l] * pyo.cos(model.delta[model.A[l, 1]] - model.delta[model.A[l, 2]]))
 
         def KVL_real_toend(model, l):
             return model.pLto[l] == model.Gii[l] * (model.v[model.A[l, 2]] ** 2) + \
                 model.v[model.A[l, 1]] * model.v[model.A[l, 2]] * (
-                        model.Bik[l] * sin(model.delta[model.A[l, 2]] - model.delta[model.A[l, 1]]) +
-                        model.Gik[l] * cos(model.delta[model.A[l, 2]] - model.delta[model.A[l, 1]]))
+                        model.Bik[l] * pyo.sin(model.delta[model.A[l, 2]] - model.delta[model.A[l, 1]]) +
+                        model.Gik[l] * pyo.cos(model.delta[model.A[l, 2]] - model.delta[model.A[l, 1]]))
 
         def KVL_reactive_fromend(model, l):
             return model.qLfrom[l] == -model.Bii[l] * (model.v[model.A[l, 1]] ** 2) + \
                 model.v[model.A[l, 1]] * model.v[model.A[l, 2]] * (
-                        model.Gik[l] * sin(model.delta[model.A[l, 1]] - model.delta[model.A[l, 2]]) -
-                        model.Bik[l] * cos(model.delta[model.A[l, 1]] - model.delta[model.A[l, 2]]))
+                        model.Gik[l] * pyo.sin(model.delta[model.A[l, 1]] - model.delta[model.A[l, 2]]) -
+                        model.Bik[l] * pyo.cos(model.delta[model.A[l, 1]] - model.delta[model.A[l, 2]]))
 
         def KVL_reactive_toend(model, l):
             return model.qLto[l] == -model.Bii[l] * (model.v[model.A[l, 2]] ** 2) + \
                 model.v[model.A[l, 1]] * model.v[model.A[l, 2]] * (
-                        model.Gik[l] * sin(model.delta[model.A[l, 2]] - model.delta[model.A[l, 1]]) -
-                        model.Bik[l] * cos(model.delta[model.A[l, 2]] - model.delta[model.A[l, 1]]))
+                        model.Gik[l] * pyo.sin(model.delta[model.A[l, 2]] - model.delta[model.A[l, 1]]) -
+                        model.Bik[l] * pyo.cos(model.delta[model.A[l, 2]] - model.delta[model.A[l, 1]]))
 
-        self.model.KVL_real_from = Constraint(self.model.L, rule=KVL_real_fromend)
-        self.model.KVL_real_to = Constraint(self.model.L, rule=KVL_real_toend)
-        self.model.KVL_reactive_from = Constraint(self.model.L, rule=KVL_reactive_fromend)
-        self.model.KVL_reactive_to = Constraint(self.model.L, rule=KVL_reactive_toend)
+        self.model.KVL_real_from = pyo.Constraint(self.model.L, rule=KVL_real_fromend)
+        self.model.KVL_real_to = pyo.Constraint(self.model.L, rule=KVL_real_toend)
+        self.model.KVL_reactive_from = pyo.Constraint(self.model.L, rule=KVL_reactive_fromend)
+        self.model.KVL_reactive_to = pyo.Constraint(self.model.L, rule=KVL_reactive_toend)
 
         # --- Kirchoff's voltage law on each transformer line ---
         def KVL_real_fromendTransf(model, l):
             if model.shift[l]:
                 return model.pThv[l] == model.GiiT[l] / model.Tap[l] ** 2 * (model.v[model.AT[l, 1]] ** 2) + \
                     model.v[model.AT[l, 1]] * model.v[model.AT[l, 2]] / model.Tap[l] * (
-                            model.GikT[l] * cos(
+                            model.GikT[l] * pyo.cos(
                         model.delta[model.AT[l, 1]] - model.delta[model.AT[l, 2]] - model.shift[l]) +
-                            model.BikT[l] * sin(
+                            model.BikT[l] * pyo.sin(
                         model.delta[model.AT[l, 1]] - model.delta[model.AT[l, 2]] - model.shift[l]))
 
             return model.pThv[l] == model.GiiT[l] / model.Tap[l] ** 2 * (model.v[model.AT[l, 1]] ** 2) + \
                 model.v[model.AT[l, 1]] * model.v[model.AT[l, 2]] / model.Tap[l] * (
-                        model.GikT[l] * cos(model.delta[model.AT[l, 1]] - model.delta[model.AT[l, 2]]) +
-                        model.BikT[l] * sin(model.delta[model.AT[l, 1]] - model.delta[model.AT[l, 2]]))
+                        model.GikT[l] * pyo.cos(model.delta[model.AT[l, 1]] - model.delta[model.AT[l, 2]]) +
+                        model.BikT[l] * pyo.sin(model.delta[model.AT[l, 1]] - model.delta[model.AT[l, 2]]))
 
         def KVL_real_toendTransf(model, l):
             if model.shift[l]:
                 return model.pTlv[l] == model.GiiT[l] * (model.v[model.AT[l, 2]] ** 2) + \
                     model.v[model.AT[l, 1]] * model.v[model.AT[l, 2]] / model.Tap[l] * (
-                            model.BikT[l] * sin(
+                            model.BikT[l] * pyo.sin(
                         model.delta[model.AT[l, 2]] - model.delta[model.AT[l, 1]] + model.shift[l]) +
-                            model.GikT[l] * cos(
+                            model.GikT[l] * pyo.cos(
                         model.delta[model.AT[l, 2]] - model.delta[model.AT[l, 1]] + model.shift[l]))
 
             return model.pTlv[l] == model.GiiT[l] * (model.v[model.AT[l, 2]] ** 2) + \
                 model.v[model.AT[l, 1]] * model.v[model.AT[l, 2]] / model.Tap[l] * (
-                        model.BikT[l] * sin(model.delta[model.AT[l, 2]] - model.delta[model.AT[l, 1]]) +
-                        model.GikT[l] * cos(model.delta[model.AT[l, 2]] - model.delta[model.AT[l, 1]]))
+                        model.BikT[l] * pyo.sin(model.delta[model.AT[l, 2]] - model.delta[model.AT[l, 1]]) +
+                        model.GikT[l] * pyo.cos(model.delta[model.AT[l, 2]] - model.delta[model.AT[l, 1]]))
 
         def KVL_reactive_fromendTransf(model, l):
             if model.shift[l]:
                 return model.qThv[l] == -model.BiiT[l] / model.Tap[l] ** 2 * (model.v[model.AT[l, 1]] ** 2) + \
                     model.v[model.AT[l, 1]] * model.v[model.AT[l, 2]] / model.Tap[l] * (
-                            - model.BikT[l] * cos(
+                            - model.BikT[l] * pyo.cos(
                         model.delta[model.AT[l, 1]] - model.delta[model.AT[l, 2]] - model.shift[l]) +
-                            model.GikT[l] * sin(
+                            model.GikT[l] * pyo.sin(
                         model.delta[model.AT[l, 1]] - model.delta[model.AT[l, 2]] - model.shift[l]))
 
             return model.qThv[l] == -model.BiiT[l] / model.Tap[l] ** 2 * (model.v[model.AT[l, 1]] ** 2) + \
                 model.v[model.AT[l, 1]] * model.v[model.AT[l, 2]] / model.Tap[l] * (
-                        - model.BikT[l] * cos(model.delta[model.AT[l, 1]] - model.delta[model.AT[l, 2]]) +
-                        model.GikT[l] * sin(model.delta[model.AT[l, 1]] - model.delta[model.AT[l, 2]]))
+                        - model.BikT[l] * pyo.cos(model.delta[model.AT[l, 1]] - model.delta[model.AT[l, 2]]) +
+                        model.GikT[l] * pyo.sin(model.delta[model.AT[l, 1]] - model.delta[model.AT[l, 2]]))
 
         def KVL_reactive_toendTransf(model, l):
             if model.shift[l]:
                 return model.qTlv[l] == -model.BiiT[l] * (model.v[model.AT[l, 2]] ** 2) + \
                     model.v[model.AT[l, 1]] * model.v[model.AT[l, 2]] / model.Tap[l] * (
-                            - model.BikT[l] * cos(
+                            - model.BikT[l] * pyo.cos(
                         model.delta[model.AT[l, 2]] - model.delta[model.AT[l, 1]] + model.shift[l]) +
-                            model.GikT[l] * sin(
+                            model.GikT[l] * pyo.sin(
                         model.delta[model.AT[l, 2]] - model.delta[model.AT[l, 1]] + model.shift[l]))
 
             return model.qTlv[l] == -model.BiiT[l] * (model.v[model.AT[l, 2]] ** 2) + \
                 model.v[model.AT[l, 1]] * model.v[model.AT[l, 2]] / model.Tap[l] * (
-                        - model.BikT[l] * cos(model.delta[model.AT[l, 2]] - model.delta[model.AT[l, 1]]) +
-                        model.GikT[l] * sin(model.delta[model.AT[l, 2]] - model.delta[model.AT[l, 1]]))
+                        - model.BikT[l] * pyo.cos(model.delta[model.AT[l, 2]] - model.delta[model.AT[l, 1]]) +
+                        model.GikT[l] * pyo.sin(model.delta[model.AT[l, 2]] - model.delta[model.AT[l, 1]]))
 
-        self.model.KVL_real_fromTransf = Constraint(self.model.TRANSF, rule=KVL_real_fromendTransf)
-        self.model.KVL_real_toTransf = Constraint(self.model.TRANSF, rule=KVL_real_toendTransf)
-        self.model.KVL_reactive_fromTransf = Constraint(self.model.TRANSF, rule=KVL_reactive_fromendTransf)
-        self.model.KVL_reactive_toTransf = Constraint(self.model.TRANSF, rule=KVL_reactive_toendTransf)
+        self.model.KVL_real_fromTransf = pyo.Constraint(self.model.TRANSF, rule=KVL_real_fromendTransf)
+        self.model.KVL_real_toTransf = pyo.Constraint(self.model.TRANSF, rule=KVL_real_toendTransf)
+        self.model.KVL_reactive_fromTransf = pyo.Constraint(self.model.TRANSF, rule=KVL_reactive_fromendTransf)
+        self.model.KVL_reactive_toTransf = pyo.Constraint(self.model.TRANSF, rule=KVL_reactive_toendTransf)
 
         # --- reactive generator power limits ---
         # for g in self.model.sG:
@@ -223,8 +223,8 @@ class AC(Basemodel):
         # --- generator voltage operating point ---
         def v_bPV_setpoint_rule(model, b):
             return model.v[b] == model.v_bPV[b]
-        self.model.v_bPV_setpoint = Constraint(self.model.bPV, rule=v_bPV_setpoint_rule)
+        self.model.v_bPV_setpoint = pyo.Constraint(self.model.bPV, rule=v_bPV_setpoint_rule)
 
-        # --- reference bus voltage constraint ---
+        # --- reference bus voltage pyo.Constraint ---
         for b0 in self.model.b0:
             self.model.v[b0].fix(self.model.v_b0[b0])

@@ -1,4 +1,4 @@
-from pyomo.environ import *
+import pyomo.environ as pyo
 from potpourri.models.basemodel import Basemodel
 
 
@@ -30,13 +30,13 @@ class DC(Basemodel):
         self.model.name = "DC"
 
         # lines and transformer chracteristics
-        self.model.BL = Param(self.model.L, within=Reals, initialize=self.BL_data[self.model.L])  # susceptance of a line
-        self.model.BLT = Param(self.model.TRANSF, within=Reals,
+        self.model.BL = pyo.Param(self.model.L, within=pyo.Reals, initialize=self.BL_data[self.model.L])  # susceptance of a line
+        self.model.BLT = pyo.Param(self.model.TRANSF, within=pyo.Reals,
                                initialize=self.trafo_data.BLT_data[self.model.TRANSF])  # susceptance of a transformer
 
-        # --- Variables ---
-        self.model.deltaL = Var(self.model.L, domain=Reals)  # angle difference across lines
-        self.model.deltaLT = Var(self.model.TRANSF, domain=Reals)  # angle difference across transformers
+        # --- pyo.Variables ---
+        self.model.deltaL = pyo.Var(self.model.L, domain=pyo.Reals)  # angle difference across lines
+        self.model.deltaLT = pyo.Var(self.model.TRANSF, domain=pyo.Reals)  # angle difference across transformers
 
         # --- Kirchoff's current law at each bus b ---
         def KCL_def(model, b):
@@ -49,10 +49,10 @@ class DC(Basemodel):
                    sum(model.pTlv[l] for l in model.TRANSF if model.AT[l, 2] == b) +
                    sum(model.GB[s] for s in model.SHUNT if (b, s) in model.SHUNTbs))
             if isinstance(kcl, bool):
-                return Constraint.Skip
+                return pyo.Constraint.Skip
             return kcl
 
-        self.model.KCL_const = Constraint(self.model.B, rule=KCL_def)
+        self.model.KCL_const = pyo.Constraint(self.model.B, rule=KCL_def)
 
         # --- Kirchoff's voltage law at each line and transformer---
         def KVL_real_fromend(model, l):
@@ -61,25 +61,25 @@ class DC(Basemodel):
         def KVL_real_toend(model, l):
             return model.pLto[l] == (model.BL[l]) * model.deltaL[l]
 
-        self.model.KVL_real_from = Constraint(self.model.L, rule=KVL_real_fromend)
-        self.model.KVL_real_to = Constraint(self.model.L, rule=KVL_real_toend)
+        self.model.KVL_real_from = pyo.Constraint(self.model.L, rule=KVL_real_fromend)
+        self.model.KVL_real_to = pyo.Constraint(self.model.L, rule=KVL_real_toend)
 
         def KVL_trans_fromend(model, l):
             return model.pThv[l] == (-model.BLT[l]) * (model.deltaLT[l])
         def KVL_trans_toend(model, l):
             return model.pTlv[l] == (model.BLT[l]) * (model.deltaLT[l])
 
-        self.model.KVL_trans_from = Constraint(self.model.TRANSF, rule=KVL_trans_fromend)
-        self.model.KVL_trans_to = Constraint(self.model.TRANSF, rule=KVL_trans_toend)
+        self.model.KVL_trans_from = pyo.Constraint(self.model.TRANSF, rule=KVL_trans_fromend)
+        self.model.KVL_trans_to = pyo.Constraint(self.model.TRANSF, rule=KVL_trans_toend)
 
-        # --- phase angle constraints ---
+        # --- phase angle pyo.Constraints ---
         def phase_angle_diff1(model, l):
             return model.deltaL[l] == model.delta[model.A[l, 1]] - model.delta[model.A[l, 2]]
 
-        self.model.phase_diff1 = Constraint(self.model.L, rule=phase_angle_diff1)
+        self.model.phase_diff1 = pyo.Constraint(self.model.L, rule=phase_angle_diff1)
 
-        # --- phase angle constraints ---
+        # --- phase angle pyo.Constraints ---
         def phase_angle_diff2(model, l):
             return model.deltaLT[l] == model.delta[model.AT[l, 1]] - model.delta[model.AT[l, 2]] - model.shift[l]
 
-        self.model.phase_diff2 = Constraint(self.model.TRANSF, rule=phase_angle_diff2)
+        self.model.phase_diff2 = pyo.Constraint(self.model.TRANSF, rule=phase_angle_diff2)

@@ -1,6 +1,6 @@
 import copy
 
-from pyomo.environ import *
+import pyomo.environ as pyo
 from potpourri.models.basemodel import Basemodel
 import numpy as np
 
@@ -53,7 +53,7 @@ class OPF(Basemodel):
 
     def get_demand_real_power_data(self):
         if 'controllable' not in self.net.load:
-            self.demand_controllable_set = None  # create empty Set if no controllable load exist
+            self.demand_controllable_set = None  # create empty  pyo.Set if no controllable load exist
         else:
             self.demand_controllable_set = self.net.load.index[self.net.load.controllable == True]
 
@@ -99,54 +99,54 @@ class OPF(Basemodel):
         self._calc_opf_parameters(**kwargs)
 
         # controllable generation
-        self.model.sGc = Set(within=self.model.sG,
+        self.model.sGc =  pyo.Set(within=self.model.sG,
                              initialize=self.static_generation_data.index[self.static_generation_data.controllable & self.static_generation_data.in_service])
-        self.model.sPGmax = Param(self.model.sGc, initialize=self.static_generation_data.max_p[self.model.sGc])
-        self.model.sPGmin = Param(self.model.sGc, initialize=self.static_generation_data.min_p[self.model.sGc])
-        self.model.PGmax = Param(self.model.G, initialize=self.generation_data['max_p'][self.model.G])
-        self.model.PGmin = Param(self.model.G, initialize=self.generation_data['min_p'][self.model.G])
+        self.model.sPGmax =  pyo.Param(self.model.sGc, initialize=self.static_generation_data.max_p[self.model.sGc])
+        self.model.sPGmin =  pyo.Param(self.model.sGc, initialize=self.static_generation_data.min_p[self.model.sGc])
+        self.model.PGmax =  pyo.Param(self.model.G, initialize=self.generation_data['max_p'][self.model.G])
+        self.model.PGmin =  pyo.Param(self.model.G, initialize=self.generation_data['min_p'][self.model.G])
 
         # controllable loads
-        self.model.Dc = Set(within=self.model.D, initialize=self.demand_controllable_set)  # controllable loads
-        self.model.PDmax = Param(self.model.D, initialize=self.PDmax_data[self.model.D])
-        self.model.PDmin = Param(self.model.D, initialize=self.PDmin_data[self.model.D])
+        self.model.Dc =  pyo.Set(within=self.model.D, initialize=self.demand_controllable_set)  # controllable loads
+        self.model.PDmax =  pyo.Param(self.model.D, initialize=self.PDmax_data[self.model.D])
+        self.model.PDmin =  pyo.Param(self.model.D, initialize=self.PDmin_data[self.model.D])
 
         # lines and transformer chracteristics and ratings
-        self.model.SLmax = Param(self.model.L, within=NonNegativeReals,
+        self.model.SLmax =  pyo.Param(self.model.L, within=pyo.NonNegativeReals,
                                  initialize=self.line_data['SLmax_data'][self.model.L],
                                  mutable=True)  # real power line limit
-        self.model.SLmaxT = Param(self.model.TRANSF, within=NonNegativeReals,
+        self.model.SLmaxT =  pyo.Param(self.model.TRANSF, within=pyo.NonNegativeReals,
                                   initialize=self.trafo_data.SLmaxT_data[self.model.TRANSF],
                                   mutable=True)  # real power transformer limit
 
         # cost data
-        # self.model.c2 = Param(self.model.G, within=NonNegativeReals,
+        # self.model.c2 =  pyo.Param(self.model.G, within=pyo.NonNegativeReals,
         #                       initialize=self.c2_data)  # generator cost coefficient c2 (*pG^2)
-        # self.model.c1 = Param(self.model.G, within=NonNegativeReals,
+        # self.model.c1 =  pyo.Param(self.model.G, within=pyo.NonNegativeReals,
         #                       initialize=self.c1_data)  # generator cost coefficient c1 (*pG)
-        # self.model.c0 = Param(self.model.G, within=NonNegativeReals,
+        # self.model.c0 =  pyo.Param(self.model.G, within=pyo.NonNegativeReals,
         #                       initialize=self.c0_data)  # generator cost coefficient c0
-        # self.model.VOLL = Param(self.model.D, within=Reals, initialize=10000)  # value of lost load
+        # self.model.VOLL =  pyo.Param(self.model.D, within=pyo.Reals, initialize=10000)  # value of lost load
 
         # --- static generator power limits ---
         def static_generation_real_power_bounds(model, g):
             model.psG[g].unfix()
             return model.sPGmin[g], model.psG[g], model.sPGmax[g]
 
-        self.model.PsG_Constraint = Constraint(self.model.sGc, rule=static_generation_real_power_bounds)
+        self.model.PsG_Constraint = pyo.Constraint(self.model.sGc, rule=static_generation_real_power_bounds)
 
         # --- generation real power limits ---
         def real_power_bounds(model, g):
             model.pG[g].unfix()
             return model.PGmin[g], model.pG[g], model.PGmax[g]
 
-        self.model.PG_Constraint = Constraint(self.model.G, rule=real_power_bounds)
+        self.model.PG_Constraint = pyo.Constraint(self.model.G, rule=real_power_bounds)
 
         # --- demand limits ---
         def real_demand_bounds(model, d):
             return model.PDmin[d], model.pD[d], model.PDmax[d]
 
-        self.model.PD_Constraint = Constraint(self.model.Dc, rule=real_demand_bounds)
+        self.model.PD_Constraint = pyo.Constraint(self.model.Dc, rule=real_demand_bounds)
 
         # --- transformer tap ratio limits ---
 
@@ -235,7 +235,7 @@ class OPF(Basemodel):
                     percent_is_set = tap_step_percent[phase_shifters].fillna(0) != 0
                     if (degree_is_set & percent_is_set).any():
                         raise UserWarning(
-                            "Both tap_step_degree and tap_step_percent set for ideal phase shifter")
+                            "Both tap_step_degree and tap_step_percent  pyo.Set for ideal phase shifter")
                     trafo_shift[phase_shifters] += np.where(
                         (degree_is_set),
                         (direction * tap_diff[phase_shifters] * tap_step_degree[phase_shifters]),
@@ -248,15 +248,15 @@ class OPF(Basemodel):
         ratio_min, ratio_max = _calc_tap_min_max(self)
         self.trafo_data = self.trafo_data.assign(**{"tap_min_data": ratio_min, "tap_max_data": ratio_max})
 
-        self.model.Tap_min = Param(self.model.TRANSF, within=Reals,
+        self.model.Tap_min =  pyo.Param(self.model.TRANSF, within=pyo.Reals,
                                    initialize=self.trafo_data.tap_min_data[self.model.TRANSF])
-        self.model.Tap_max = Param(self.model.TRANSF, within=Reals,
+        self.model.Tap_max =  pyo.Param(self.model.TRANSF, within=pyo.Reals,
                                    initialize=self.trafo_data.tap_max_data[self.model.TRANSF])
 
         def trafo_tap_linear_bounds(model, t):
             return model.Tap_min[t], model.Tap[t], model.Tap_max[t]
 
-        self.model.Tap_linear_constr = Constraint(self.model.TRANSF, rule=trafo_tap_linear_bounds)
+        self.model.Tap_linear_constr = pyo.Constraint(self.model.TRANSF, rule=trafo_tap_linear_bounds)
 
         self.unfix_vars('Tap')
 
@@ -271,22 +271,22 @@ class OPF(Basemodel):
                                                     "tap_pos_max": tap_pos_max, "tap_pos_min": tap_pos_min,
                                                     "tap_side_data": tap_side_data})
 
-        self.model.Tap_pos = Var(self.model.TRANSF, within=Integers, initialize=0.)  # transformer tap position
-        self.model.Tap_pos_min = Param(self.model.TRANSF, within=Integers,
+        self.model.Tap_pos = pyo.Var(self.model.TRANSF, within=pyo.Integers, initialize=0.)  # transformer tap position
+        self.model.Tap_pos_min =  pyo.Param(self.model.TRANSF, within=pyo.Integers,
                                        initialize=self.trafo_data.tap_pos_min[self.model.TRANSF])
-        self.model.Tap_pos_max = Param(self.model.TRANSF, within=Integers,
+        self.model.Tap_pos_max =  pyo.Param(self.model.TRANSF, within=pyo.Integers,
                                        initialize=self.trafo_data.tap_pos_max[self.model.TRANSF])
-        self.model.Tap_neutral = Param(self.model.TRANSF, within=Integers,
+        self.model.Tap_neutral =  pyo.Param(self.model.TRANSF, within=pyo.Integers,
                                        initialize=self.trafo_data.tap_neutral[
                                            self.model.TRANSF])  # transformer tap neutral position
-        self.model.Tap_step = Param(self.model.TRANSF, within=Reals,
+        self.model.Tap_step =  pyo.Param(self.model.TRANSF, within=pyo.Reals,
                                     initialize=self.trafo_data.tap_step[self.model.TRANSF])  # transformer tap step size
-        self.model.Tap_side = Param(self.model.TRANSF, initialize=self.trafo_data.tap_side_data[self.model.TRANSF]) # transformer tap side; 0: hv, 1: lv
+        self.model.Tap_side =  pyo.Param(self.model.TRANSF, initialize=self.trafo_data.tap_side_data[self.model.TRANSF]) # transformer tap side; 0: hv, 1: lv
 
         def trafo_tap_pos_min_max(model, t):
             return model.Tap_pos_min[t], model.Tap_pos[t], model.Tap_pos_max[t]
 
-        self.model.Tap_pos_constr = Constraint(self.model.TRANSF, rule=trafo_tap_pos_min_max)
+        self.model.Tap_pos_constr = pyo.Constraint(self.model.TRANSF, rule=trafo_tap_pos_min_max)
 
         def trafo_tap_discrete(model, t):
             if model.Tap_side[t]:
@@ -295,6 +295,6 @@ class OPF(Basemodel):
 
             return model.Tap[t] == 1. + (model.Tap_pos[t] - model.Tap_neutral[t]) * model.Tap_step[t]
 
-        self.model.Tap_discrete_constr = Constraint(self.model.TRANSF, rule=trafo_tap_discrete)
+        self.model.Tap_discrete_constr = pyo.Constraint(self.model.TRANSF, rule=trafo_tap_discrete)
 
         self.unfix_vars('Tap')

@@ -1,4 +1,4 @@
-from pyomo.environ import *
+import pyomo.environ as pyo
 from potpourri.models.DC import DC
 from potpourri.models.OPF import OPF
 
@@ -29,8 +29,8 @@ class DCOPF(DC, OPF):
         def line_lim2_def(model, l):
             return model.pL[l] >= -model.SLmax[l]
 
-        self.model.line_lim_from = Constraint(self.model.L, rule=line_lim1_def)
-        self.model.line_lim_to = Constraint(self.model.L, rule=line_lim2_def)
+        self.model.line_lim_from = pyo.Constraint(self.model.L, rule=line_lim1_def)
+        self.model.line_lim_to = pyo.Constraint(self.model.L, rule=line_lim2_def)
 
         # --- power flow limits on transformer lines---
         def transf_lim1_def(model, l):
@@ -39,7 +39,7 @@ class DCOPF(DC, OPF):
         def transf_lim2_def(model, l):
             return model.pLT[l] >= -model.SLmaxT[l]
 
-        self.model.transf_lim1 = Constraint(self.model.TRANSF, rule=transf_lim1_def)
-        self.model.transf_lim2 = Constraint(self.model.TRANSF, rule=transf_lim2_def)
+        self.model.transf_lim1 = pyo.Constraint(self.model.TRANSF, rule=transf_lim1_def)
+        self.model.transf_lim2 = pyo.Constraint(self.model.TRANSF, rule=transf_lim2_def)
 
 

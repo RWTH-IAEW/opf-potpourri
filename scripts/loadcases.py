@@ -1,7 +1,7 @@
 import copy
 import numpy as np
 import simbench as sb
-import pyomo.environ as pe
+import pyomo.environ as pyo
 import pandapower as pp
 
 from potpourri.models.ACOPF_base import ACOPF
@@ -49,10 +49,10 @@ if __name__ == '__main__':
     print("Grid-state before OPF:")
     print("SGEN P:")
     for g in hc.model.sG:
-        print(pe.value(hc.model.PsG[g]))
+        print(pyo.value(hc.model.PsG[g]))
     print("SGEN Q:")
     for g in hc.model.sG:
-        print(pe.value(hc.model.QsG[g]))
+        print(pyo.value(hc.model.QsG[g]))
 
     # hc.solve(solver='neos', print_solver_output=True)
     hc.solve(solver='ipopt', print_solver_output=False)
@@ -63,10 +63,10 @@ if __name__ == '__main__':
     print("Grid-state after OPF:")
     print("SGEN P:")
     for g in hc.model.sG:
-        print(pe.value(hc.model.psG[g]))
+        print(pyo.value(hc.model.psG[g]))
     print("SGEN Q:")
     for g in hc.model.sG:
-        print(pe.value(hc.model.qsG[g]))
+        print(pyo.value(hc.model.qsG[g]))
 
     for case in case_keys:
         net_case = net.deepcopy()
@@ -87,11 +87,11 @@ if __name__ == '__main__':
         hc.solve(solver='neos')
 
         # hcs.append(copy.deepcopy(hc))
-        # obj.append(pe.value(hc.model.obj))
+        # obj.append(pyo.value(hc.model.obj))
 
         # for g in hc.model.sG:
-        #    print(f"Gen {g}: {pe.value(hc.model.pG[g])}")
-        #    print(f"Gen {g}: {pe.value(hc.model.qG[g])}")
+        #    print(f"Gen {g}: {pyo.value(hc.model.pG[g])}")
+        #    print(f"Gen {g}: {pyo.value(hc.model.qG[g])}")
 
-        line_flow = pe.value(hc.model.pLfrom[0])
+        line_flow = pyo.value(hc.model.pLfrom[0])
         print(f"Line flow: {line_flow}")
