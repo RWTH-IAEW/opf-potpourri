@@ -1,16 +1,61 @@
-import pandas as pd
-import pyomo.environ as pyo
-from math import pi
+"""
+Basemodel for Power System Optimization
+
+This script defines the `Basemodel` class, which uses Pyomo for modeling optimization problems
+on power system networks represented in `pandapower`.
+
+Dependencies:
+    - copy: For creating deep copies of objects to ensure immutability.
+    - os: For managing environment variables and file paths.
+    - math: For mathematical constants and functions (e.g., `pi`).
+
+    - numpy: For efficient numerical computations and array manipulation.
+    - pandas: For managing tabular data structures like DataFrames.
+    - pandapower: For power system modeling and simulation.
+    - pyomo.environ: For building and solving optimization models.
+
+    - potpourri.models.pyo_to_net: For mapping Pyomo solutions back to `pandapower` networks.
+
+"""
+
 import copy
-import numpy as np
-import pandapower as pp
 import os
+from math import pi
+
+import numpy as np
+import pandas as pd
+import pandapower as pp
+import pyomo.environ as pyo
+
 
 from potpourri.models.pyo_to_net import pyo_sol_to_net_res
 
 
 class Basemodel:
+    """
+        A Pyomo-based optimization model for power system analysis.
+
+        This class creates and solves optimization models based on a given `pandapower` network.
+        It supports the creation of sets, parameters, and variables, as well as solving and postprocessing.
+
+        Attributes:
+            net (pandapowerNet): The input power system network.
+            model (ConcreteModel): The Pyomo model created for optimization.
+            results: Stores the results of the optimization process.
+        """
     def __init__(self, net):
+        """
+            Initializes the Basemodel with a deepcopy of the given network.
+
+            Args:
+                net (pandapowerNet): The input pandapower network to be used in the optimization.
+
+            Raises:
+                ValueError: If the input network is invalid.
+        """
+        if not isinstance(net, pp.pandapowerNet):
+            raise ValueError("Input network must be a pandapower network.")
+
         self.net = copy.deepcopy(net)
         pp.runpp(self.net)
 
@@ -75,6 +120,10 @@ class Basemodel:
             zip(trafo_ind, [2] * len(trafo_ind))), np.concatenate([hv_bus_trafo[trafo_ind], lv_bus_trafo[trafo_ind]])))
 
     def create_model(self):
+        """
+            Creates a Pyomo model based on the input network. The model includes sets, parameters, and variables.
+
+        """
         self.model = pyo.ConcreteModel()
 
         # --- pyo.SetS ---
@@ -167,7 +216,23 @@ class Basemodel:
 
     def solve(self, to_net: bool = True, print_solver_output: bool = False, solver='ipopt', load_solutions: bool = True,
               mip_solver='gurobi', max_iter=None, time_limit=600, init_strategy='rNLP', neos_opt='ipopt'):
+        """
+            Solves the optimization model using the specified solver.
 
+            Args:
+                to_net (bool): Whether to map results back to the pandapower network.
+                print_solver_output (bool): Whether to print solver output.
+                solver (str): The solver to use ('ipopt', 'mindtpy', 'neos', etc.).
+                load_solutions (bool): Whether to load solutions into the model after solving.
+                mip_solver (str): The mixed-integer programming solver for 'mindtpy'.
+                max_iter (int, optional): Maximum iterations for the solver.
+                time_limit (int): Time limit for the solver in seconds.
+                init_strategy (str): Initialization strategy for 'mindtpy'.
+                neos_opt (str): Solver to use with NEOS.
+
+            Raises:
+                ValueError: If solver settings are invalid or the solver fails.
+        """
         if solver == 'mindtpy':
             optimizer = pyo.SolverFactory(solver)
             if not max_iter:
@@ -206,6 +271,16 @@ class Basemodel:
             print(err)
 
     def change_vals(self, key, value):
+        """
+        Changes the value of a component in the model.
+
+        Args:
+            key:
+            value:
+
+        Returns:
+
+        """
         component = self.model.component(key)
         if not component:
             print("Model " + self.model.name + " has no component " + key)
@@ -217,6 +292,16 @@ class Basemodel:
             print(err)
 
     def fix_vars(self, key, value=None):
+        """
+        Fixes the value of a component in the model.
+
+        Args:
+            key:
+            value:
+
+        Returns:
+
+        """
         component = self.model.component(key)
         if not component:
             print("Model " + self.model.name + " has no component " + key)
@@ -231,6 +316,16 @@ class Basemodel:
             print(err)
 
     def unfix_vars(self, key, value=None):
+        """
+        Unfixes the value of a component in the model.
+
+        Args:
+            key:
+            value:
+
+        Returns:
+
+        """
         component = self.model.component(key)
         if not component:
             print("Model " + self.model.name + " has no component " + key)
