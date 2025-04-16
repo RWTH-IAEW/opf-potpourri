@@ -246,21 +246,21 @@ class ACOPF(AC, OPF):
             model.qsG[g].unfix()
             return model.QsGmin[g], model.qsG[g], model.QsGmax[g]
 
-        self.model.QsG_pyo.Constraint = pyo.Constraint(self.model.sGc, rule=static_generation_reactive_power_bounds)
+        self.model.QsG_pyo = pyo.Constraint(self.model.sGc, rule=static_generation_reactive_power_bounds)
 
         # --- reactive generator power limits ---
         def reactive_power_bounds(model, g):
             model.qG[g].unfix()
             return model.QGmin[g], model.qG[g], model.QGmax[g]
 
-        self.model.QG_pyo.Constraint = pyo.Constraint(self.model.G, rule=reactive_power_bounds)
+        self.model.QG_pyo = pyo.Constraint(self.model.G, rule=reactive_power_bounds)
 
         # --- reactive demand limits ---
         def reactive_demand_bounds(model, d):
             model.qD[d].unfix()
             return model.QDmin[d], model.qD[d], model.QDmax[d]
 
-        self.model.QD_pyo.Constraint = pyo.Constraint(self.model.Dc, rule=reactive_demand_bounds)
+        self.model.QD_pyo = pyo.Constraint(self.model.Dc, rule=reactive_demand_bounds)
 
         # --- voltage pyo.Constraints ---
         self.model.v_bPV_setpoint.deactivate()
@@ -268,7 +268,7 @@ class ACOPF(AC, OPF):
         def v_bounds(model, b):
             return model.Vmin[b], model.v[b], model.Vmax[b]
 
-        self.model.v_pyo.Constraint = pyo.Constraint(self.model.B, rule=v_bounds)
+        self.model.v_pyo = pyo.Constraint(self.model.B, rule=v_bounds)
 
         # --- wind generation q requirements variant 3---
         def QW_pos(model, w):
@@ -277,21 +277,21 @@ class ACOPF(AC, OPF):
         def QW_neg(model, w):
             return model.qsG[w] >= self.q_limit_parameter.b_qp_min[model.var_q[w]] * model.PsG_inst[w] + self.q_limit_parameter.m_qp_min[model.var_q[w]] * model.psG[w]
 
-        self.model.QW_pos_pyo.Constraint = pyo.Constraint(self.model.WINDc, rule=QW_pos)
-        self.model.QW_neg_pyo.Constraint = pyo.Constraint(self.model.WINDc, rule=QW_neg)
+        self.model.QW_pos_pyo = pyo.Constraint(self.model.WINDc, rule=QW_pos)
+        self.model.QW_neg_pyo = pyo.Constraint(self.model.WINDc, rule=QW_neg)
 
         #
         def QV_min(model, w):
             for (g, b) in model.sGbs:
                 if g == w:
                     return model.qsG[w] >= (self.q_limit_parameter.m_qv[model.var_q[w]] * model.v[b] + self.q_limit_parameter.b_qv_min[model.var_q[w]]) * model.PsG_inst[w]
-        self.model.QU_min_pyo.Constraint = pyo.Constraint(self.model.WINDc, rule=QV_min)
+        self.model.QU_min_pyo = pyo.Constraint(self.model.WINDc, rule=QV_min)
 
         def QV_max(model, w):
             for (g, b) in model.sGbs:
                 if g == w:
                     return model.qsG[w] <= (self.q_limit_parameter.m_qv[model.var_q[w]] * model.v[b] + self.q_limit_parameter.b_qv_max[model.var_q[w]]) * model.PsG_inst[w]
-        self.model.QU_max_pyo.Constraint = pyo.Constraint(self.model.WINDc, rule=QV_max)
+        self.model.QU_max_pyo = pyo.Constraint(self.model.WINDc, rule=QV_max)
 
 
     def add_voltage_deviation_objective(self):
