@@ -18,7 +18,7 @@ from potpourri.models_multi_period.pyo_to_net_multi_period import pyo_sol_to_net
 
 
 class Basemodel_multi_period:
-    def __init__(self, net, toT,  fromT=None, pf=1, vehicles=None, locations=None, chargingpoints=None, scenario=None):
+    def __init__(self, net, toT,  fromT=None, pf=1, num_vehicles=None):
         """
         **Constructor Basemodel_multi_period** \n
         *net:* simbench/ T.B.D. pandapower ... network \n
@@ -112,8 +112,8 @@ class Basemodel_multi_period:
         self.flexibilities.append(Sgens_multi_period(self.net))
         self.flexibilities.append(Generator_multi_period(self.net))
         # only create instance of EV if necessary parameters are provided
-        if vehicles is not None and locations is not None and chargingpoints is not None and scenario is not None:
-            self.flexibilities.append(EV_multi_period(self.net, vehicles, locations, chargingpoints, scenario))
+        if num_vehicles is not None :
+            self.flexibilities.append(EV_multi_period(self.net, num_vehicles))
 
         if 'windpot_p_mw' in self.net.bus:
             self.flexibilities.append(Windpower_multi_period(self.net))

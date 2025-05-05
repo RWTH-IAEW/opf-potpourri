@@ -8,8 +8,8 @@ from potpourri.models_multi_period.demand_multi_period import Demand_multi_perio
 import numpy as np
 
 class OPF_multi_period(Basemodel_multi_period):
-    def __init__(self, net, toT,  fromT=None, pf=1, vehicles=None, locations=None, chargingpoints=None, scenario=None):
-        super().__init__(net, toT,  fromT, pf, vehicles, locations, chargingpoints, scenario)
+    def __init__(self, net, toT,  fromT=None, pf=1, num_vehicles=None):
+        super().__init__(net, toT,  fromT, pf, num_vehicles)
 
     def __calc_SLmax(self, max_loading_percent=100):
         vr = self.net.bus.loc[self.net.line["from_bus"].values, "vn_kv"].values * np.sqrt(3.)

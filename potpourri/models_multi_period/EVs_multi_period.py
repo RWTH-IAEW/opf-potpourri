@@ -2,6 +2,7 @@ import copy
 import random
 import numpy as np
 import pandas as pd
+import pickle
 from pyomo.environ import *
 from potpourri.models_multi_period.flexibility_multi_period import Flexibility_multi_period
 from pyomo.common.errors import ApplicationError
@@ -11,7 +12,7 @@ from chargingprofilegenerator.Core.simulate_charging import simulate_charging_be
 # linearized model --> weakness: efficiencies(if not market oriented) , calculation of p for soc > soclim
 
 class EV_multi_period(Flexibility_multi_period):
-    def __init__(self, net, vehicles, locations, chargingpoints, scenario):
+    def __init__(self, net, num_vehicles):
         """
         Args:
             vehicles: dictionary of the vehicles created in the charging profile generator simulation
@@ -20,6 +21,36 @@ class EV_multi_period(Flexibility_multi_period):
             scenario: scenario storing the simulation configuration
         """
         super().__init__(net)
+
+        # Extract the vehicles, locations, and charging points from the pkl file
+        file_path = r'/data/emob_profiles.pkl'
+
+        with open(file_path, 'rb') as f:
+            vehicles, locations, chargingpoints, scenario = pickle.load(f)
+
+        def extract_vehicles(original_dict, num_vehicles, start_index=0):
+
+            # Extract a subset of vehicles from a dictionary of arrays.
+
+            new_dict = {}
+            for key, array in original_dict.items():
+
+                if isinstance(array, list):
+                    new_dict[key] = array[start_index:start_index + num_vehicles]
+                elif isinstance(array, np.ndarray):
+                    if array.ndim == 2:
+                        new_dict[key] = array[:num_vehicles, :]
+                    elif array.ndim == 1:
+                        new_dict[key] = array[:num_vehicles]
+                    else:
+                        raise ValueError(f"Array for key '{key}' is not 2D.")
+                elif isinstance(array, pd.DataFrame):
+                    new_dict[key] = array.iloc[:num_vehicles]
+                else:
+                    new_dict[key] = array
+            return new_dict
+        # Extract a subset of vehicles from the original dictionary
+        vehicles = extract_vehicles(vehicles, num_vehicles, start_index=0)
 
         # Sets
         self.vehicles = copy.deepcopy(vehicles)
@@ -50,7 +81,7 @@ class EV_multi_period(Flexibility_multi_period):
 
 
         # driving profile parameters:
-        self.n_t_steps = self.scenario.config['n_t_steps']
+        # self.n_t_steps = self.scenario.config['n_t_steps']
         self.distance = self.vehicles['distance']  # in km
         self.consumption = self.vehicles['consumption'] / 100000  # in MWh/km
         self.t_arr = self.vehicles['t_arr']
@@ -63,6 +94,7 @@ class EV_multi_period(Flexibility_multi_period):
         self.timestep_size = self.scenario.config['timestep_size']  # in minutes
         self.loctypes = self.locations['type']
         self.cptype = self.chargingpoints['type']
+
 
         # charging profile parameters
         self.soc = {(i, t): self.vehicles['soc'][i, t] for i in vehicles['id'] for t in range(self.scenario.config['n_t_steps'])}
@@ -98,7 +130,7 @@ class EV_multi_period(Flexibility_multi_period):
 
         # market parameters
         # file_path = r'C:/Users/f.nasr/Documents/price_data.xlsx'
-        file_path = r'C:/Users/f.nasr/Documents/Grosshandelspreise_2022_Stunde.xlsx'
+        file_path = 'data/Grosshandelspreise_2022_Stunde.xlsx'
         # self.p_id = pd.read_excel(file_path, sheet_name='Intraday')['Price (€/MWh)'].values
         # self.p_da_hourly = pd.read_excel(file_path, sheet_name='Day Ahead')['Price (€/MWh)'].values
         self.p_da_hourly = pd.read_excel(file_path)['Deutschland/Luxemburg [€/MWh]'].values

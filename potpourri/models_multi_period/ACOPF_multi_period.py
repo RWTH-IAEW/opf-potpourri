@@ -17,8 +17,8 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
     """
     This class implements the AC Optimal Power Flow (ACOPF) model.
     """
-    def __init__(self, net, toT,  fromT=None, pf=1, vehicles=None, locations=None, chargingpoints=None, scenario=None):
-        super().__init__(net, toT,  fromT, pf, vehicles, locations, chargingpoints, scenario)
+    def __init__(self, net, toT,  fromT=None, pf=1, num_vehicles=None):
+        super().__init__(net, toT,  fromT, pf, num_vehicles)
 
     def _calc_opf_parameters(self):
         super()._calc_opf_parameters()

@@ -6,8 +6,8 @@ from potpourri.models_multi_period.EVs_multi_period import EV_multi_period
 
 
 class AC_multi_period(Basemodel_multi_period):
-    def __init__(self, net, toT,  fromT=None, pf=1, vehicles=None, locations=None, chargingpoints=None, scenario=None):
-        super().__init__(net, toT,  fromT, pf, vehicles, locations, chargingpoints, scenario)
+    def __init__(self, net, toT,  fromT=None, pf=1, num_vehicles=None):
+        super().__init__(net, toT,  fromT, pf, num_vehicles)
 
         self.BB_data = - self.net.shunt.q_mvar * self.net.shunt.step / self.baseMVA
 
