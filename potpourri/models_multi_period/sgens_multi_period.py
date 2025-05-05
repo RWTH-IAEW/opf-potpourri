@@ -145,7 +145,7 @@ class Sgens_multi_period(Flexibility_multi_period):
     def get_all_Constraints_acopf(self, model):
 
         #QsG_Constraint
-        @model.Constraint(model.sGc)
+        @model.Constraint(model.sGc, model.T)
         def static_generation_reactive_power_bounds(model, g, t):
             model.qsG[(g, t)].unfix()
             return model.QsGmin[(g, t)], model.qsG[(g, t)], model.QsGmax[(g, t)]
