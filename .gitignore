@@ -1,5 +1,4 @@
 /.idea
-/data
 **/potpourri.egg-info/
 **/__pycache__/
 **/potpourri/models/__pycache__/
