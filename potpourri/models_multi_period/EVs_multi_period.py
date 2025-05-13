@@ -130,7 +130,7 @@ class EV_multi_period(Flexibility_multi_period):
 
         # market parameters
         # file_path = r'C:/Users/f.nasr/Documents/price_data.xlsx'
-        file_path = 'data/Grosshandelspreise_2022_Stunde.xlsx'
+        file_path = 'data/da_prices_hourly_2022.xlsx'
         # self.p_id = pd.read_excel(file_path, sheet_name='Intraday')['Price (€/MWh)'].values
         # self.p_da_hourly = pd.read_excel(file_path, sheet_name='Day Ahead')['Price (€/MWh)'].values
         self.p_da_hourly = pd.read_excel(file_path)['Deutschland/Luxemburg [€/MWh]'].values
