@@ -271,7 +271,8 @@ class EV_multi_period(Flexibility_multi_period):
                 is_driving = self.p[v, t-1] < 0
             else:
                 is_driving = model.p[v, t-1] < 0
-            ev_not_connected = self.veh_cps[v, t-1] == -1
+            # vehicle is not connected at t-1 or t
+            ev_not_connected = self.veh_cps[v, t-1] == -1 or self.veh_cps[v, t] == -1
 
             # Find the next departure and last arrival time for the vehicle
             dep_times = model.t_dep[v]
@@ -279,9 +280,9 @@ class EV_multi_period(Flexibility_multi_period):
             next_dep_time = next_deps.min() if next_deps.size > 0 else None
             arr_times = model.t_arr[v]
             past_arrs = arr_times[arr_times <= t]
-            last_arr_time = past_arrs.max() if past_arrs.size > 0 else None
+            last_arr_time = past_arrs.max() if past_arrs.size > 0 else 0
 
-            recovery_period = 4
+            recovery_period = 6
             recovery_time_end = last_arr_time + recovery_period if last_arr_time is not None else t
 
             # if the last 4 timesteps prior to arrival time the vehicle has been driving create a parameter 'long Trip' and set it to 1
