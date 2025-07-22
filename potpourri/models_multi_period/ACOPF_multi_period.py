@@ -230,7 +230,7 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
 
         # day ahead market arbitrage
         def arbitrage_objective(model):
-            return sum(model.p_opf[v, t] * model.p_da[t] * model.timestep_size/60 + model.buffer_soc[v, t] * model.bigM for v in model.veh for t in model.T)  # p_da in [€/MWh], timestep_size in [min], + model.buffer_soc[v, t] * model.bigM
+            return sum(model.p_opf[v, t] * model.p_da[t] * model.timestep_size/60 for v in model.veh for t in model.T)  # p_da in [€/MWh], timestep_size in [min]
 
         self.model.arbitrage_obj = Objective(rule=arbitrage_objective, sense=minimize)
 

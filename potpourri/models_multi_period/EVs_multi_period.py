@@ -23,7 +23,7 @@ class EV_multi_period(Flexibility_multi_period):
         super().__init__(net)
 
         # Extract the vehicles, locations, and charging points from the pkl file
-        file_path = r'/data/emob_profiles.pkl'
+        file_path = r'../data/emob_profiles.pkl'
 
         with open(file_path, 'rb') as f:
             vehicles, locations, chargingpoints, scenario = pickle.load(f)
@@ -130,7 +130,7 @@ class EV_multi_period(Flexibility_multi_period):
 
         # market parameters
         # file_path = r'C:/Users/f.nasr/Documents/price_data.xlsx'
-        file_path = 'data/da_prices_hourly_2022.xlsx'
+        file_path = '../data/da_prices_hourly_2022.xlsx'
         # self.p_id = pd.read_excel(file_path, sheet_name='Intraday')['Price (€/MWh)'].values
         # self.p_da_hourly = pd.read_excel(file_path, sheet_name='Day Ahead')['Price (€/MWh)'].values
         self.p_da_hourly = pd.read_excel(file_path)['Deutschland/Luxemburg [€/MWh]'].values
@@ -230,13 +230,11 @@ class EV_multi_period(Flexibility_multi_period):
             else:
                 p_max_veh_cptype = 0
 
-
-
             # Resulting maximum power is the minimum of all max powers
             p_max_charging = p_max_veh_cptype
             return model.p_charging[v, t] <= p_max_charging * model.ev_connected[v, t]
-
         model.charging_power_ub = Constraint(model.veh, model.T, rule=upper_power_bounds_cp)
+
         def upper_power_bounds_cp2(model, v, t):
             # 3. maximum cp power
             if model.veh_cps[v, t] == -1:
@@ -266,8 +264,8 @@ class EV_multi_period(Flexibility_multi_period):
             return model.soc[v, model.T.last()] == model.soc_init[v, model.T.last()]
         model.final_soc_constraint = Constraint(model.veh, rule=final_soc_rule)
 
-        # --- min SOC constraints, only ONE of the following 2 constraints should be active ---
-        # SOC after discharging the battery must be above preferred  by owner
+
+        # SOC after discharging the battery must be above preferred by owner
         def soc_limits(model, v, t):
             if t == model.T.first():
                 is_driving = self.p[v, t-1] < 0
@@ -286,17 +284,17 @@ class EV_multi_period(Flexibility_multi_period):
             recovery_period = 4
             recovery_time_end = last_arr_time + recovery_period if last_arr_time is not None else t
 
-            # if the last 4 timesteps prior to arrival time the vehicle has been driving cerate a parameter 'long Trip' and set it to 1
+            # if the last 4 timesteps prior to arrival time the vehicle has been driving create a parameter 'long Trip' and set it to 1
             long_trip = 1 if all(self.p[v, last_arr_time - i] < 0 for i in range(1, 5)) else 0
 
             # Skipping step if discharging is due to driving -> then EV is allowed to go below these limits
             if ev_not_connected or t == last_arr_time:
                 return Constraint.Skip
 
-            # ensure feasibility of model by temporarily allowing soc to be below min soc for parking (either this constraint or the buffer soc)
-            # elif last_arr_time is not None and t < recovery_time_end:
-            #     min_soc_dynamic = model.min_soc_parking * (t - last_arr_time) / (recovery_period * 2)
-            #     return model.soc[v, t] >= min_soc_dynamic * long_trip + model.min_soc_parking * (1 - long_trip)
+            # ensure feasibility of model by temporarily allowing soc to be below min soc for parking
+            elif last_arr_time is not None and t < recovery_time_end:
+                min_soc_dynamic = model.min_soc_parking * (t - last_arr_time) / (recovery_period * 2)
+                return model.soc[v, t] >= min_soc_dynamic * long_trip + model.min_soc_parking * (1 - long_trip)
 
             # if vehicle is departing in the next timestep,the soc must be above the min soc for departing
             elif t == next_dep_time:
@@ -305,66 +303,8 @@ class EV_multi_period(Flexibility_multi_period):
             # if vehicle is still parking in the next time step, the soc must be above the min soc for parking
             else:
                 return model.soc[v, t] >= model.min_soc_parking - model.buffer_soc[v, t]
-
-        # Alternative SOC limits: demand-oriented, i.e. soc limits are not fixed but depend on the next trip consumption
-        def bedarfsgerechte_SOC_limits(model, v, t):
-            if t == model.T.first():
-                is_driving = self.p[v, t-1] < 0
-
-            else:
-                is_driving = model.p[v, t-1] < 0
-            ev_not_connected = self.veh_cps[v, t-1] == -1
-
-            # Find the next departure and last arrival time for the vehicle
-            dep_times = model.t_dep[v]
-            next_deps = dep_times[dep_times >= t]
-            next_dep_time = next_deps.min() if next_deps.size > 0 else None
-            arr_times = model.t_arr[v]
-            past_arrs = arr_times[arr_times <= t]
-            last_arr_time = past_arrs.max() if past_arrs.size > 0 else None
-
-            recovery_period = 4
-            recovery_time_end = min(last_arr_time + recovery_period, model.T.last())
-
-            # if the 4 timesteps prior to the last arrival time the vehicle has been driving set 'long Trip' to 1
-            long_trip = 1 if all(self.p[v, last_arr_time - i] < 0 for i in range(1, 5)) else 0
-
-            # determine how many next trips are considered for the soc limits
-            next_dists_to_consider = 1
-            next_dep_times = next_deps[0:next_dists_to_consider] if next_deps.size > 0 else None
-
-            # calculate next consumption
-            if next_dep_times is not None:
-                # get the index of next_dep_time
-                # next_dep_time_idx = np.where(dep_times == next_dep_time)[0][0]
-                next_dep_time_idx = np.array([np.where(dep_times == next_dep_time)[0][0] for next_dep_time in next_dep_times])
-                # Calculate the time left until the next departure after this timestep
-                # time_left = next_dep_time - t
-                # Calculate the distance to the next location
-                dist_to_next_loc = model.distance[v][next_dep_time_idx]
-                dist_sum = dist_to_next_loc.sum()
-                # Calculate next consumption
-                next_consumption = model.consumption[v] * dist_sum  # in MWh per km
-            else:  # if there is no next departure time, the vehicle is parked for the rest of the time horizon
-                # time_left = model.T.last() - t
-                next_consumption = 0
-
-            if ev_not_connected:
-                return Constraint.Skip
-
-            # ensure feasibility of model by temporarily allowing soc to be below min soc for parking
-            # elif last_arr_time is not None and t < recovery_time_end:
-            #     min_soc_dynamic = model.min_soc_parking * (t - last_arr_time) / (recovery_period * 2)
-                # return model.soc[v, t] >= min_soc_dynamic * long_trip + model.min_soc_parking * (1 - long_trip)
-            # soc must be above next_consumption by the next departure time
-            elif t == next_dep_time:
-                # ev should be charged to the next consumption needs on top of the min_soc_parking or fully charged if next consumption is higher
-                return model.soc[v, t] >= min(next_consumption / model.e_max[v] + model.min_soc_parking, 1) - model.buffer_soc[v, t]
-            else:
-                return model.soc[v, t] >= model.min_soc_parking - model.buffer_soc[v, t]
-
         model.soc_limits = Constraint(model.veh, model.T, rule=soc_limits)
-        # model.soc_limits_bedarfsgerecht = Constraint(model.veh, model.T, rule=bedarfsgerechte_SOC_limits)
+
 
         # SOC update
         def update_soc(model, v, t):
@@ -386,9 +326,6 @@ class EV_multi_period(Flexibility_multi_period):
                     + model.p_drive[v, model.T.last()] * model.param[v], 1)
         model.limit_last_power = Constraint(model.veh, rule=limit_last_power)
 
-        def buffer_soc_rule(model, v, t):
-            return (0, model.buffer_soc[v, t] +  model.soc[v, t], 1)
-        model.buffer_soc_constraint = Constraint(model.veh, model.T, rule=buffer_soc_rule)
 
         def non_controllable_power(model, v, t):
             return model.p_charging[v, t] == model.p_req_ev[v, t]
@@ -396,23 +333,12 @@ class EV_multi_period(Flexibility_multi_period):
 
     def get_market_constraints(self, model):
         # --- market constraints ---
-        # power has to be constant over 4 time steps (1 hour = 4 x 15 min), choose only ONE of the following two constraints
-
-        # power constant over 4 time steps for each vehicle
-        def constant_power_per_hour(model, v, t):
-            if (t - model.T.first()) % 4 != 3:
-                return model.p_opf[v, t] - model.p_opf[v, t + 1] == 0
-            else:
-                return Constraint.Skip
-
-        # aggregated power over all vehicles has to be constant over 4 time steps (1 hour = 4 x 15 min)
+        # aggregated power has to be constant over 4 time steps (1 hour = 4 x 15 min)
         def constant_aggregated_power_per_hour(model, t):
             if (t - model.T.first()) % 4 != 3:
                 return sum(model.p_opf[v, t] for v in model.veh) - sum(model.p_opf[v, t + 1] for v in model.veh) == 0
             else:
                 return Constraint.Skip
-
-        # model.constant_power_per_hour = Constraint(model.veh, model.T, rule=constant_power_per_hour)
         model.constant_aggregated_power_per_hour = Constraint(model.T, rule=constant_aggregated_power_per_hour)
 
     def get_opf_objective(self, model):
@@ -428,7 +354,6 @@ class EV_multi_period(Flexibility_multi_period):
         self.get_opf_objective(model)
         self.set_simbench_ev_to_zero(model)
         # self.active_soc_constraints(model)
-
 
     def get_all_acopf(self, model):
         pass
@@ -449,14 +374,4 @@ class EV_multi_period(Flexibility_multi_period):
                     model.pD[d, t].fix(0)
                 elif d in apls_loads:
                     model.pD[d, t].fix(0)
-        return True
-
-    def active_soc_constraints(self, model):
-        # warning if both soc constraints are active: only one should be active
-        for v in model.veh:
-            for t in model.T:
-                if model.soc_limits[v, t].active and model.soc_limits_bedarfsgerecht[v, t].active:
-                    print('Both SOC limit constraints are active. Only one should be active. Please deactivate either model.soc_limits or model.soc_limits_bedarfsgerecht')
-                    # Stop the model with a warning
-                    raise ApplicationError("Model stopped due to two active SOC constraints. Please deactivate one.")
         return True
