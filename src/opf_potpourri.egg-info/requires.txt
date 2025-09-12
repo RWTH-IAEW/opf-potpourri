@@ -1,0 +1,9 @@
+jupyterlab>=4.4.7
+matplotlib>=3.9.4
+notebook>=7.4.5
+numba>=0.60.0
+numpy>=2.0.2
+pandapower>=3.1.2
+pandas>=2.3.2
+pyomo>=6.9.4
+simbench>=1.6.1

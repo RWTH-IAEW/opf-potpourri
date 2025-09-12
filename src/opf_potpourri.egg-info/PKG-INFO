@@ -1,0 +1,72 @@
+Metadata-Version: 2.4
+Name: opf-potpourri
+Version: 0.1.0
+Summary: [Python] Tool for power system analysis with pandapower
+Author-email: Steffen Kortmann <s.kortmann@iaew.rwth-aachen.de>, Farah Nasr <f.nasr@iaew.rwth-aachen.de>
+License: MIT License
+        
+        Copyright (c) 2024 Institute for High Voltage Equipment and Grids,
+        Digitalization and Energy Economics (IAEW), RWTH Aachen University
+        
+        Permission is hereby granted, free of charge, to any person obtaining a copy
+        of this software and associated documentation files (the "Software"), to deal
+        in the Software without restriction, including without limitation the rights
+        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+        copies of the Software, and to permit persons to whom the Software is
+        furnished to do so, subject to the following conditions:
+        
+        The above copyright notice and this permission notice shall be included in all
+        copies or substantial portions of the Software.
+        
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+        FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+        AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+        LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+        OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+        SOFTWARE.
+        
+Project-URL: Homepage, https://gitlab.iaew.rwth-aachen.de/aev/potpourri/
+Project-URL: Repository, https://gitlab.iaew.rwth-aachen.de/aev/potpourri/
+Keywords: power systems,pandapower,analysis
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: jupyterlab>=4.4.7
+Requires-Dist: matplotlib>=3.9.4
+Requires-Dist: notebook>=7.4.5
+Requires-Dist: numba>=0.60.0
+Requires-Dist: numpy>=2.0.2
+Requires-Dist: pandapower>=3.1.2
+Requires-Dist: pandas>=2.3.2
+Requires-Dist: pyomo>=6.9.4
+Requires-Dist: simbench>=1.6.1
+Dynamic: license-file
+
+# POTPOURRI
+
+Multi-**P**eriod **O**p**t**imal **Po**wer Flow for Distrib**u**tion G**r**ids with Sto**r**age Appl**i**cation
+
+## Etymology
+Potpourri - piece of music composed from various popular smaller works or melodies
+
+## Requirements:
+
+    - Python & Conda
+This package requires Python (3.7 or higher) and Conda. Miniconda includes a Python version, so this can be done in a single installation. Conda should then be update to the latest version via `conda update conda`. See [https://wiki.iaew.rwth-aachen.de/w/index.php/Python](https://wiki.iaew.rwth-aachen.de/w/index.php/Python) for more information on the installation of Python and Conda.
+
+## Installation
+**1. Install the environment:**
+To install the environment described in the `environment.yaml`, run each line in the terminal:
+
+    conda update conda
+    conda env create -f environment.yml
+
+In case you have already created an environment and just want to update it, replace 'create' with 'update' in the last line
+
+## Author
+- Steffen Kortmann, Institute for High Voltage Equipment and Grids, Digitalisation and Energy Economics (IAEW) at RWTH Aachen University
+- Andreas Bong, Institute for High Voltage Equipment and Grids, Digitalisation and Energy Economics (IAEW) at RWTH Aachen University
