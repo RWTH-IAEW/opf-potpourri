@@ -1,6 +1,6 @@
-from potpourri.models.HC_ACOPF import HC_ACOPF
-from potpourri.net_augmentation.prepare_net import *
-from potpourri.plotting.plot_functions import set_plt_config
+from src.potpourri.models.HC_ACOPF import HC_ACOPF
+from src.potpourri.net_augmentation.prepare_net import *
+from src.potpourri.plotting.plot_functions import set_plt_config
 
 import pyomo.environ as pe
 import pickle

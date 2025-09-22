@@ -1,6 +1,6 @@
 import pyomo.environ as pyo
-from potpourri.models.DC import DC
-from potpourri.models.OPF import OPF
+from src.potpourri.models.DC import DC
+from src.potpourri.models.OPF import OPF
 
 
 class DCOPF(DC, OPF):

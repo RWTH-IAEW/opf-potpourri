@@ -3,7 +3,7 @@ import copy
 import numpy as np
 import pandas as pd
 from pyomo.environ import *
-from potpourri.models_multi_period.ACOPF_multi_period import ACOPF_multi_period
+from src.potpourri.models_multi_period.ACOPF_multi_period import ACOPF_multi_period
 import pandapower as pp
 
 #TODO make multiperiod

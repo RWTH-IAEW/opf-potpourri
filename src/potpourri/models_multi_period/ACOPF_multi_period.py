@@ -1,12 +1,12 @@
 import pandas as pd
 from pyomo.environ import *
-from potpourri.models_multi_period.AC_multi_period import AC_multi_period
-from potpourri.models_multi_period.OPF_multi_period import OPF_multi_period
-from potpourri.models_multi_period.generator_multi_period import Generator_multi_period
-from potpourri.models_multi_period.demand_multi_period import Demand_multi_period
-from potpourri.models_multi_period.windpower_multi_period import Windpower_multi_period
-from potpourri.models_multi_period.sgens_multi_period import Sgens_multi_period
-from potpourri.models_multi_period.EVs_multi_period import EV_multi_period
+from src.potpourri.models_multi_period.AC_multi_period import AC_multi_period
+from src.potpourri.models_multi_period.OPF_multi_period import OPF_multi_period
+from src.potpourri.models_multi_period.generator_multi_period import Generator_multi_period
+from src.potpourri.models_multi_period.demand_multi_period import Demand_multi_period
+from src.potpourri.models_multi_period.windpower_multi_period import Windpower_multi_period
+from src.potpourri.models_multi_period.sgens_multi_period import Sgens_multi_period
+from src.potpourri.models_multi_period.EVs_multi_period import EV_multi_period
 
 
 import numpy as np

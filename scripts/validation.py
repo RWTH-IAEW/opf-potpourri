@@ -4,7 +4,7 @@ import pandapower as pp
 import pickle
 from tqdm import tqdm
 
-from potpourri.models.AC import AC
+from src.potpourri.models.AC import AC
 
 
 if __name__ == "__main__":

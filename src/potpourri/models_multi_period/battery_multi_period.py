@@ -5,7 +5,7 @@ from itertools import product
 import copy
 import numpy as np
 import pandapower as pp
-from potpourri.models_multi_period.flexibility_multi_period import Flexibility_multi_period
+from src.potpourri.models_multi_period.flexibility_multi_period import Flexibility_multi_period
 
 
 class Battery_multi_period(Flexibility_multi_period):

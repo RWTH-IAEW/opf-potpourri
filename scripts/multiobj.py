@@ -6,8 +6,8 @@ import pyomo.environ as pe
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-from potpourri.models.HC_ACOPF import HC_ACOPF
-from potpourri.plotting.plot_functions import plot_wind_hc_results, set_plt_config
+from src.potpourri.models.HC_ACOPF import HC_ACOPF
+from src.potpourri.plotting.plot_functions import plot_wind_hc_results, set_plt_config
 from scripts.run_scenarios import create_output_writer
 
 

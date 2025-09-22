@@ -4,10 +4,8 @@ import numpy as np
 import pandas as pd
 import pickle
 from pyomo.environ import *
-from potpourri.models_multi_period.flexibility_multi_period import Flexibility_multi_period
+from src.potpourri.models_multi_period.flexibility_multi_period import Flexibility_multi_period
 from pyomo.common.errors import ApplicationError
-from chargingprofilegenerator.ClassDefinitions.Vehicle import update_vehicle_soc
-from chargingprofilegenerator.Core.simulate_charging import simulate_charging_behaviour
 
 # linearized model --> weakness: efficiencies(if not market oriented) , calculation of p for soc > soclim
 
@@ -81,7 +79,6 @@ class EV_multi_period(Flexibility_multi_period):
 
 
         # driving profile parameters:
-        # self.n_t_steps = self.scenario.config['n_t_steps']
         self.distance = self.vehicles['distance']  # in km
         self.consumption = self.vehicles['consumption'] / 100000  # in MWh/km
         self.t_arr = self.vehicles['t_arr']
@@ -91,14 +88,14 @@ class EV_multi_period(Flexibility_multi_period):
         self.veh_cps = self.vehicles['cps']
         self.param = self.vehicles['param1']*1000  # convert from kWh to MWh
         self.cp_locids = self.chargingpoints['loc_ids']  # location id of the chargingpoint
-        self.timestep_size = self.scenario.config['timestep_size']  # in minutes
+        self.timestep_size = self.scenario['config']['timestep_size']  # in minutes
         self.loctypes = self.locations['type']
         self.cptype = self.chargingpoints['type']
 
 
         # charging profile parameters
-        self.soc = {(i, t): self.vehicles['soc'][i, t] for i in vehicles['id'] for t in range(self.scenario.config['n_t_steps'])}
-        self.soclim = self.scenario.config['soclim']
+        self.soc = {(i, t): self.vehicles['soc'][i, t] for i in vehicles['id'] for t in range(self.scenario['config']['n_t_steps'])}
+        self.soclim = self.scenario['config']['soclim']
         self.e_max = self.vehicles['e_max'] / 1000  # battery capacity of the vehicle (in MWh)
         self.p = self.vehicles['p'] / 1000  # current power demand vehicle
         self.p_req_ev = self.vehicles['p_req'] / 1000  # required power for the vehicle

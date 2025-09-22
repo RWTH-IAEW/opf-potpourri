@@ -1,5 +1,5 @@
 import pyomo.environ as pyo
-from potpourri.models.basemodel import Basemodel
+from src.potpourri.models.basemodel import Basemodel
 
 
 class DC(Basemodel):

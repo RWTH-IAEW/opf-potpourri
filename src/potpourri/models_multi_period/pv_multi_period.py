@@ -4,8 +4,8 @@ from math import pi
 import copy
 import numpy as np
 import pandapower as pp
-from potpourri.models_multi_period.flexibility_multi_period import Flexibility_multi_period
-from potpourri.models_multi_period.pyo_to_net_multi_period import pyo_sol_to_net_res
+from src.potpourri.models_multi_period.flexibility_multi_period import Flexibility_multi_period
+from src.potpourri.models_multi_period.pyo_to_net_multi_period import pyo_sol_to_net_res
 import simbench as sb
 
 class PV_multi_period(Flexibility_multi_period):

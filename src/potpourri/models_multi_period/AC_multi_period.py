@@ -1,7 +1,7 @@
 from pyomo.environ import *
-from potpourri.models_multi_period.basemodel_multi_period import Basemodel_multi_period
-from potpourri.models_multi_period.demand_multi_period import Demand_multi_period
-from potpourri.models_multi_period.EVs_multi_period import EV_multi_period
+from src.potpourri.models_multi_period.basemodel_multi_period import Basemodel_multi_period
+from src.potpourri.models_multi_period.demand_multi_period import Demand_multi_period
+from src.potpourri.models_multi_period.EVs_multi_period import EV_multi_period
 
 
 
