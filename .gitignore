@@ -1,4 +1,35 @@
+# IDE
 /.idea
-**/potpourri.egg-info/
-**/__pycache__/
-**/potpourri/models/__pycache__/
+/.vscode
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Build artefacts
+dist/
+build/
+*.egg-info/
+*.egg
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Test and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# MkDocs site output
+site/
+
+# Environment files
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db

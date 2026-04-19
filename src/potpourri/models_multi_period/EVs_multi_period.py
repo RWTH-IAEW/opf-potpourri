@@ -3,9 +3,12 @@ import random
 import numpy as np
 import pandas as pd
 import pickle
+from pathlib import Path
 from pyomo.environ import *
 from src.potpourri.models_multi_period.flexibility_multi_period import Flexibility_multi_period
 from pyomo.common.errors import ApplicationError
+
+_DATA_DIR = Path(__file__).parent.parent / "data"
 
 # linearized model --> weakness: efficiencies(if not market oriented) , calculation of p for soc > soclim
 
@@ -21,7 +24,7 @@ class EV_multi_period(Flexibility_multi_period):
         super().__init__(net)
 
         # Extract the vehicles, locations, and charging points from the pkl file
-        file_path = r'../data/emob_profiles.pkl'
+        file_path = _DATA_DIR / "emob_profiles.pkl"
 
         with open(file_path, 'rb') as f:
             vehicles, locations, chargingpoints, scenario = pickle.load(f)
@@ -126,8 +129,7 @@ class EV_multi_period(Flexibility_multi_period):
         self.nc_vehicles = []  # non controllable vehicles
 
         # market parameters
-        # file_path = r'C:/Users/f.nasr/Documents/price_data.xlsx'
-        file_path = '../data/da_prices_hourly_2022.xlsx'
+        file_path = _DATA_DIR / "da_prices_hourly_2022.xlsx"
         # self.p_id = pd.read_excel(file_path, sheet_name='Intraday')['Price (€/MWh)'].values
         # self.p_da_hourly = pd.read_excel(file_path, sheet_name='Day Ahead')['Price (€/MWh)'].values
         self.p_da_hourly = pd.read_excel(file_path)['Deutschland/Luxemburg [€/MWh]'].values
