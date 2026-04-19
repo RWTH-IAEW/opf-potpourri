@@ -26,6 +26,7 @@ import numpy as np
 import pandas as pd
 import pandapower as pp
 import pyomo.environ as pyo
+from loguru import logger
 
 
 from src.potpourri.models.pyo_to_net import pyo_sol_to_net_res
@@ -57,7 +58,7 @@ class Basemodel:
             raise ValueError("Input network must be a pandapower network.")
 
         self.net = copy.deepcopy(net)
-        pp.runpp(self.net)
+        pp.runpp(self.net, voltage_depend_loads=False)
 
         # --- pyo.Sets ---
         bus_set = self.net._ppc['bus'][:, [0, 1, 7, 8]]
@@ -233,6 +234,8 @@ class Basemodel:
             Raises:
                 ValueError: If solver settings are invalid or the solver fails.
         """
+        logger.info("Solving model '{}' with solver '{}'", self.model.name, solver)
+
         if solver == 'mindtpy':
             optimizer = pyo.SolverFactory(solver)
             if not max_iter:
@@ -241,19 +244,21 @@ class Basemodel:
             if mip_solver == 'gurobi':
                 mip_solver = 'gurobi_persistent'
 
+            logger.debug("mindtpy: mip_solver={}, nlp_solver=ipopt, max_iter={}, init_strategy={}",
+                         mip_solver, max_iter, init_strategy)
             try:
                 self.results = optimizer.solve(self.model, mip_solver=mip_solver, nlp_solver='ipopt',
                                                tee=print_solver_output, iteration_limit=max_iter, time_limit=time_limit,
                                                init_strategy=init_strategy)
             except ValueError as err:
-                print(err)
+                logger.error("mindtpy solver error: {}", err)
 
             # if self.results.solver.termination_condition == TerminationCondition.feasible:
             #     print('Model is feasible but not optimal. Trying to solve a second time.')
             #     self.results = optimizer.solve(self.model, mip_solver=mip_solver, nlp_solver='ipopt',
             #                                    tee=print_solver_output, iteration_limit=max_iter, time_limit=time_limit)
         elif solver == 'neos':
-            os.environ['NEOS_EMAIL'] = "ben.jamin@bluem-chen.de"
+            logger.info("Submitting model to NEOS server (opt={})", neos_opt)
             solver_manager = pyo.SolverManagerFactory('neos')
             self.results = solver_manager.solve(self.model, opt=neos_opt, tee=True)
         else:
@@ -261,14 +266,21 @@ class Basemodel:
 
             if max_iter:
                 optimizer.options['max_iter'] = max_iter
+                logger.debug("Solver max_iter set to {}", max_iter)
 
             self.results = optimizer.solve(self.model, load_solutions=load_solutions, tee=print_solver_output)
 
         try:
-            if pyo.check_optimal_termination(self.results) & to_net:
-                pyo_sol_to_net_res(self.net, self.model)
+            if pyo.check_optimal_termination(self.results):
+                logger.info("Optimal solution found for model '{}'", self.model.name)
+                if to_net:
+                    pyo_sol_to_net_res(self.net, self.model)
+                    logger.debug("Solution mapped to net.res_*")
+            else:
+                logger.warning("Solver did not reach optimal termination for model '{}' (condition: {})",
+                               self.model.name, self.results.solver.termination_condition)
         except AttributeError as err:
-            print(err)
+            logger.error("Could not check termination condition: {}", err)
 
     def change_vals(self, key, value):
         """
@@ -283,13 +295,13 @@ class Basemodel:
         """
         component = self.model.component(key)
         if not component:
-            print("Model " + self.model.name + " has no component " + key)
+            logger.warning("Model '{}' has no component '{}'", self.model.name, key)
             return
         try:
             for index in component:
                 component[index] = value
         except TypeError as err:
-            print(err)
+            logger.error("change_vals failed for component '{}': {}", key, err)
 
     def fix_vars(self, key, value=None):
         """
@@ -304,7 +316,7 @@ class Basemodel:
         """
         component = self.model.component(key)
         if not component:
-            print("Model " + self.model.name + " has no component " + key)
+            logger.warning("Model '{}' has no component '{}'", self.model.name, key)
             return
         try:
             for index in component:
@@ -312,8 +324,9 @@ class Basemodel:
                     component[index].fix(value)
                 else:
                     component[index].fix()
+            logger.debug("Fixed variable '{}' in model '{}'", key, self.model.name)
         except AttributeError as err:
-            print(err)
+            logger.error("fix_vars failed for component '{}': {}", key, err)
 
     def unfix_vars(self, key, value=None):
         """
@@ -328,12 +341,13 @@ class Basemodel:
         """
         component = self.model.component(key)
         if not component:
-            print("Model " + self.model.name + " has no component " + key)
+            logger.warning("Model '{}' has no component '{}'", self.model.name, key)
             return
         try:
             for index in component:
                 component[index].unfix()
-                if value:
+                if value is not None:
                     component[index] = value
+            logger.debug("Unfixed variable '{}' in model '{}'", key, self.model.name)
         except AttributeError as err:
-            print(err)
+            logger.error("unfix_vars failed for component '{}': {}", key, err)

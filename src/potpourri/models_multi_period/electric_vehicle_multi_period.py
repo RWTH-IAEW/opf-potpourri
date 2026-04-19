@@ -5,6 +5,7 @@ from itertools import product
 import copy
 import numpy as np
 import pandapower as pp
+from loguru import logger
 from src.potpourri.models_multi_period.flexibility_multi_period import Flexibility_multi_period
 
 
@@ -56,7 +57,7 @@ class Electric_vehicle_multi_period(Flexibility_multi_period):
 
 
 
-        print('night_indicator')
+        logger.debug("night_indicator array constructed")
 
 
 

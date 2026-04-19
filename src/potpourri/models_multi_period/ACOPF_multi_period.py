@@ -10,7 +10,7 @@ from src.potpourri.models_multi_period.EVs_multi_period import EV_multi_period
 
 
 import numpy as np
-import logging
+from loguru import logger
 
 
 class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
@@ -66,8 +66,8 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
             v_max_bound = max_vm_pu[gen_buses] < self.net["gen"]["max_vm_pu"].values
             if np.any(v_max_bound):
                 bound_gens = self.net["gen"].index.values[v_max_bound]
-                print("gen max_vm_pu > bus max_vm_pu for gens {}. "
-                      "Setting bus limit for these gens.".format(bound_gens))
+                logger.warning("gen max_vm_pu > bus max_vm_pu for gens {}. "
+                               "Setting bus limit for these gens.", bound_gens)
                 # set only vm of gens which do not violate the limits
                 max_vm_pu[gen_buses[~v_max_bound]] = self.net["gen"]["max_vm_pu"].values[~v_max_bound]
             else:
@@ -78,8 +78,8 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
             v_min_bound = self.net["gen"]["min_vm_pu"].values < min_vm_pu[gen_buses]
             if np.any(v_min_bound):
                 bound_gens = self.net["gen"].index.values[v_min_bound]
-                print("gen min_vm_pu < bus min_vm_pu for gens {}. "
-                      "Setting bus limit for these gens.".format(bound_gens))
+                logger.warning("gen min_vm_pu < bus min_vm_pu for gens {}. "
+                               "Setting bus limit for these gens.", bound_gens)
                 # set only vm of gens which do not violate the limits
                 min_vm_pu[gen_buses[~v_min_bound]] = self.net["gen"]["min_vm_pu"].values[~v_min_bound]
             else:

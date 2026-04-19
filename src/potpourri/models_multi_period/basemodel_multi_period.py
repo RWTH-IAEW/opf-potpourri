@@ -7,6 +7,7 @@ import numpy as np
 import pandapower as pp
 import simbench as sb
 import time as ctime
+from loguru import logger
 from src.potpourri.models_multi_period.generator_multi_period import Generator_multi_period
 from src.potpourri.models_multi_period.shunts_multi_period import Shunts_multi_period
 from src.potpourri.models_multi_period.sgens_multi_period import Sgens_multi_period
@@ -123,7 +124,7 @@ class Basemodel_multi_period:
         self.net.profiles[('sgen', 'q_mvar')] = self.net.profiles[('sgen', 'p_mw')] * np.tan(np.arccos(pf))
 
     def create_model(self):
-        print("Creating Model at: ", ctime.ctime())
+        logger.info("Creating model at {}", ctime.ctime())
         self.model = ConcreteModel()
 
         # time dependency to model
@@ -189,6 +190,7 @@ class Basemodel_multi_period:
 
     def solve(self, to_net: bool = True, print_solver_output: bool = True, solver='ipopt', load_solutions: bool = True,
               mip_solver='gurobi', max_iter=None, time_limit=600, init_strategy='rNLP', neos_opt='bonmin'):
+        logger.info("Solving model with solver '{}'", solver)
         optimizer = SolverFactory(solver)
 
         if solver == 'mindtpy':
@@ -198,49 +200,57 @@ class Basemodel_multi_period:
             if mip_solver == 'gurobi':
                 mip_solver = 'gurobi_persistent'
 
+            logger.debug("mindtpy: mip_solver={}, nlp_solver=ipopt, max_iter={}, init_strategy={}",
+                         mip_solver, max_iter, init_strategy)
             try:
                 self.results = optimizer.solve(self.model, mip_solver=mip_solver, nlp_solver='ipopt',
                                                tee=print_solver_output, iteration_limit=max_iter, time_limit=time_limit, init_strategy=init_strategy)
             except ValueError as err:
-                print(err)
+                logger.error("mindtpy solver error: {}", err)
 
             # if self.results.solver.termination_condition == TerminationCondition.feasible:
             #     print('Model is feasible but not optimal. Trying to solve a second time.')
             #     self.results = optimizer.solve(self.model, mip_solver=mip_solver, nlp_solver='ipopt',
             #                                    tee=print_solver_output, iteration_limit=max_iter, time_limit=time_limit)
         elif solver == 'neos':
-            os.environ['NEOS_EMAIL'] = "xyz@rwth-aachen.de"
+            logger.info("Submitting model to NEOS server (opt={})", neos_opt)
             solver_manager = SolverManagerFactory('neos')
             self.results = solver_manager.solve(self.model, opt=neos_opt, tee=True)
 
         else:
             if max_iter:
                 optimizer.options['max_iter'] = max_iter
+                logger.debug("Solver max_iter set to {}", max_iter)
 
             self.results = optimizer.solve(self.model, load_solutions=load_solutions, tee=print_solver_output)
 
         try:
-            if check_optimal_termination(self.results) & to_net:
-                #pyo_sol_to_net_res(self.net, self.model)
-                print("Solved successfully")
+            if check_optimal_termination(self.results):
+                logger.info("Optimal solution found")
+                if to_net:
+                    #pyo_sol_to_net_res(self.net, self.model)
+                    logger.debug("Solution mapped to net.res_*")
+            else:
+                logger.warning("Solver did not reach optimal termination (condition: {})",
+                               self.results.solver.termination_condition)
         except AttributeError as err:
-            print(err)
+            logger.error("Could not check termination condition: {}", err)
 
     def change_vals(self, key, value):
         component = self.model.component(key)
         if not component:
-            print("Model " + self.model.name + " has no component " + key)
+            logger.warning("Model has no component '{}'", key)
             return
         try:
             for index in component:
                 component[index] = value
         except TypeError as err:
-            print(err)
+            logger.error("change_vals failed for component '{}': {}", key, err)
 
     def fix_vars(self, key, value=None):
         component = self.model.component(key)
         if not component:
-            print("Model " + self.model.name + " has no component " + key)
+            logger.warning("Model has no component '{}'", key)
             return
         try:
             for index in component:
@@ -248,21 +258,23 @@ class Basemodel_multi_period:
                     component[index].fix(value)
                 else:
                     component[index].fix()
+            logger.debug("Fixed variable '{}'", key)
         except AttributeError as err:
-            print(err)
+            logger.error("fix_vars failed for component '{}': {}", key, err)
 
     def unfix_vars(self, key, value=None):
         component = self.model.component(key)
         if not component:
-            print("Model " + self.model.name + " has no component " + key)
+            logger.warning("Model has no component '{}'", key)
             return
         try:
             for index in component:
                 component[index].unfix()
-                if value:
+                if value is not None:
                     component[index] = value
+            logger.debug("Unfixed variable '{}'", key)
         except AttributeError as err:
-            print(err)
+            logger.error("unfix_vars failed for component '{}': {}", key, err)
 
     def make_to_dict(self, model_obj, model_time, data, time_dependent=True):
         """

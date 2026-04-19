@@ -8,7 +8,7 @@ from src.potpourri.models_multi_period.sgens_multi_period import Sgens_multi_per
 from src.potpourri.models_multi_period.pyo_to_net_multi_period import pyo_sol_to_net_res
 import simbench as sb
 import os
-import logging
+from loguru import logger
 import pandapower as pp
 
 #TODO: check if properly made multiperiod
@@ -112,8 +112,7 @@ class Windpower_multi_period(Sgens_multi_period):
             try:
                 p_inst = self.net.sgen.p_inst_mw.values / self.baseMVA
             except AttributeError:
-                logging.warning(
-                    "No p_inst_mw attribute found in self.net.sgen. Using p as p_inst for wind generators power limits.")
+                logger.warning("No p_inst_mw attribute found in net.sgen. Using p_mw as p_inst for wind generator power limits.")
                 p_inst = self.static_generation_data['p']
 
             self.static_generation_data['p_inst'] = p_inst

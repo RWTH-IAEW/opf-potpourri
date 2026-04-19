@@ -3,14 +3,31 @@ import pyomo.environ as pyo
 from src.potpourri.models.AC import AC
 from src.potpourri.models.OPF import OPF
 import numpy as np
-import logging
+from loguru import logger
 
 
 class ACOPF(AC, OPF):
+    """Full AC Optimal Power Flow model.
+
+    Combines AC power flow physics with operational limit constraints via
+    multiple inheritance. Adds voltage bounds, reactive power bounds, apparent
+    power thermal limits on lines and transformers, and optional wind Q-curve
+    constraints for grid-code compliance.
+
+    Args:
+        net: A pandapower network with voltage limits and generator data.
+    """
+
     def __init__(self, net):
         super().__init__(net)
 
     def _calc_opf_parameters(self):
+        """Compute all AC-OPF limit data from the network.
+
+        Extends OPF._calc_opf_parameters() with bus voltage limits, reactive
+        power limits for static generators and external grids, and reactive
+        demand bounds.
+        """
         super()._calc_opf_parameters()
 
         max_vm_pu, min_vm_pu = self.get_v_limits()
@@ -21,42 +38,55 @@ class ACOPF(AC, OPF):
         self.get_demand_reactive_data()
 
     def static_generation_reactive_power_limits(self):
+        """Read reactive power limits for static generators from net.sgen.
+
+        Populates static_generation_data['max_q'] and ['min_q'] (per-unit).
+        Also calls static_generation_wind_var_q() for wind-specific Q limits.
+        """
         if 'controllable' in self.net.sgen:
             self.static_generation_data['controllable'] = self.net.sgen.controllable.values
         else:
             self.static_generation_data['controllable'] = False
 
-        lim_q = abs(self.net.sgen.q_mvar) / self.baseMVA
+        lim_q = abs(self.net.sgen.q_mvar)  # MVAr — divided by baseMVA once below
         if 'max_q_mvar' in self.net.sgen:
             self.static_generation_data['max_q'] = self.net.sgen.max_q_mvar.fillna(lim_q).values / self.baseMVA
         else:
-            self.static_generation_data['max_q'] = lim_q / self.baseMVA
+            self.static_generation_data['max_q'] = lim_q.values / self.baseMVA
 
         if 'min_q_mvar' in self.net.sgen:
             self.static_generation_data['min_q'] = self.net.sgen.min_q_mvar.fillna(-lim_q).values / self.baseMVA
         else:
-            self.static_generation_data['min_q'] = -lim_q / self.baseMVA
+            self.static_generation_data['min_q'] = -lim_q.values / self.baseMVA
 
         self.static_generation_wind_var_q()
         self.static_generation_data['type'] = self.net.sgen.type.values
 
     def generation_reactive_power_limits(self):
-        # max_q = np.full(len(self.generation_data), 1e9) / self.baseMVA
-        # min_q = np.full(len(self.generation_data), -1e9) / self.baseMVA
-        #
-        # for element, (f, t) in self.net._gen_order.items():
-        #     if 'max_q_mvar' in self.net[element]:
-        #         max_q[f:t] = self.net[element].max_q_mvar.fillna(1e9) / self.baseMVA
-        #     if 'min_q_mvar' in self.net[element]:
-        #         min_q[f:t] = self.net[element].min_q_mvar.fillna(-1e9) / self.baseMVA
-        #
-        # self.generation_data['max_q'] = max_q
-        # self.generation_data['min_q'] = min_q
+        """Read reactive power limits for external grid generators.
 
-        self.generation_data['max_q'] = self.net.sgen['max_q_mvar']
-        self.generation_data['min_q'] = self.net.sgen['min_q_mvar']
+        Populates generation_data['max_q'] and ['min_q'] (per-unit).
+        """
+        max_q = np.full(len(self.generation_data), 1e9) / self.baseMVA
+        min_q = np.full(len(self.generation_data), -1e9) / self.baseMVA
+
+        for element, (f, t) in self.net._gen_order.items():
+            if 'max_q_mvar' in self.net[element]:
+                max_q[f:t] = self.net[element].max_q_mvar.fillna(1e9).values / self.baseMVA
+            if 'min_q_mvar' in self.net[element]:
+                min_q[f:t] = self.net[element].min_q_mvar.fillna(-1e9).values / self.baseMVA
+
+        self.generation_data['max_q'] = max_q
+        self.generation_data['min_q'] = min_q
 
     def get_v_limits(self):
+        """Read bus voltage bounds from net.bus.
+
+        Returns:
+            tuple: (max_vm_pu, min_vm_pu) as numpy arrays indexed by internal
+            bus id. Defaults to 1.1 / 0.9 if columns are absent. Generator-level
+            limits override bus limits where stricter.
+        """
         if 'max_vm_pu' in self.net.bus:
             max_vm_pu = self.net.bus.max_vm_pu.values
         else:
@@ -73,14 +103,24 @@ class ACOPF(AC, OPF):
         return max_vm_pu, min_vm_pu
 
     def add_generator_v_limits(self, max_vm_pu, min_vm_pu):
+        """Apply per-generator voltage limits, overriding bus defaults.
+
+        Modifies max_vm_pu and min_vm_pu in-place. Generator limits that exceed
+        the bus limit are ignored with a warning; otherwise they override the
+        bus-level value.
+
+        Args:
+            max_vm_pu: Array of per-bus upper voltage limits (per-unit).
+            min_vm_pu: Array of per-bus lower voltage limits (per-unit).
+        """
         # check max_vm_pu / min_vm_pu bus limit violation by gens
         gen_buses = self.bus_lookup[self.net.gen.bus.values]
         if "max_vm_pu" in self.net["gen"].columns:
             v_max_bound = max_vm_pu[gen_buses] < self.net["gen"]["max_vm_pu"].values
             if np.any(v_max_bound):
                 bound_gens = self.net["gen"].index.values[v_max_bound]
-                print("gen max_vm_pu > bus max_vm_pu for gens {}. "
-                      "Setting bus limit for these gens.".format(bound_gens))
+                logger.warning("gen max_vm_pu > bus max_vm_pu for gens {}. "
+                               "Setting bus limit for these gens.", bound_gens)
                 # pyo.Set only vm of gens which do not violate the limits
                 max_vm_pu[gen_buses[~v_max_bound]] = self.net["gen"]["max_vm_pu"].values[~v_max_bound]
             else:
@@ -91,8 +131,8 @@ class ACOPF(AC, OPF):
             v_min_bound = self.net["gen"]["min_vm_pu"].values < min_vm_pu[gen_buses]
             if np.any(v_min_bound):
                 bound_gens = self.net["gen"].index.values[v_min_bound]
-                print("gen min_vm_pu < bus min_vm_pu for gens {}. "
-                      "Setting bus limit for these gens.".format(bound_gens))
+                logger.warning("gen min_vm_pu < bus min_vm_pu for gens {}. "
+                               "Setting bus limit for these gens.", bound_gens)
                 # pyo.Set only vm of gens which do not violate the limits
                 min_vm_pu[gen_buses[~v_min_bound]] = self.net["gen"]["min_vm_pu"].values[~v_min_bound]
             else:
@@ -115,6 +155,11 @@ class ACOPF(AC, OPF):
         return max_vm_pu, min_vm_pu
 
     def get_demand_reactive_data(self):
+        """Read reactive power bounds for loads from net.load.
+
+        Populates self.QDmax_data and self.QDmin_data (per-unit). Falls back
+        to active power magnitude if no reactive power values are set.
+        """
         # reactive power demand
         # use active power for reactive power limits, if no reactive power given for any sgen
         if self.net.load.q_mvar.sum() == 0:
@@ -134,6 +179,12 @@ class ACOPF(AC, OPF):
         self.QDmin_data = self.net.load.min_q_mvar.fillna(0) / self.baseMVA
 
     def static_generation_wind_var_q(self):
+        """Compute Q-P and Q-U characteristic limits for wind generators.
+
+        Reads sgen.var_q (variant 0–2) and assigns grid-code-compliant reactive
+        power bounds. Populates self.q_limit_parameter with slope/intercept
+        parameters for the Q-P and Q-U curves used in add_OPF() constraints.
+        """
         x = np.array([[96, 103], [120, 127]]) / 110
         y = np.array([[0.48, 0.41, 0.33], [-0.23, -0.33, -0.41]])
         m = (y[1] - y[0]) / (x[0, 1] - x[0, 0])
@@ -156,7 +207,7 @@ class ACOPF(AC, OPF):
             try:
                 p_inst = self.net.sgen.p_inst_mw.values / self.baseMVA
             except AttributeError:
-                logging.warning("No p_inst_mw attribute found in net.sgen. Using p as p_inst for wind generators power limits.")
+                logger.warning("No p_inst_mw attribute found in net.sgen. Using p_mw as p_inst for wind generator power limits.")
                 p_inst = self.static_generation_data['p']
 
             self.static_generation_data['p_inst'] = p_inst
@@ -177,6 +228,16 @@ class ACOPF(AC, OPF):
             self.static_generation_data['wind_hc'] = False
 
     def add_OPF(self, **kwargs):
+        """Attach AC-OPF sets, parameters, and constraints to self.model.
+
+        Extends OPF.add_OPF() with bus voltage bounds (Vmin, Vmax), apparent
+        power limits on lines and transformers, reactive power bounds for static
+        generators, external grids, and controllable loads, and wind Q-P/Q-U
+        curve constraints for sgens with var_q set.
+
+        Args:
+            **kwargs: Forwarded to _calc_opf_parameters.
+        """
         super().add_OPF(**kwargs)
 
         self.model.name = "ACOPF"
@@ -280,21 +341,31 @@ class ACOPF(AC, OPF):
         self.model.QW_pos_pyo = pyo.Constraint(self.model.WINDc, rule=QW_pos)
         self.model.QW_neg_pyo = pyo.Constraint(self.model.WINDc, rule=QW_neg)
 
-        #
+        sGbs_lookup = {g: b for (g, b) in self.model.sGbs}
+
         def QV_min(model, w):
-            for (g, b) in model.sGbs:
-                if g == w:
-                    return model.qsG[w] >= (self.q_limit_parameter.m_qv[model.var_q[w]] * model.v[b] + self.q_limit_parameter.b_qv_min[model.var_q[w]]) * model.PsG_inst[w]
+            if w not in sGbs_lookup:
+                return pyo.Constraint.Skip
+            b = sGbs_lookup[w]
+            return model.qsG[w] >= (self.q_limit_parameter.m_qv[model.var_q[w]] * model.v[b] + self.q_limit_parameter.b_qv_min[model.var_q[w]]) * model.PsG_inst[w]
+
         self.model.QU_min_pyo = pyo.Constraint(self.model.WINDc, rule=QV_min)
 
         def QV_max(model, w):
-            for (g, b) in model.sGbs:
-                if g == w:
-                    return model.qsG[w] <= (self.q_limit_parameter.m_qv[model.var_q[w]] * model.v[b] + self.q_limit_parameter.b_qv_max[model.var_q[w]]) * model.PsG_inst[w]
+            if w not in sGbs_lookup:
+                return pyo.Constraint.Skip
+            b = sGbs_lookup[w]
+            return model.qsG[w] <= (self.q_limit_parameter.m_qv[model.var_q[w]] * model.v[b] + self.q_limit_parameter.b_qv_max[model.var_q[w]]) * model.PsG_inst[w]
+
         self.model.QU_max_pyo = pyo.Constraint(self.model.WINDc, rule=QV_max)
 
 
     def add_voltage_deviation_objective(self):
+        """Set objective to minimise sum of squared voltage deviations from 1 p.u.
+
+        Minimises Σ (v[b] - 1)² over non-slack buses and
+        Σ (v[b] - v_b0[b])² over slack buses.
+        """
         self.model.vm = pyo.Param(self.model.B, initialize=self.bus_data['v_m'][self.model.B])
 
         def voltage_deviation_objective(model):
@@ -304,6 +375,10 @@ class ACOPF(AC, OPF):
         self.model.obj_v_deviation = pyo.Objective(rule=voltage_deviation_objective, sense=pyo.minimize)
 
     def add_reactive_power_flow_objective(self):
+        """Set objective to minimise total squared reactive generation.
+
+        Minimises Σ qsG[g]² over all static generators.
+        """
 
         def reactive_objective(model):
             # Minimize the reactive power
