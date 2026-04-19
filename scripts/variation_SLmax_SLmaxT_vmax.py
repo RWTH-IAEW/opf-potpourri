@@ -2,8 +2,8 @@ import pandapower as pp
 import simbench as sb
 import matplotlib.pyplot as plt
 
-from potpourri.models.HC_ACOPF import HC_ACOPF
-from potpourri.plotting.plot_functions import plot_wind_hc_results, plot_qu_res
+from src.potpourri.models.HC_ACOPF import HC_ACOPF
+from src.potpourri.plotting.plot_functions import plot_wind_hc_results, plot_qu_res
 
 if __name__ == '__main__':
     # net = pp.networks.simple_four_bus_system()

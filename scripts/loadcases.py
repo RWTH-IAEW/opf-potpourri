@@ -4,7 +4,7 @@ import simbench as sb
 import pyomo.environ as pyo
 import pandapower as pp
 
-from potpourri.models.ACOPF_base import ACOPF
+from src.potpourri.models.ACOPF_base import ACOPF
 
 if __name__ == '__main__':
     # net = sb.get_simbench_net("1-HV-mixed--0-no_sw")

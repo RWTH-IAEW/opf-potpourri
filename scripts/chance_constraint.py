@@ -1,7 +1,7 @@
 import pickle
 import pyomo.environ as pe
 
-from potpourri.models.HC_ACOPF import HC_ACOPF
+from src.potpourri.models.HC_ACOPF import HC_ACOPF
 
 
 def create_hc_cc_basics(net, n_scenarios, eps, Delta):

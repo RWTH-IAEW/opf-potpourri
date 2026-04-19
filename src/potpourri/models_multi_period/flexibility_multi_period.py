@@ -6,7 +6,7 @@ import copy
 import numpy as np
 import pandapower as pp
 
-from potpourri.models_multi_period.pyo_to_net_multi_period import pyo_sol_to_net_res
+from src.potpourri.models_multi_period.pyo_to_net_multi_period import pyo_sol_to_net_res
 class Flexibility_multi_period:
     #TODO see if correct time dependency implementation
     def __init__(self, net, T=None, scenario=None):

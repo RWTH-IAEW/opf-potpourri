@@ -2,8 +2,8 @@ import numpy as np
 import pickle
 from tqdm import tqdm
 
-from potpourri.models.HC_ACOPF import HC_ACOPF
-from potpourri.plotting.plot_functions import set_plt_config
+from src.potpourri.models.HC_ACOPF import HC_ACOPF
+from src.potpourri.plotting.plot_functions import set_plt_config
 import matplotlib.pyplot as plt
 
 

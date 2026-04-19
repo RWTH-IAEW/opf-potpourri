@@ -4,8 +4,8 @@ import pandas as pd
 import pandapower as pp
 from tqdm import tqdm
 
-from potpourri.models.HC_ACOPF import HC_ACOPF
-from potpourri.net_augmentation.prepare_net import apply_loadcase_to_sb_net, upgrade_pandapower_net
+from src.potpourri.models.HC_ACOPF import HC_ACOPF
+from src.potpourri.net_augmentation.prepare_net import apply_loadcase_to_sb_net, upgrade_pandapower_net
 
 def write_wind_node_potential_to_buses(opf, node_potentials):
     # Step 1: Initialize a new column in hc.net.bus named 'node_potential' with default values as NaN.

@@ -1,5 +1,5 @@
 from pyomo.environ import *
-from potpourri.models_multi_period.basemodel_multi_period import Basemodel_multi_period
+from src.potpourri.models_multi_period.basemodel_multi_period import Basemodel_multi_period
 #TODO make multiperiod
 
 class DC_multi_period(Basemodel_multi_period):

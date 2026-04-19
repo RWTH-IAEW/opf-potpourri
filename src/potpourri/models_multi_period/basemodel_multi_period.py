@@ -7,14 +7,14 @@ import numpy as np
 import pandapower as pp
 import simbench as sb
 import time as ctime
-from potpourri.models_multi_period.generator_multi_period import Generator_multi_period
-from potpourri.models_multi_period.shunts_multi_period import Shunts_multi_period
-from potpourri.models_multi_period.sgens_multi_period import Sgens_multi_period
-from potpourri.models_multi_period.demand_multi_period import Demand_multi_period
-from potpourri.models_multi_period.windpower_multi_period import Windpower_multi_period
-from potpourri.models_multi_period.EVs_multi_period import EV_multi_period
-from potpourri.models_multi_period.flexibility_multi_period import Flexibility_multi_period
-from potpourri.models_multi_period.pyo_to_net_multi_period import pyo_sol_to_net_res
+from src.potpourri.models_multi_period.generator_multi_period import Generator_multi_period
+from src.potpourri.models_multi_period.shunts_multi_period import Shunts_multi_period
+from src.potpourri.models_multi_period.sgens_multi_period import Sgens_multi_period
+from src.potpourri.models_multi_period.demand_multi_period import Demand_multi_period
+from src.potpourri.models_multi_period.windpower_multi_period import Windpower_multi_period
+from src.potpourri.models_multi_period.EVs_multi_period import EV_multi_period
+from src.potpourri.models_multi_period.flexibility_multi_period import Flexibility_multi_period
+from src.potpourri.models_multi_period.pyo_to_net_multi_period import pyo_sol_to_net_res
 
 
 class Basemodel_multi_period:

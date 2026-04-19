@@ -1,10 +1,10 @@
 import copy
 
 from pyomo.environ import *
-from potpourri.models_multi_period.basemodel_multi_period import Basemodel_multi_period
-from potpourri.models_multi_period.generator_multi_period import Generator_multi_period
-from potpourri.models_multi_period.sgens_multi_period import Sgens_multi_period
-from potpourri.models_multi_period.demand_multi_period import Demand_multi_period
+from src.potpourri.models_multi_period.basemodel_multi_period import Basemodel_multi_period
+from src.potpourri.models_multi_period.generator_multi_period import Generator_multi_period
+from src.potpourri.models_multi_period.sgens_multi_period import Sgens_multi_period
+from src.potpourri.models_multi_period.demand_multi_period import Demand_multi_period
 import numpy as np
 
 class OPF_multi_period(Basemodel_multi_period):

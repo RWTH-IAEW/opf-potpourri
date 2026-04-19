@@ -4,7 +4,7 @@ import pandapower as pp
 import numpy as np
 import math
 
-from potpourri.models.HC_ACOPF import HC_ACOPF
+from src.potpourri.models.HC_ACOPF import HC_ACOPF
 
 
 def init_pGW_qGW(hc_model, pGW=1, qGW=0):

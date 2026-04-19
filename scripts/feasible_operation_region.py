@@ -25,8 +25,8 @@ import numpy as np
 import pandapower as pp
 import matplotlib.pyplot as plt
 
-from potpourri.models.HC_ACOPF import HC_ACOPF
-from potpourri.models.ACOPF_base import ACOPF
+from src.potpourri.models.HC_ACOPF import HC_ACOPF
+from src.potpourri.models.ACOPF_base import ACOPF
 
 # ==========================
 def run_feasible_operation_region(self):

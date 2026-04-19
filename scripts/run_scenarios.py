@@ -1,9 +1,9 @@
 import copy
 
-from potpourri.models.HC_ACOPF import HC_ACOPF
-from potpourri.models.pyo_to_net import pyo_sol_to_net_res
-from potpourri.models.init_pyo_from_pp_res import init_pyo_from_dcpp
-from potpourri.plotting.plot_functions import set_plt_config
+from src.potpourri.models.HC_ACOPF import HC_ACOPF
+from src.potpourri.models.pyo_to_net import pyo_sol_to_net_res
+from src.potpourri.models.init_pyo_from_pp_res import init_pyo_from_dcpp
+from src.potpourri.plotting.plot_functions import set_plt_config
 config = set_plt_config()
 
 import pandapower as pp

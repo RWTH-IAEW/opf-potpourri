@@ -1,7 +1,7 @@
 import pandas as pd
 import pyomo.environ as pyo
-from potpourri.models.AC import AC
-from potpourri.models.OPF import OPF
+from src.potpourri.models.AC import AC
+from src.potpourri.models.OPF import OPF
 import numpy as np
 import logging
 

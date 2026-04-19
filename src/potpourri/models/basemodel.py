@@ -28,7 +28,7 @@ import pandapower as pp
 import pyomo.environ as pyo
 
 
-from potpourri.models.pyo_to_net import pyo_sol_to_net_res
+from src.potpourri.models.pyo_to_net import pyo_sol_to_net_res
 
 
 class Basemodel:

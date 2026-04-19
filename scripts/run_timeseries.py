@@ -2,16 +2,16 @@ import copy
 
 import pandas as pd
 
-from potpourri.models.ACOPF_base import ACOPF
+from src.potpourri.models.ACOPF_base import ACOPF
 import simbench as sb
 import pyomo.environ as pe
 from pandapower import timeseries as ts
 import pickle
 from pandapower.control.run_control import get_controller_order
 
-from potpourri.models.HC_ACOPF import HC_ACOPF
-from potpourri.models.init_pyo_from_pp_res import init_pyo_from_dcpp
-from potpourri.plotting.plot_functions import *
+from src.potpourri.models.HC_ACOPF import HC_ACOPF
+from src.potpourri.models.init_pyo_from_pp_res import init_pyo_from_dcpp
+from src.potpourri.plotting.plot_functions import *
 
 
 def create_run_pyomo_opf(net, **kwargs):
