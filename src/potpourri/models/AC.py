@@ -3,6 +3,16 @@ from src.potpourri.models.basemodel import Basemodel
 
 
 class AC(Basemodel):
+    """AC power flow model for distribution network analysis.
+
+    Extends Basemodel with full AC power flow equations including voltage
+    magnitudes and reactive power. Adds real and reactive KCL at each bus,
+    and real and reactive KVL on each line and transformer.
+
+    Args:
+        net: A pandapower network compatible with pp.runpp().
+    """
+
     def __init__(self, net):
         super().__init__(net)
 
@@ -39,6 +49,13 @@ class AC(Basemodel):
         self.create_model()
 
     def create_model(self):
+        """Build the Pyomo ConcreteModel with AC power flow constraints.
+
+        Adds line and transformer admittance parameters (Bii, Bik, Gii, Gik),
+        voltage magnitude variables, reactive power variables (qsG, qD, qLfrom,
+        qLto, qThv, qTlv, qG), and KCL/KVL constraints for real and reactive
+        power on every bus, line, and transformer.
+        """
         super().create_model()
 
         self.model.name = "AC"

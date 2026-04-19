@@ -8,17 +8,39 @@ import pandapower as pp
 
 
 class HC_ACOPF(ACOPF):
-    def __init__(self, net):
-        if 'wind_hc' not in net.sgen:
-            net = copy.deepcopy(net)
-            buses_excl_extGrids = net.bus.loc[~net.bus.index.isin(net.ext_grid.bus)].index
+    """Hosting Capacity AC OPF for wind generation integration studies.
 
+    Extends ACOPF with binary variables y[w] ∈ {0, 1} indicating whether each
+    wind generator is active. The default objective maximises total wind
+    generation minus network losses.
+
+    If net.sgen has no 'wind_hc' column, candidate wind generators are
+    automatically placed at every bus that is not an external grid bus.
+
+    Args:
+        net: A pandapower network. Wind candidates identified via sgen.wind_hc.
+    """
+
+    def __init__(self, net):
+        net = copy.deepcopy(net)
+        if 'wind_hc' not in net.sgen:
+            buses_excl_extGrids = net.bus.loc[~net.bus.index.isin(net.ext_grid.bus)].index
             pp.create_sgens(net, buses_excl_extGrids, p_mw=0, wind_hc=True)
         net.sgen.wind_hc.fillna(False, inplace=True)
 
         super().__init__(net)
 
     def _calc_opf_parameters(self, SWmax=10000, SWmin=0):
+        """Compute HC-OPF limit data from the network.
+
+        Extends ACOPF._calc_opf_parameters() with apparent power bounds
+        SWmax and SWmin for WIND_HC generators, and Q-U characteristic slopes
+        for grid code variant 1.
+
+        Args:
+            SWmax: Maximum apparent power per wind generator (MVA).
+            SWmin: Minimum apparent power per active wind generator (MVA).
+        """
         super()._calc_opf_parameters()
 
         if 'windpot_p_mw' in self.net.bus:
@@ -34,6 +56,17 @@ class HC_ACOPF(ACOPF):
         self.qu_min = -self.m_qu_min * 96 / 110 + 0.33
 
     def add_OPF(self, **kwargs):
+        """Attach HC-OPF variables and constraints to self.model.
+
+        Extends ACOPF.add_OPF() with binary variable y[w], apparent power
+        envelope (SWmin·y ≤ S² ≤ SWmax·y), Q-P bounds (variant 1), Q-U bounds
+        from the grid-code voltage characteristic, an optional real power cap
+        from net.bus.windpot_p_mw, and a default objective maximising wind
+        generation minus network losses.
+
+        Args:
+            **kwargs: Forwarded to ACOPF.add_OPF().
+        """
         super().add_OPF(**kwargs)
 
         self.model.name = "HC_ACOPF"
@@ -87,19 +120,23 @@ class HC_ACOPF(ACOPF):
         self.model.QW_min_constraint =  pyo.Constraint(self.model.WIND_HC, rule=QW_min)
         self.model.QW_max_constraint =  pyo.Constraint(self.model.WIND_HC, rule=QW_max)
 
-        def QU_min_hc(model, w):
-            for (g, b) in model.sGbs:
-                if g == w:
-                    return model.qsG[w] >= (self.m_qu_min * model.v[b] + self.qu_min) * model.psG[w]
+        hc_sGbs_lookup = {g: b for (g, b) in self.model.sGbs}
 
-        self.model.QU_min_hc_constraint =  pyo.Constraint(self.model.WIND_HC, rule=QU_min_hc)
+        def QU_min_hc(model, w):
+            if w not in hc_sGbs_lookup:
+                return pyo.Constraint.Skip
+            b = hc_sGbs_lookup[w]
+            return model.qsG[w] >= (self.m_qu_min * model.v[b] + self.qu_min) * model.psG[w]
+
+        self.model.QU_min_hc_constraint = pyo.Constraint(self.model.WIND_HC, rule=QU_min_hc)
 
         def QU_max_hc(model, w):
-            for (g, b) in model.sGbs:
-                if g == w:
-                    return model.qsG[w] <= (self.m_qu_max * model.v[b] + self.qu_max) * model.psG[w]
+            if w not in hc_sGbs_lookup:
+                return pyo.Constraint.Skip
+            b = hc_sGbs_lookup[w]
+            return model.qsG[w] <= (self.m_qu_max * model.v[b] + self.qu_max) * model.psG[w]
 
-        self.model.QU_max_hc_constraint =  pyo.Constraint(self.model.WIND_HC, rule=QU_max_hc)
+        self.model.QU_max_hc_constraint = pyo.Constraint(self.model.WIND_HC, rule=QU_max_hc)
 
         if 'windpot_p_mw' in self.net.bus:
             def PW_max(model, w):
@@ -108,11 +145,18 @@ class HC_ACOPF(ACOPF):
             self.model.PW_max_constraint =  pyo.Constraint(self.model.WIND_HC, rule=PW_max)
 
     def add_loss_obj(self):
+        """Replace default objective with a weighted wind-vs-loss objective.
+
+        Maximises: ε · Σ psG[w]  +  (1 - ε) · (- Σ losses)
+
+        The mutable parameter eps (default 1.0) can be updated for sensitivity
+        analysis without rebuilding the model: model.eps.set_value(0.5).
+        """
         self.model.eps = pyo.Param(domain=pyo.Reals, initialize=1., mutable=True)
 
         def objective_pwind_loss(model):
             return model.eps * sum(model.psG[w] for w in model.WIND_HC) + (1 - model.eps) * (
                 - sum(model.pLfrom[l] + model.pLto[l] for l in model.L))
 
-        self.model.obj_hc.deactivate()
+        self.model.obj.deactivate()
         self.model.OBJ_with_loss = pyo.Objective(rule=objective_pwind_loss, sense=pyo.maximize)

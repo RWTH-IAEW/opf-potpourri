@@ -6,10 +6,25 @@ import numpy as np
 
 
 class OPF(Basemodel):
+    """OPF mixin that adds power and thermal limit constraints to a power flow model.
+
+    Intended for use via multiple inheritance alongside AC or DC:
+
+        class ACOPF(AC, OPF): ...
+
+    Provides methods to read operational limits from a pandapower network and
+    attach the corresponding Pyomo sets, parameters, and constraints.
+    """
+
     def __init__(self, net):
         super().__init__(net)
 
     def generation_real_power_limits(self):
+        """Read generator real power limits from net into generation_data.
+
+        Populates generation_data['max_p'] and ['min_p'] (per-unit on baseMVA).
+        Non-controllable generators are pinned to their current p_mw setpoint.
+        """
         max_p = np.full(len(self.generation_data), 1e9) / self.baseMVA
         min_p = np.full(len(self.generation_data), -1e9) / self.baseMVA
 
@@ -36,6 +51,11 @@ class OPF(Basemodel):
         self.generation_data['min_p'] = min_p
 
     def static_generation_real_power_limits(self):
+        """Read static generator real power limits from net.sgen.
+
+        Populates static_generation_data['max_p'], ['min_p'], and
+        ['controllable'] (per-unit). Defaults: max = p_mw, min = 0.
+        """
         if 'controllable' in self.net.sgen:
             self.static_generation_data['controllable'] = self.net.sgen.controllable.values
         else:
@@ -52,17 +72,22 @@ class OPF(Basemodel):
             self.static_generation_data['min_p'] = np.zeros(len(self.net.sgen.index))
 
     def get_demand_real_power_data(self):
+        """Read load real power bounds from net.load.
+
+        Populates self.PDmax_data and self.PDmin_data (per-unit).
+        Falls back to p_mw and 0 respectively if columns are absent.
+        """
         if 'controllable' not in self.net.load:
             self.demand_controllable_set = None  # create empty  pyo.Set if no controllable load exist
         else:
-            self.demand_controllable_set = self.net.load.index[self.net.load.controllable == True]
+            self.demand_controllable_set = self.net.load.index[self.net.load.controllable.fillna(False).astype(bool)]
 
         # add rows with active demand limits if not existing
         if 'max_p_mw' not in self.net.load:
             self.net.load['max_p_mw'] = self.net.load.p_mw
 
         if 'min_p_mw' not in self.net.load:
-            self.net.load['min_p_mw'] = [0] * len(self.net.load.index)
+            self.net.load['min_p_mw'] = np.zeros(len(self.net.load.index))
 
         # demand limits for loads
         self.PDmax_data = self.net.load.max_p_mw.fillna(self.net.load.p_mw) / self.baseMVA
@@ -75,6 +100,11 @@ class OPF(Basemodel):
         return max_loading_percent / 100. * max_i_ka * df * self.net.line.parallel.values * vr / self.baseMVA
 
     def _calc_opf_parameters(self, **kwargs):
+        """Compute all OPF limit data from the network before model construction.
+
+        Calculates line apparent power limits (SLmax) and transformer limits
+        (SLmaxT), then reads generator, static generator, and demand limits.
+        """
         max_load = self.net.line.max_loading_percent.values if "max_loading_percent" in self.net.line else 100.
         self.line_data['SLmax_data'] = self.__calc_SLmax(max_load)
 
@@ -96,6 +126,15 @@ class OPF(Basemodel):
         self.get_demand_real_power_data()
 
     def add_OPF(self, **kwargs):
+        """Attach OPF sets, parameters, and constraints to self.model.
+
+        Calls _calc_opf_parameters(), then adds sets sGc and Dc, parameters
+        PGmax/min, sPGmax/min, PDmax/min, SLmax, SLmaxT, and real-power bound
+        constraints for generators, static generators, and controllable loads.
+
+        Args:
+            **kwargs: Forwarded to _calc_opf_parameters (e.g. max_loading_percent).
+        """
         self._calc_opf_parameters(**kwargs)
 
         # controllable generation
@@ -151,6 +190,11 @@ class OPF(Basemodel):
         # --- transformer tap ratio limits ---
 
     def add_tap_changer_linear(self):
+        """Enable continuous (linear) transformer tap ratio optimisation.
+
+        Unfixes Tap variables and adds [Tap_min, Tap_max] bounds derived from
+        net.trafo tap_min / tap_max columns.
+        """
         def _calc_tap_min_max(self):
             vn_trafo_hv_min, vn_trafo_lv_min, shift_min = _calc_tap_shift(self, tap_pos=self.net.trafo.tap_min)
             vn_trafo_hv_max, vn_trafo_lv_max, shift_max = _calc_tap_shift(self, tap_pos=self.net.trafo.tap_max)
@@ -234,8 +278,8 @@ class OPF(Basemodel):
                     degree_is_set = tap_step_degree[phase_shifters].fillna(0) != 0
                     percent_is_set = tap_step_percent[phase_shifters].fillna(0) != 0
                     if (degree_is_set & percent_is_set).any():
-                        raise UserWarning(
-                            "Both tap_step_degree and tap_step_percent  pyo.Set for ideal phase shifter")
+                        raise ValueError(
+                            "Both tap_step_degree and tap_step_percent set for ideal phase shifter.")
                     trafo_shift[phase_shifters] += np.where(
                         (degree_is_set),
                         (direction * tap_diff[phase_shifters] * tap_step_degree[phase_shifters]),
@@ -261,6 +305,11 @@ class OPF(Basemodel):
         self.unfix_vars('Tap')
 
     def add_tap_changer_discrete(self):
+        """Enable discrete transformer tap ratio optimisation.
+
+        Introduces integer variable Tap_pos and links it to Tap via a
+        constraint. Suitable for use with MIP/MINLP solvers (MindtPy, Gurobi).
+        """
         tap_neutral = self.net.trafo.tap_neutral
         tap_step = self.net.trafo.tap_step_percent / 100.
         tap_pos_max = self.net.trafo.tap_max

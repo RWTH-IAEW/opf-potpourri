@@ -1,34 +1,44 @@
-import pandapower as pp
 import math
-def init_pyo_from_dcpp(net, model):
+import pandapower as pp
+
+
+def init_pyo_from_pp_res(net, model):
+    """Warm-start Pyomo variables from a pandapower DC power flow result.
+
+    Runs pp.rundcpp() on the network and copies bus angles, line flows,
+    transformer flows, and generator injections into the Pyomo model variables
+    as initial values. For AC models, voltage magnitudes are also initialised.
+
+    Args:
+        net: pandapower network (will be solved in-place by rundcpp).
+        model: Pyomo ConcreteModel with variables delta, pLfrom, pLto,
+               pThv, pTlv, pG, and optionally v.
+    """
     pp.rundcpp(net)
 
     bus_lookup = net._pd2ppc_lookups["bus"]
 
+    # bus angles and voltage magnitudes
     for b in net.bus.index:
         model.delta[bus_lookup[b]] = net.res_bus.va_degree[b] * math.pi / 180
-        if 'AC' in model.name:
+        if hasattr(model, 'v'):
             model.v[bus_lookup[b]] = net.res_bus.vm_pu[b]
 
+    # line flows — Pyomo L index matches net.line.index
     for l in model.L:
         model.pLfrom[l] = net.res_line.p_from_mw[l] / model.baseMVA.value
         model.pLto[l] = net.res_line.p_to_mw[l] / model.baseMVA.value
-        # if 'AC' in model.name:
-        #     model.qLfrom[l] = net.res_line.q_from_mvar[l] / model.baseMVA.value
-        #     model.qLto[l] = net.res_line.q_to_mvar[l] / model.baseMVA.value
 
-    for m_ind, net_ind in enumerate(net.trafo.index):
-        model.pThv[m_ind] = net.res_trafo.p_hv_mw[net_ind] / model.baseMVA.value
-        model.pTlv[m_ind] = net.res_trafo.p_lv_mw[net_ind] / model.baseMVA.value
-        # if 'AC' in model.name:
-        #     model.qThv[t] = net.res_trafo.q_hv_mvar[t] / model.baseMVA.value
-        #     model.qTlv[t] = net.res_trafo.q_lv_mvar[t] / model.baseMVA.value
+    # transformer flows — trafo_data uses 0-based position indices
+    for pos, net_ind in enumerate(net.trafo.index):
+        if pos in model.TRANSF:
+            model.pThv[pos] = net.res_trafo.p_hv_mw[net_ind] / model.baseMVA.value
+            model.pTlv[pos] = net.res_trafo.p_lv_mw[net_ind] / model.baseMVA.value
 
-    for m_ind, net_ind in enumerate(net.ext_grid.index):
-        model.pG[m_ind] = net.res_ext_grid.p_mw[net_ind] / model.baseMVA.value
-        # if 'AC' in model.name:
-        #     model.qeG[e] = net.res_ext_grid.q_mvar[e] / model.baseMVA.value
-
-
-
-
+    # generator injections — G index follows _gen_order contiguous ranges
+    for element, (f, t) in net._gen_order.items():
+        res_table = net['res_' + element]
+        for i, net_ind in enumerate(net[element].index):
+            pyo_ind = f + i
+            if pyo_ind in model.G:
+                model.pG[pyo_ind] = res_table.p_mw.iloc[i] / model.baseMVA.value

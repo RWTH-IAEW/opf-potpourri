@@ -6,40 +6,36 @@ from src.potpourri.models.OPF import OPF
 class DCOPF(DC, OPF):
     def __init__(self, net):
         super().__init__(net)
-
         self.create_model()
-
 
     def create_model(self):
         super().create_model()
         self.model.name = "DCOPF"
 
-        # --- cost function ---
-        # def objective(model):
-        #     obj = sum(model.c1[g] * (model.baseMVA * model.pG[g]) + model.c0[g] for g in model.G) + \
-        #           sum(model.VOLL[d] * (model.PD[d] - model.pD[d]) * model.baseMVA for d in model.D)
-        #     return obj
-        #
-        # self.model.OBJ = Objective(rule=objective, sense=minimize)
+    def add_OPF(self, **kwargs):
+        """Attach DC-OPF sets, parameters, and constraints to self.model.
 
-        # --- line power limits ---
-        def line_lim1_def(model, l):
-            return model.pL[l] <= model.SLmax[l]
+        Calls OPF.add_OPF() for generator/demand limits and line ratings, then
+        adds DC thermal limit constraints using the correct pLfrom / pThv variables.
+        """
+        super().add_OPF(**kwargs)
 
-        def line_lim2_def(model, l):
-            return model.pL[l] >= -model.SLmax[l]
+        # --- line power limits (check sending end; DC is approximately lossless) ---
+        def line_lim_upper(model, l):
+            return model.pLfrom[l] <= model.SLmax[l]
 
-        self.model.line_lim_from = pyo.Constraint(self.model.L, rule=line_lim1_def)
-        self.model.line_lim_to = pyo.Constraint(self.model.L, rule=line_lim2_def)
+        def line_lim_lower(model, l):
+            return model.pLfrom[l] >= -model.SLmax[l]
 
-        # --- power flow limits on transformer lines---
-        def transf_lim1_def(model, l):
-            return model.pLT[l] <= model.SLmaxT[l]
+        self.model.line_lim_from = pyo.Constraint(self.model.L, rule=line_lim_upper)
+        self.model.line_lim_to = pyo.Constraint(self.model.L, rule=line_lim_lower)
 
-        def transf_lim2_def(model, l):
-            return model.pLT[l] >= -model.SLmaxT[l]
+        # --- transformer power limits ---
+        def transf_lim_upper(model, l):
+            return model.pThv[l] <= model.SLmaxT[l]
 
-        self.model.transf_lim1 = pyo.Constraint(self.model.TRANSF, rule=transf_lim1_def)
-        self.model.transf_lim2 = pyo.Constraint(self.model.TRANSF, rule=transf_lim2_def)
+        def transf_lim_lower(model, l):
+            return model.pThv[l] >= -model.SLmaxT[l]
 
-
+        self.model.transf_lim1 = pyo.Constraint(self.model.TRANSF, rule=transf_lim_upper)
+        self.model.transf_lim2 = pyo.Constraint(self.model.TRANSF, rule=transf_lim_lower)

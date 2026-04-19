@@ -3,6 +3,16 @@ from src.potpourri.models.basemodel import Basemodel
 
 
 class DC(Basemodel):
+    """Linearised DC power flow model for distribution network analysis.
+
+    Extends Basemodel with lossless DC power flow equations. Voltage
+    magnitudes are assumed 1.0 p.u. and reactive power is ignored, reducing
+    the power flow to a linear system in voltage angles.
+
+    Args:
+        net: A pandapower network compatible with pp.runpp().
+    """
+
     def __init__(self, net):
         super().__init__(net)
 
@@ -25,6 +35,12 @@ class DC(Basemodel):
         self.create_model()
 
     def create_model(self):
+        """Build the Pyomo ConcreteModel with DC power flow constraints.
+
+        Adds line susceptance parameters (BL, BLT), angle difference variables
+        (deltaL, deltaLT), real-power KCL at each bus, and KVL constraints
+        linking power flows to angle differences. All quantities in per-unit.
+        """
         super().create_model()
 
         self.model.name = "DC"
