@@ -1,0 +1,21 @@
+site_name: POTPOURRI
+site_description: Multi-Period Optimal Power Flow for Distribution Grids with Storage Application
+site_author: Steffen Kortmann, Farah Nasr
+
+theme:
+  name: readthedocs
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - User Guide:
+      - Single-Period OPF: user-guide/single-period.md
+      - Multi-Period OPF: user-guide/multi-period.md
+      - Flexible Devices: user-guide/devices.md
+      - Solvers: user-guide/solvers.md
+      - Logging: user-guide/logging.md
+  - API Reference:
+      - Single-Period Models: api/models.md
+      - Multi-Period Models: api/multi-period.md
+      - Flexible Devices: api/devices.md
+      - Utilities: api/utilities.md

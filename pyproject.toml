@@ -3,31 +3,54 @@ requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "opf-potpourri"            # <- PyPI / pip install name
-version = "0.1.0"
-description = "[Python] Tool for power system analysis with pandapower"
+name = "opf-potpourri"
+version = "0.2.0"
+description = "Multi-period Optimal Power Flow for distribution grids with storage — Pyomo models over pandapower networks"
 readme = "README.md"
-requires-python = ">=3.9"
-license = { file = "LICENSE" }
-authors = [{ name = "Steffen Kortmann", email = "s.kortmann@iaew.rwth-aachen.de" },
-            { name = "Farah Nasr", email = "f.nasr@iaew.rwth-aachen.de" },
+requires-python = ">=3.9,<3.13"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Steffen Kortmann", email = "s.kortmann@iaew.rwth-aachen.de" },
+    { name = "Andreas Bong",       email = "a.bong@iaew.rwth-aachen.de" },
+    { name = "Simon Braun",       email = "s.braun@iaew.rwth-aachen.de" },
+    { name = "Alexander Och",       email = "a.och@iaew.rwth-aachen.de" },
+    { name = "Farah Nasr",       email = "f.nasr@iaew.rwth-aachen.de" },
+    { name = "Philip Kvesic",       email = "p.kvesic@iaew.rwth-aachen.de" },
 ]
 classifiers = [
-  "Programming Language :: Python :: 3",
-  "License :: OSI Approved :: MIT License",
-  "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Intended Audience :: Science/Research",
 ]
-keywords = ["power systems", "pandapower", "analysis"]
+keywords = ["power systems", "pandapower", "optimal power flow", "pyomo", "distribution grid", "multi-period", "OPF"]
 dependencies = [
-    "jupyterlab>=4.4.7",
+    "gurobipy>=12.0.3",
+    "loguru>=0.7.3",
     "matplotlib>=3.9.4",
-    "notebook>=7.4.5",
+    "mkdocs>=1.6.1",
     "numba>=0.60.0",
     "numpy>=2.0.2",
+    "openpyxl>=3.1.5",
     "pandapower>=3.1.2",
     "pandas>=2.3.2",
     "pyomo>=6.9.4",
     "simbench>=1.6.1",
+]
+
+[project.optional-dependencies]
+tutorials = [
+    "jupyterlab>=4.4.7",
+    "notebook>=7.4.5",
+]
+docs = [
+    "mkdocs>=1.6.1",
 ]
 
 [project.urls]
