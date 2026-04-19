@@ -7,11 +7,15 @@
 # 
 # We begin by importing the required libraries for the analysis, including simbench, pyomo, and pandapower.
 #%%
+import os
+os.environ['NEOS_EMAIL'] = "test-email@test.com"
+
 import copy
 import numpy as np
 import simbench as sb
 import pyomo.environ as pe
 import pandapower as pp
+
 import warnings
 warnings.filterwarnings('ignore', category=FutureWarning)
 #%% md
@@ -59,7 +63,7 @@ net.sgen["min_q_mvar"] = -q_max
 net.sgen["max_p_mw"] = net.sgen["p_mw"]
 net.sgen["min_p_mw"] = net.sgen["p_mw"]
 net.sgen['controllable'] = True
-pp.runpp(net)
+pp.runpp(net, voltage_depend_loads=False)
 #%% md
 # 6. Create a Copy of the Network for OPF
 # 

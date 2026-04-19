@@ -8,6 +8,8 @@
 # 
 # 
 #%%
+import os
+os.environ['NEOS_EMAIL'] = "test-email@test.com"
 import simbench as sb
 import pyomo.environ as pe
 import warnings
@@ -53,7 +55,7 @@ opf.add_voltage_deviation_objective()
 # We solve the ACOPF optimization problem using the ipopt solver. The solver adjusts the power generation and reactive power over the entire time horizon to minimize the objective function while satisfying the grid constraints. After solving the OPF problem, we access some results, such as the power generation of an exemplary pv generation over the entire optimization horizon.
 # 
 #%%
-opf.solve(print_solver_output=False)
+opf.solve(solver="neos", neos_opt='knitro', print_solver_output=False)
 
 # example of how to access the results -> sg output throughout the time horizon
 for t in opf.model.T:
