@@ -17,8 +17,8 @@ class OPF_multi_period(Basemodel_multi_period):
     """OPF mixin for multi-period models: provides line/transformer ratings
     and generator/demand limits."""
 
-    def __init__(self, net, toT, fromT=None, pf=1, num_vehicles=None):
-        super().__init__(net, toT, fromT, pf, num_vehicles)
+    def __init__(self, net, toT, fromT=None, pf=1):
+        super().__init__(net, toT, fromT, pf)
 
     def __calc_SLmax(self, max_loading_percent=100):
         vr = self.net.bus.loc[

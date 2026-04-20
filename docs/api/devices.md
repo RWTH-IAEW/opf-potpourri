@@ -84,56 +84,6 @@ Randomly places batteries on network buses. The fraction of buses with batteries
 
 ---
 
-## EV_multi_period
-
-```
-potpourri.technologies.evs.EV_multi_period
-```
-
-Models a fleet of electric vehicles with driving profiles, charging point assignments, and optional V2G capability. Profiles are loaded from `data/emob_profiles.pkl`.
-
-**Inherits:** `Flexibility_multi_period`
-
-### `__init__(net, num_vehicles)`
-
-**Parameters:**
-
-- `net` — pandapower network
-- `num_vehicles` — number of EV profiles to sample from the dataset
-
-Charging points are randomly assigned to network buses. Day-ahead electricity prices are loaded from `data/da_prices_hourly_2022.xlsx` and repeated 4× for 15-minute resolution.
-
-**Key derived data:**
-
-| Attribute | Description |
-|---|---|
-| `veh_cps[v, t]` | Charging point index for vehicle `v` at time `t` (-1 if not connected) |
-| `ev_connected[v, t]` | Binary connectivity indicator |
-| `p_req_ev[v, t]` | Required uncontrolled charging power |
-| `p_dischargable[v, t]` | Max V2G discharge power |
-| `t_arr[v]`, `t_dep[v]` | Arrival and departure time indices |
-
-**Pyomo components added:**
-
-- Sets: `veh`, `cp`, `Bcp`, `veh_v2g`, `veh_v1g`, `veh_nc`
-- Params: `p_da[t]`, `timestep_size`, time-series profiles
-- Vars: `soc[v, t]`, `p_opf[v, t]`, `p_charging[v, t]`, `p_discharging[v, t]`, `buffer_soc[v, t]`
-- Constraints: power bounds (V1G/V2G), SOC dynamics, SOC targets, departure SOC
-
-### `get_market_constraints(model)`
-
-Adds hourly power aggregation constraints: the total EV charging power must remain constant over each group of 4 consecutive 15-minute steps (= 1 hour).
-
-### `fix_variables(model)`
-
-Fixes all EV charging variables to their uncontrolled (reference) profile, effectively disabling EV flexibility.
-
-### `set_simbench_ev_to_zero(model)`
-
-Sets SimBench EV load profiles to zero to avoid double-counting when explicit EV variables are added.
-
----
-
 ## Heatpump_multi_period
 
 ```

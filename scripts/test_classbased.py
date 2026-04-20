@@ -1,19 +1,27 @@
 import copy
+import os
+import random
 import time
 
 import pyomo.environ as pe
-import random
 
-from src.potpourri.models.ACOPF_base import ACOPF
-from src.potpourri.models.HC_ACOPF import HC_ACOPF
-from src.potpourri.models.DC import DC
-from src.potpourri.models.AC import AC
+import numpy as np
 
-from src.potpourri.models.pyo_to_net import pyo_sol_to_net_res
-from src.potpourri.plotting.plot_functions import *
-from src.potpourri.models.init_pyo_from_pp_res import init_pyo_from_dcpp
+from potpourri.models.ACOPF_base import ACOPF
+from potpourri.models.HC_ACOPF import HC_ACOPF
+from potpourri.models.DC import DC
+from potpourri.models.AC import AC
+from potpourri.models.pyo_to_net import pyo_sol_to_net_res
+from potpourri.plotting.plot_functions import plot_wind_hc_results
+from potpourri.models.init_pyo_from_pp_res import (
+    init_pyo_from_pp_res as init_pyo_from_dcpp,
+)
 
 import pandapower as pp
+
+os.environ["NEOS_EMAIL"] = os.environ.get(
+    "NEOS_EMAIL", "steffen.kortmann@fit.fraunhofer.de"
+)
 
 
 def create_testnet():
@@ -341,7 +349,7 @@ if __name__ == "__main__":
     acopf = ACOPF(net)
     if any(net.trafo.shift_degree):
         init_pyo_from_dcpp(acopf.net, acopf.model)
-    acopf.solve()
+    acopf.solve(solver="neos")
 
     pp.runpp(net)
     pp.nets_equal(net, acopf.net)

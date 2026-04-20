@@ -6,7 +6,7 @@ The multi-period models extend single-period OPF with a time dimension, allowing
 
 The time horizon is controlled by `fromT` and `toT` (0-indexed time step indices into the SimBench profiles). Each time step is 15 minutes (`deltaT = 0.25 h`).
 
-Flexible devices — batteries, EVs, heat pumps — are instantiated separately and automatically attach their Pyomo sets, parameters, variables, and constraints to the parent model.
+Flexible devices — batteries, heat pumps — are instantiated separately and automatically attach their Pyomo sets, parameters, variables, and constraints to the parent model.
 
 ## Step 1 — Load a SimBench network with profiles
 
@@ -43,15 +43,7 @@ The constructor automatically creates device objects for loads (`Demand_multi_pe
 
 ## Step 4 — Add flexible devices (optional)
 
-Instantiate device classes and pass the model to them. Each device attaches itself to `opf.model`:
-
-```python
-# Electric vehicles (V1G + V2G)
-# num_vehicles EV profiles are loaded from data/emob_profiles.pkl
-opf2 = ACOPF_multi_period(net, toT=toT, fromT=fromT, num_vehicles=5)
-```
-
-Battery storage is added similarly — see [Flexible Devices](devices.md) for all options.
+Instantiate device classes and pass the model to them. Each device attaches itself to `opf.model`. See [Flexible Devices](devices.md) for all options.
 
 ## Step 5 — Add OPF constraints and objective
 
@@ -65,10 +57,7 @@ Other available objectives:
 ```python
 opf.add_minimize_power_objective()        # minimise total load consumption
 opf.add_generation_objective()            # minimise Σ pG²
-opf.add_weighted_generation_objective()   # weighted: generators + EVs + sgens
-opf.add_arbitrage_objective()             # minimise EV charging cost (day-ahead prices)
-opf.add_charging_power_obj()              # maximise EV charging power
-opf.add_discharging_power_obj()           # maximise EV discharging power
+opf.add_weighted_generation_objective()   # weighted: generators + sgens
 ```
 
 ## Step 6 — Solve
@@ -94,15 +83,6 @@ for t in opf.model.T:
     p_gen = sum(pyo.value(opf.model.psG[g, t]) * opf.model.baseMVA
                 for g in opf.model.sG)
     print(f"t={t}: total sgen output = {p_gen:.3f} MW")
-```
-
-Or access EV-specific results:
-
-```python
-for v in opf.model.veh:
-    for t in opf.model.T:
-        print(f"v={v}, t={t}: SOC={pyo.value(opf.model.soc[v, t]):.2f}, "
-              f"p={pyo.value(opf.model.p_opf[v, t]) * opf.model.baseMVA:.3f} MW")
 ```
 
 ## Model architecture

@@ -43,54 +43,6 @@ opf.solve(solver="ipopt")
 
 ---
 
-## Electric vehicles
-
-`EV_multi_period` models a fleet of EVs with per-vehicle driving profiles, charging point assignments, and optional vehicle-to-grid (V2G) capability.
-
-EV profiles are loaded from `data/emob_profiles.pkl`. Day-ahead electricity prices for the arbitrage objective come from `data/da_prices_hourly_2022.xlsx`.
-
-**Vehicle types:**
-
-| Type | Set | Description |
-|---|---|---|
-| V1G (unidirectional) | `veh_v1g` | Charging only |
-| V2G (bidirectional) | `veh_v2g` | Charging and discharging |
-| Non-controllable | `veh_nc` | Follows pre-computed charging profile |
-
-**Key variables:**
-
-- `soc[v, t]` — vehicle state of charge (0–1)
-- `p_opf[v, t]` — optimised net charging power (per-unit)
-- `p_charging[v, t]` — charging power component (≥ 0)
-- `p_discharging[v, t]` — discharging power (≤ 0, V2G only)
-- `buffer_soc[v, t]` — SOC slack for departure constraint relaxation
-
-**SOC constraints:**
-
-- SOC must stay above `min_soc_parking` while parked
-- SOC must reach `min_soc_departing` before each departure
-- Net energy over the horizon must be equal (cyclic condition)
-
-**Usage:**
-
-```python
-from potpourri.models_multi_period.ACOPF_multi_period import ACOPF_multi_period
-
-# Pass num_vehicles to the constructor
-opf = ACOPF_multi_period(net, toT=96, num_vehicles=10)
-opf.add_OPF()
-opf.add_arbitrage_objective()    # minimise charging cost
-opf.solve(solver="ipopt")
-```
-
-Enable market constraints (constant aggregated hourly power):
-
-```python
-opf.model.ev_object.get_market_constraints(opf.model)
-```
-
----
-
 ## Heat pump
 
 `Heatpump_multi_period` models thermal loads with a thermal storage buffer. It uses a simple building thermal model with heat capacity and heat loss parameters.

@@ -8,9 +8,6 @@ from potpourri.technologies.generator import Generator_multi_period
 from potpourri.technologies.demand import Demand_multi_period
 from potpourri.technologies.windpower import Windpower_multi_period
 from potpourri.technologies.sgens import Sgens_multi_period
-from potpourri.technologies.evs import EV_multi_period
-
-
 import numpy as np
 from loguru import logger
 
@@ -19,8 +16,8 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
     """Multi-period AC OPF model combining AC power flow and OPF constraints
     over a time horizon."""
 
-    def __init__(self, net, toT, fromT=None, pf=1, num_vehicles=None):
-        super().__init__(net, toT, fromT, pf, num_vehicles)
+    def __init__(self, net, toT, fromT=None, pf=1):
+        super().__init__(net, toT, fromT, pf)
 
     def _calc_opf_parameters(self):
         """Extend OPF parameter calculation with AC-specific limits: voltage
@@ -271,69 +268,16 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
         self.model.obj = Objective(rule=minimize_generation, sense=minimize)
 
     def add_weighted_generation_objective(self):
-        """Set objective to minimise a weighted sum of external grid, EV
-        discharging, and sgen power."""
+        """Set objective to minimise a weighted sum of external grid and sgen
+        power."""
 
         def weighted_generation_objective(model):
             c1 = 4
-            c2 = 1
             c3 = 1
-            return (
-                c1 * sum(model.pG[(g, t)] for g in model.G for t in model.T)
-                + c2
-                * sum(
-                    model.p_discharging[(v, t)]
-                    for v in model.veh
-                    for t in model.T
-                )
+            return c1 * sum(
+                model.pG[(g, t)] for g in model.G for t in model.T
             ) + c3 * sum(model.psG[(g, t)] for g in model.sG for t in model.T)
 
         self.model.obj = Objective(
             rule=weighted_generation_objective, sense=minimize
-        )
-
-    def add_charging_power_obj(self):
-        """Set objective to maximise total EV controlled charging power."""
-
-        def maximize_charging_power(model):
-            return sum(model.p_opf[v, t] for v in model.veh for t in model.T)
-
-        self.model.charging_power_obj = Objective(
-            rule=maximize_charging_power, sense=maximize
-        )
-
-    def add_discharging_power_obj(self):
-        """Set objective to minimise total EV discharging power (maximise net
-        charging)."""
-
-        def maximize_discharging_power(model):
-            return sum(model.p_opf[v, t] for v in model.veh for t in model.T)
-
-        self.model.discharging_power_obj = Objective(
-            rule=maximize_discharging_power, sense=minimize
-        )
-
-    def add_arbitrage_objective(self):
-        """Set day-ahead market arbitrage objective: minimise EV charging cost
-        using p_da prices."""
-        ev_object = next(
-            (
-                obj
-                for obj in self.flexibilities
-                if isinstance(obj, EV_multi_period)
-            ),
-            None,
-        )
-        ev_object.get_market_constraints(self.model)
-
-        # day ahead market arbitrage
-        def arbitrage_objective(model):
-            return sum(
-                model.p_opf[v, t] * model.p_da[t] * model.timestep_size / 60
-                for v in model.veh
-                for t in model.T
-            )  # p_da in [€/MWh], timestep_size in [min]
-
-        self.model.arbitrage_obj = Objective(
-            rule=arbitrage_objective, sense=minimize
         )

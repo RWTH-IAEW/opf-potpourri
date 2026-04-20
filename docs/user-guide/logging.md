@@ -15,7 +15,7 @@ Call this once at the start of your script. All subsequent POTPOURRI calls will 
 
 | Level | What is logged |
 |-------|---------------|
-| `DEBUG` | Low-level model internals: solver options, variable fix/unfix operations, EV indicator arrays, result mapping to `net.res_*` |
+| `DEBUG` | Low-level model internals: solver options, variable fix/unfix operations, result mapping to `net.res_*` |
 | `INFO` | Normal milestones: model creation timestamp, solve started (with solver name), optimal solution found, NEOS job submitted |
 | `WARNING` | Non-fatal issues that may affect results: generator voltage limits overriding bus limits, missing `p_inst_mw` attribute (fallback used), non-optimal solver termination, unknown model component in `change_vals` / `fix_vars` |
 | `ERROR` | Caught exceptions: solver errors (mindtpy `ValueError`), termination-condition check failures, `fix_vars` / `unfix_vars` attribute errors |

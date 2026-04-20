@@ -1,6 +1,6 @@
 # Multi-Period Models API
 
-Multi-period OPF model classes live in `src/potpourri/models_multi_period/`. Device/technology mix-in classes (batteries, EVs, heat pumps, PV, wind, demand, generators) live in `src/potpourri/technologies/`.
+Multi-period OPF model classes live in `src/potpourri/models_multi_period/`. Device/technology mix-in classes (batteries, heat pumps, PV, wind, demand, generators) live in `src/potpourri/technologies/`.
 
 ---
 
@@ -14,7 +14,7 @@ Extends `Basemodel` with a time dimension and a modular framework for flexible d
 
 **Inherits:** `Basemodel`
 
-### `__init__(net, toT, fromT=None, pf=1, num_vehicles=None)`
+### `__init__(net, toT, fromT=None, pf=1)`
 
 **Parameters:**
 
@@ -24,7 +24,6 @@ Extends `Basemodel` with a time dimension and a modular framework for flexible d
 | `toT` | End time step (exclusive, 0-indexed) |
 | `fromT` | Start time step (inclusive); defaults to `0` |
 | `pf` | Power factor for reactive power initialisation (default `1`) |
-| `num_vehicles` | Number of EV profiles to load; activates `EV_multi_period` if set |
 
 The constructor instantiates the following flexibility objects and appends them to `self.flexibilities`:
 
@@ -32,7 +31,6 @@ The constructor instantiates the following flexibility objects and appends them 
 - `Shunts_multi_period`
 - `Sgens_multi_period`
 - `Generator_multi_period`
-- `EV_multi_period` (if `num_vehicles` is set)
 - `Windpower_multi_period` (if `net.bus` has a `windpot_p_mw` column)
 
 ### `create_model()`
@@ -81,10 +79,7 @@ Calls `flex.get_all_acopf(model)` for each flexibility object, then adds time-in
 | `add_voltage_deviation_objective()` | `min Σ_t Σ_b (v[b,t] - 1)²` |
 | `add_minimize_power_objective()` | `min Σ_d,t pD[d,t]` |
 | `add_generation_objective()` | `min Σ_g,t pG[g,t]²` |
-| `add_weighted_generation_objective()` | `min 4·Σ pG + Σ p_discharging + Σ psG` |
-| `add_charging_power_obj()` | Maximise total EV charging power |
-| `add_discharging_power_obj()` | Maximise total EV discharging (V2G) |
-| `add_arbitrage_objective()` | `min Σ_v,t p_opf[v,t] · p_da[t] · Δt/60` |
+| `add_weighted_generation_objective()` | `min 4·Σ pG + Σ psG` |
 
 ---
 

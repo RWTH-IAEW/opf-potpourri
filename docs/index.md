@@ -8,7 +8,7 @@ POTPOURRI is a Python library for AC and DC Optimal Power Flow (OPF) in distribu
 
 - **Single-period AC/DC OPF** — full nonlinear AC and linearised DC formulations
 - **Multi-period OPF** — time-indexed optimisation over load/generation profiles from [SimBench](https://simbench.de/en/)
-- **Modular flexible devices** — batteries, EVs (V1G/V2G), heat pumps, PV, wind
+- **Modular flexible devices** — batteries, heat pumps, PV, wind
 - **Hosting capacity analysis** — binary wind generator placement with grid-code Q-curve constraints
 - **Multiple solvers** — IPOPT (NLP), Gurobi/CBC via MindtPy (MINLP), NEOS remote
 

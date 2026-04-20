@@ -6,15 +6,14 @@ from potpourri.models_multi_period.basemodel_multi_period import (
     Basemodel_multi_period,
 )
 from potpourri.technologies.demand import Demand_multi_period
-from potpourri.technologies.evs import EV_multi_period
 
 
 class AC_multi_period(Basemodel_multi_period):
     """Multi-period AC power flow model with full AC equations indexed over
     time steps."""
 
-    def __init__(self, net, toT, fromT=None, pf=1, num_vehicles=None):
-        super().__init__(net, toT, fromT, pf, num_vehicles)
+    def __init__(self, net, toT, fromT=None, pf=1):
+        super().__init__(net, toT, fromT, pf)
 
         self.BB_data = (
             -self.net.shunt.q_mvar * self.net.shunt.step / self.baseMVA
@@ -488,27 +487,6 @@ class AC_multi_period(Basemodel_multi_period):
                 self.model.v[b0, t].fix(self.model.v_b0[b0])
 
     def KCL_flexibility(self, model, b, t):
-        """Return the net power injection from flexible assets (EVs) at bus b
+        """Return the net power injection from flexible assets at bus b
         at time t."""
-        power_sum = 0
-        self.EV_object = next(
-            (
-                obj
-                for obj in self.flexibilities
-                if isinstance(obj, EV_multi_period)
-            ),
-            None,
-        )
-
-        if self.EV_object is not None:
-            power_sum += sum(
-                model.p_opf[v, t]
-                for v in model.veh
-                if (b, model.veh_cps[v, t]) in model.Bcp
-            )
-            # += sum(
-            #     model.p_discharging[v, t] for v in model.veh
-            #     if (b, model.veh_cps[v, t]) in model.Bcp
-            # )
-
-        return power_sum
+        return 0

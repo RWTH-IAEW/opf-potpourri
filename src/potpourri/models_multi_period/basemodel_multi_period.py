@@ -15,7 +15,6 @@ from potpourri.technologies.shunts import Shunts_multi_period
 from potpourri.technologies.sgens import Sgens_multi_period
 from potpourri.technologies.demand import Demand_multi_period
 from potpourri.technologies.windpower import Windpower_multi_period
-from potpourri.technologies.evs import EV_multi_period
 
 
 class Basemodel_multi_period:
@@ -33,7 +32,7 @@ class Basemodel_multi_period:
         deltaT: Time-step length in hours (default 0.25 = 15 min).
     """
 
-    def __init__(self, net, toT, fromT=None, pf=1, num_vehicles=None):
+    def __init__(self, net, toT, fromT=None, pf=1):
         """Initialise the multi-period base model.
 
         Args:
@@ -41,7 +40,6 @@ class Basemodel_multi_period:
             toT: Model runs up to (exclusive) this time-step index.
             fromT: Model starts from this time-step index (default 0).
             pf: Power factor for reactive power calculation (default 1).
-            num_vehicles: If not None, creates an EV_multi_period instance.
         """
         self.net = copy.deepcopy(net)
         pp.runpp(self.net, voltage_depend_loads=False)
@@ -169,9 +167,6 @@ class Basemodel_multi_period:
         self.flexibilities.append(Shunts_multi_period(self.net))
         self.flexibilities.append(Sgens_multi_period(self.net))
         self.flexibilities.append(Generator_multi_period(self.net))
-        # only create instance of EV if necessary parameters are provided
-        if num_vehicles is not None:
-            self.flexibilities.append(EV_multi_period(self.net, num_vehicles))
 
         if "windpot_p_mw" in self.net.bus:
             self.flexibilities.append(Windpower_multi_period(self.net))
