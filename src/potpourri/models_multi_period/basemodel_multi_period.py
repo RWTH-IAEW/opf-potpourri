@@ -1,32 +1,46 @@
+"""Multi-period Basemodel: extends Basemodel with a time dimension and simbench profile integration."""
+
 import pandas as pd
 from pyomo.environ import *
 from math import pi
 import copy
-import os
 import numpy as np
 import pandapower as pp
 import simbench as sb
 import time as ctime
 from loguru import logger
-from src.potpourri.models_multi_period.generator_multi_period import Generator_multi_period
-from src.potpourri.models_multi_period.shunts_multi_period import Shunts_multi_period
-from src.potpourri.models_multi_period.sgens_multi_period import Sgens_multi_period
-from src.potpourri.models_multi_period.demand_multi_period import Demand_multi_period
-from src.potpourri.models_multi_period.windpower_multi_period import Windpower_multi_period
-from src.potpourri.models_multi_period.EVs_multi_period import EV_multi_period
-from src.potpourri.models_multi_period.flexibility_multi_period import Flexibility_multi_period
+from src.potpourri.technologies.generator import Generator_multi_period
+from src.potpourri.technologies.shunts import Shunts_multi_period
+from src.potpourri.technologies.sgens import Sgens_multi_period
+from src.potpourri.technologies.demand import Demand_multi_period
+from src.potpourri.technologies.windpower import Windpower_multi_period
+from src.potpourri.technologies.evs import EV_multi_period
+from src.potpourri.technologies.flexibility import Flexibility_multi_period
 from src.potpourri.models_multi_period.pyo_to_net_multi_period import pyo_sol_to_net_res
 
 
 class Basemodel_multi_period:
-    def __init__(self, net, toT,  fromT=None, pf=1, num_vehicles=None):
-        """
-        **Constructor Basemodel_multi_period** \n
-        *net:* simbench/ T.B.D. pandapower ... network \n
-        *toT:* Model runs till this Time-step, beware: Index 3 equals time step 4, int \n
-        *fromT:* Model runs from this Time-step beware: Index 0 equals time step 1, standard value=None, int \n
-        *pf:* Power Factor (cos between active and reactive power, equals 1 if reactive power is zero), standard value: 1,float \n
-        *scenario:* Scenario for the model, standard value=None, 0-2020, 1-2030, 2-2040, 3-2050, int \n
+    """Multi-period base model that adds a time set and simbench profile support to a pandapower network.
+
+    Attributes:
+        net: Deep-copied pandapower network with profiles attached.
+        model: Pyomo ConcreteModel, built by create_model().
+        flexibilities: List of technology mix-in objects (Demand, Sgens, Generator, …).
+        fromT: First time-step index (inclusive).
+        toT: Last time-step index (exclusive).
+        T: Number of time steps.
+        deltaT: Time-step length in hours (default 0.25 = 15 min).
+    """
+
+    def __init__(self, net, toT, fromT=None, pf=1, num_vehicles=None):
+        """Initialise the multi-period base model.
+
+        Args:
+            net: pandapower network with simbench profiles.
+            toT: Model runs up to (exclusive) this time-step index.
+            fromT: Model starts from this time-step index (default 0).
+            pf: Power factor for reactive power calculation (default 1).
+            num_vehicles: If not None, creates an EV_multi_period instance.
         """
         self.net = copy.deepcopy(net)
         pp.runpp(self.net)
@@ -74,7 +88,7 @@ class Basemodel_multi_period:
             self.fromT = 0
         self.T = toT - fromT if fromT else toT
         self.pf = pf # powerfactor for reactive power calculation
-        if toT != None and not hasattr(self.net, "profiles"):
+        if toT is not None and not hasattr(self.net, "profiles"):
             raise ValueError("The net object does not have profiles. Please provide a net object with profiles.")
         self.profiles = sb.get_absolute_values(self.net, profiles_instead_of_study_cases=True)
         # TODO: q static generation data with power factor ( check for power factor in pp net)
@@ -85,7 +99,7 @@ class Basemodel_multi_period:
 
         self.net.profiles.clear() #  TODO: needed here?
         # cut off profiles for T, depending on fromT and toT
-        if self.fromT == None:
+        if self.fromT is None:
             for profile in self.profiles.keys():
                 self.net.profiles[profile] = self.profiles[profile].iloc[:self.toT]  # cut off profiles to T
         elif self.fromT < 0:
@@ -96,9 +110,9 @@ class Basemodel_multi_period:
             raise ValueError("toT must be smaller than the length of the profiles")
         elif self.toT < self.fromT:
             raise ValueError("toT must be greater than fromT")
-        elif self.fromT != None:
+        elif self.fromT is not None:
             for profile in self.profiles.keys():
-                self.net.profiles[profile] = self.profiles[profile].iloc[self.fromT:self.toT]  # cuts out the profile from fromT to toT
+                self.net.profiles[profile] = self.profiles[profile].iloc[self.fromT:self.toT]
 
         # print("Model runs from time step " + str(self.fromT+1) + " to time step " + str(self.toT))
 
@@ -119,11 +133,12 @@ class Basemodel_multi_period:
         if 'windpot_p_mw' in self.net.bus:
             self.flexibilities.append(Windpower_multi_period(self.net))
 
-    # calculates reactive power for static generators with given power factor
     def calc_reactive_sgen_power(self, pf=1):
+        """Calculate reactive power profiles for static generators from active power and power factor."""
         self.net.profiles[('sgen', 'q_mvar')] = self.net.profiles[('sgen', 'p_mw')] * np.tan(np.arccos(pf))
 
     def create_model(self):
+        """Create the multi-period Pyomo ConcreteModel with time sets, bus/line data, and base variables."""
         logger.info("Creating model at {}", ctime.ctime())
         self.model = ConcreteModel()
 
@@ -188,8 +203,22 @@ class Basemodel_multi_period:
         for b in self.model.b0:
             self.model.delta[b, t].fix(self.model.delta_b0[b])
 
-    def solve(self, to_net: bool = True, print_solver_output: bool = True, solver='ipopt', load_solutions: bool = True,
-              mip_solver='gurobi', max_iter=None, time_limit=600, init_strategy='rNLP', neos_opt='bonmin'):
+    def solve(self, to_net: bool = True, print_solver_output: bool = True, solver='ipopt',
+              load_solutions: bool = True, mip_solver='gurobi', max_iter=None, time_limit=600,
+              init_strategy='rNLP', neos_opt='bonmin'):
+        """Solve the multi-period OPF model with the specified solver.
+
+        Args:
+            to_net: Whether to map the solution back to net.res_* (not yet implemented).
+            print_solver_output: Whether to stream solver output.
+            solver: Solver name ('ipopt', 'mindtpy', 'neos', etc.).
+            load_solutions: Whether Pyomo should load the solution after solving.
+            mip_solver: MIP sub-solver for mindtpy.
+            max_iter: Maximum solver iterations.
+            time_limit: Wall-clock time limit in seconds.
+            init_strategy: Initialization strategy for mindtpy.
+            neos_opt: Solver name to use with NEOS.
+        """
         logger.info("Solving model with solver '{}'", solver)
         optimizer = SolverFactory(solver)
 
@@ -208,10 +237,6 @@ class Basemodel_multi_period:
             except ValueError as err:
                 logger.error("mindtpy solver error: {}", err)
 
-            # if self.results.solver.termination_condition == TerminationCondition.feasible:
-            #     print('Model is feasible but not optimal. Trying to solve a second time.')
-            #     self.results = optimizer.solve(self.model, mip_solver=mip_solver, nlp_solver='ipopt',
-            #                                    tee=print_solver_output, iteration_limit=max_iter, time_limit=time_limit)
         elif solver == 'neos':
             logger.info("Submitting model to NEOS server (opt={})", neos_opt)
             solver_manager = SolverManagerFactory('neos')
@@ -228,7 +253,6 @@ class Basemodel_multi_period:
             if check_optimal_termination(self.results):
                 logger.info("Optimal solution found")
                 if to_net:
-                    #pyo_sol_to_net_res(self.net, self.model)
                     logger.debug("Solution mapped to net.res_*")
             else:
                 logger.warning("Solver did not reach optimal termination (condition: {})",
@@ -237,6 +261,7 @@ class Basemodel_multi_period:
             logger.error("Could not check termination condition: {}", err)
 
     def change_vals(self, key, value):
+        """Set all indices of a named Pyomo component to value."""
         component = self.model.component(key)
         if not component:
             logger.warning("Model has no component '{}'", key)
@@ -248,6 +273,7 @@ class Basemodel_multi_period:
             logger.error("change_vals failed for component '{}': {}", key, err)
 
     def fix_vars(self, key, value=None):
+        """Fix all indices of a named Pyomo variable; optionally set to value first."""
         component = self.model.component(key)
         if not component:
             logger.warning("Model has no component '{}'", key)
@@ -263,6 +289,7 @@ class Basemodel_multi_period:
             logger.error("fix_vars failed for component '{}': {}", key, err)
 
     def unfix_vars(self, key, value=None):
+        """Unfix all indices of a named Pyomo variable; optionally reset to value."""
         component = self.model.component(key)
         if not component:
             logger.warning("Model has no component '{}'", key)
@@ -291,12 +318,7 @@ class Basemodel_multi_period:
 
         """
 
-        # if isinstance(data, float):
-        #     data_dict = {(o, t): data for o in model_obj for t in model_time}
-        #     tuple_list = list([(o, t) for o in model_obj for t in model_time])
-        #     return data_dict, tuple_list
-
-        if data is 0:
+        if data == 0:
             data_dict = {(o, t): 0 for o in model_obj for t in model_time}
             tuple_list = list([(o, t) for o in model_obj for t in model_time])
             return data_dict, tuple_list
@@ -327,8 +349,6 @@ class Basemodel_multi_period:
                 tuple_list = list([(o, t) for o in model_obj for t in model_time])
                 return data_dict, tuple_list
 
-        # if isinstance(data, dict):
-        #     return data, list(data.keys())
         # make data_dict with constant values over time if not time dependent
         if time_dependent:
             data_dict = data.to_dict()

@@ -1,12 +1,14 @@
+"""Multi-period AC OPF combining multi-period AC power flow and OPF operational limits."""
+
 import pandas as pd
 from pyomo.environ import *
 from src.potpourri.models_multi_period.AC_multi_period import AC_multi_period
 from src.potpourri.models_multi_period.OPF_multi_period import OPF_multi_period
-from src.potpourri.models_multi_period.generator_multi_period import Generator_multi_period
-from src.potpourri.models_multi_period.demand_multi_period import Demand_multi_period
-from src.potpourri.models_multi_period.windpower_multi_period import Windpower_multi_period
-from src.potpourri.models_multi_period.sgens_multi_period import Sgens_multi_period
-from src.potpourri.models_multi_period.EVs_multi_period import EV_multi_period
+from src.potpourri.technologies.generator import Generator_multi_period
+from src.potpourri.technologies.demand import Demand_multi_period
+from src.potpourri.technologies.windpower import Windpower_multi_period
+from src.potpourri.technologies.sgens import Sgens_multi_period
+from src.potpourri.technologies.evs import EV_multi_period
 
 
 import numpy as np
@@ -14,13 +16,13 @@ from loguru import logger
 
 
 class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
-    """
-    This class implements the AC Optimal Power Flow (ACOPF) model.
-    """
-    def __init__(self, net, toT,  fromT=None, pf=1, num_vehicles=None):
-        super().__init__(net, toT,  fromT, pf, num_vehicles)
+    """Multi-period AC OPF model combining AC power flow and OPF constraints over a time horizon."""
+
+    def __init__(self, net, toT, fromT=None, pf=1, num_vehicles=None):
+        super().__init__(net, toT, fromT, pf, num_vehicles)
 
     def _calc_opf_parameters(self):
+        """Extend OPF parameter calculation with AC-specific limits: voltage bounds, Q limits, Q-curve data."""
         super()._calc_opf_parameters()
 
         max_vm_pu, min_vm_pu = self.get_v_limits()
@@ -44,6 +46,7 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
         demand_object.get_demand_reactive_data(self.model)
 
     def get_v_limits(self):
+        """Read per-bus voltage bounds from net.bus; returns (max_vm_pu, min_vm_pu) arrays."""
         if 'max_vm_pu' in self.net.bus:
             max_vm_pu = self.net.bus.max_vm_pu.values
         else:
@@ -60,6 +63,7 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
         return max_vm_pu, min_vm_pu
 
     def add_generator_v_limits(self, max_vm_pu, min_vm_pu):
+        """Apply per-generator voltage limits, overriding bus defaults where applicable."""
         # check max_vm_pu / min_vm_pu bus limit violation by gens
         gen_buses = self.bus_lookup[self.net.gen.bus.values]
         if "max_vm_pu" in self.net["gen"].columns:
@@ -102,6 +106,7 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
         return max_vm_pu, min_vm_pu
 
     def add_OPF(self, **kwargs):
+        """Extend OPF.add_OPF() with voltage bounds, AC thermal limits, and reactive power constraints."""
         super().add_OPF(**kwargs)
 
         self.model.name = "ACOPF"
@@ -114,17 +119,7 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
         self.model.Vmax = Param(self.model.B, within=NonNegativeReals, initialize=self.v_limits[0][self.model.B], mutable=True)  # max voltage (p.u.)
         self.model.Vmin = Param(self.model.B, within=NonNegativeReals,initialize=self.v_limits[1][self.model.B], mutable=True)  # min voltage (p.u.)
 
-        # --- cost function ---
-        # def objective(model):
-        #     obj = sum(
-        #         model.c2[g] * (model.baseMVA * model.pG[g]) ** 2 + model.c1[g] * model.baseMVA * model.pG[g] +
-        #         model.c0[g] for g in model.G) + \
-        #           sum(model.VOLL[d] * (model.PD[d] - model.pD[d]) * model.baseMVA for d in model.D)
-        #     return obj
-        #
-        # self.model.OBJ = Objective(rule=objective, sense=minimize)
-
-        # --- line power limits --- DONE non time dependent
+        # --- line power limits ---
         def line_lim_from_def(model, l, t):
             return model.pLfrom[l,t] ** 2 + model.qLfrom[l,t] ** 2 <= model.SLmax[l] ** 2 * model.v[model.A[l, 1],t] ** 2
 
@@ -144,40 +139,14 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
         self.model.transf_lim1 = Constraint(self.model.TRANSF, self.model.T, rule=transf_lim1_def)
         self.model.transf_lim2 = Constraint(self.model.TRANSF, self.model.T, rule=transf_lim2_def)
 
-        # --- voltage constraints --- can be removed
-        # self.model.v_bPV_setpoint.deactivate()
-
-        #should be time dependent
+        # voltage bounds are time-dependent
         def v_bounds(model, b, t):
             return model.Vmin[b], model.v[b, t], model.Vmax[b]
 
         self.model.v_constraint = Constraint(self.model.B, self.model.T, rule=v_bounds)
 
-        # # --- wind generation q requirements variant 3---
-        # def QW_pos(model, w):
-        #     return model.qsG[w] <= self.q_limit_parameter.b_qp_max[model.var_q[w]] * model.PsG_inst[w] + self.q_limit_parameter.m_qp_max[model.var_q[w]] * model.psG[w]
-        #
-        # def QW_neg(model, w):
-        #     return model.qsG[w] >= self.q_limit_parameter.b_qp_min[model.var_q[w]] * model.PsG_inst[w] + self.q_limit_parameter.m_qp_min[model.var_q[w]] * model.psG[w]
-        #
-        # self.model.QW_pos_constraint = Constraint(self.model.WINDc, rule=QW_pos)
-        # self.model.QW_neg_constraint = Constraint(self.model.WINDc, rule=QW_neg)
-        #
-        # #
-        # def QV_min(model, w):
-        #     for (g, b) in model.sGbs:
-        #         if g == w:
-        #             return model.qsG[w] >= (self.q_limit_parameter.m_qv[model.var_q[w]] * model.v[b] + self.q_limit_parameter.b_qv_min[model.var_q[w]]) * model.PsG_inst[w]
-        # self.model.QU_min_constraint = Constraint(self.model.WINDc, rule=QV_min)
-        #
-        # def QV_max(model, w):
-        #     for (g, b) in model.sGbs:
-        #         if g == w:
-        #             return model.qsG[w] <= (self.q_limit_parameter.m_qv[model.var_q[w]] * model.v[b] + self.q_limit_parameter.b_qv_max[model.var_q[w]]) * model.PsG_inst[w]
-        # self.model.QU_max_constraint = Constraint(self.model.WINDc, rule=QV_max)
-        #
-
     def add_voltage_deviation_objective(self):
+        """Set objective to minimise sum of squared bus voltage deviations from 1 p.u. over all time steps."""
         self.model.vm = Param(self.model.B, initialize=self.bus_data['v_m'][self.model.B])
 
         def voltage_deviation_objective(model, t):
@@ -186,23 +155,22 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
 
         self.model.obj_v_deviation = Objective(rule=voltage_deviation_objective, sense=minimize)
 
-    # Assuming model, G, T, and pf are already defined
-
-    #test objective function
     def add_minimize_power_objective(self):
+        """Set objective to minimise total demand served over all loads and time steps."""
         def power_minimization_objective(model):
             return sum(model.pD[d, t] for d in model.D for t in model.T)
 
         self.model.Objective = Objective(rule=power_minimization_objective, sense=minimize)
 
     def add_generation_objective(self):
+        """Set objective to minimise sum of squared generator real power injections."""
         def minimize_generation(model):
             return sum(model.pG[(g, t)]**2 for g in model.G for t in model.T)
 
         self.model.obj = Objective(rule=minimize_generation, sense=minimize)
 
-    # possible objective: weighted generation and discharging
     def add_weighted_generation_objective(self):
+        """Set objective to minimise a weighted sum of external grid, EV discharging, and sgen power."""
         def weighted_generation_objective(model):
             c1 = 4
             c2 = 1
@@ -213,18 +181,21 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
         self.model.obj = Objective(rule=weighted_generation_objective, sense=minimize)
 
     def add_charging_power_obj(self):
+        """Set objective to maximise total EV controlled charging power."""
         def maximize_charging_power(model):
             return sum(model.p_opf[v, t] for v in model.veh for t in model.T)
 
         self.model.charging_power_obj = Objective(rule=maximize_charging_power, sense=maximize)
 
     def add_discharging_power_obj(self):
+        """Set objective to minimise total EV discharging power (maximise net charging)."""
         def maximize_discharging_power(model):
             return sum(model.p_opf[v, t] for v in model.veh for t in model.T)
 
         self.model.discharging_power_obj = Objective(rule=maximize_discharging_power, sense=minimize)
 
     def add_arbitrage_objective(self):
+        """Set day-ahead market arbitrage objective: minimise EV charging cost using p_da prices."""
         ev_object = next((obj for obj in self.flexibilities if isinstance(obj, EV_multi_period)), None)
         ev_object.get_market_constraints(self.model)
 

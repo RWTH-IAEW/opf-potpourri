@@ -1,14 +1,19 @@
+"""Base mix-in class for all multi-period flexibility device modules (batteries, EVs, demand, etc.)."""
+
 import pandas as pd
 from pyomo.environ import *
 from math import pi
-from itertools import product
-import copy
 import numpy as np
-import pandapower as pp
 
-from src.potpourri.models_multi_period.pyo_to_net_multi_period import pyo_sol_to_net_res
+
 class Flexibility_multi_period:
-    #TODO see if correct time dependency implementation
+    """Base class for technology mix-in objects that attach Pyomo components to a multi-period model.
+
+    Reads network topology and profile data from net in __init__. Subclasses implement
+    get_all(), get_sets(), get_parameters(), get_variables(), and constraint methods.
+    """
+
+    # TODO see if correct time dependency implementation
     def __init__(self, net, T=None, scenario=None):
         self.net = net
         self.t_range = range(T) if T else [0]  # If T is None, default to a single time period [0]
@@ -34,6 +39,7 @@ class Flexibility_multi_period:
 
 
     def get_sets(self, model):
+        """Initialise (or re-initialise) the bus set B on the Pyomo model from network topology."""
         if hasattr(model, 'B'):
             model.del_component(model.B)
         # Make B time-dependent # why?
@@ -54,12 +60,7 @@ class Flexibility_multi_period:
             tuple_list: List of tuples with the object and time index
 
         """
-        #TODO Check if it is dict already and then just take dict and pack indexes in tuple_list
-
-        # if isinstance(data, float):
-        #     data_dict = {(o, t): data for o in model_obj for t in model_time}
-        #     tuple_list = list([(o, t) for o in model_obj for t in model_time])
-        #     return data_dict, tuple_list
+        # TODO Check if it is dict already and then just take dict and pack indexes in tuple_list
         if time_dependent:
             if isinstance(data, np.ndarray):
                 data_dict = {(o, t): data[o] for o in model_obj for t in model_time}
@@ -87,7 +88,7 @@ class Flexibility_multi_period:
                 return data_dict, tuple_list
 
         else:
-            if data is 0:
+            if data == 0:
                 data_dict = {(o, t): 0 for o in model_obj for t in model_time}
                 tuple_list = list([(o, t) for o in model_obj for t in model_time])
                 return data_dict, tuple_list

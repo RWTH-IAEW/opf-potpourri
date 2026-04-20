@@ -1,3 +1,5 @@
+"""EV fleet mix-in: attaches vehicle-level charging optimisation sets, parameters, and constraints to a model."""
+
 import copy
 import random
 import numpy as np
@@ -5,21 +7,21 @@ import pandas as pd
 import pickle
 from pathlib import Path
 from pyomo.environ import *
-from src.potpourri.models_multi_period.flexibility_multi_period import Flexibility_multi_period
+from src.potpourri.technologies.flexibility import Flexibility_multi_period
 from pyomo.common.errors import ApplicationError
 
 _DATA_DIR = Path(__file__).parent.parent / "data"
 
-# linearized model --> weakness: efficiencies(if not market oriented) , calculation of p for soc > soclim
+# linearized model — weakness: efficiencies (if not market-oriented), calculation of p for soc > soclim
+
 
 class EV_multi_period(Flexibility_multi_period):
+    """Multi-period EV fleet device module; reads driving and charging profiles from emob_profiles.pkl."""
     def __init__(self, net, num_vehicles):
         """
         Args:
-            vehicles: dictionary of the vehicles created in the charging profile generator simulation
-            locations: dictionary of the locations created in the charging profile generator simulation
-            chargingpoints: dictionary of the chargingpoints created in the charging profile generator simulation
-            scenario: scenario storing the simulation configuration
+            net: pandapower network object.
+            num_vehicles: number of vehicles to extract from the pre-generated emob_profiles.pkl file.
         """
         super().__init__(net)
 
@@ -68,19 +70,6 @@ class EV_multi_period(Flexibility_multi_period):
 
         self.bus_cp_set = list(zip(self.bus_lookup[self.chargingpoints['bus']], self.chargingpoints['id']))
 
-        # VARIANTE 2: bus-cp mapping, look up ev buses in simbench
-        # buses_ev_home = net.load.bus[net.load[net.load.profile.str.startswith("H0")].index].values
-        # buses_ev_work = net.load.bus[net.load[net.load.profile.str.startswith("APLS")].index].values
-        # cps_home = self.chargingpoints['loc_ids'] == 3
-        # cps_work = self.chargingpoints['loc_ids'] == 0
-        # # assign home charging points to buses with household loads but don't repeat buses
-        # for i in range(self.chargingpoints['n']):
-        #     if i in cps_home:
-        #         self.chargingpoints['bus'][i] = random.choice(buses_ev_home)
-        #     elif i in cps_work:
-        #         self.chargingpoints['bus'][i] = random.choice(buses_ev_work)
-
-
         # driving profile parameters:
         self.distance = self.vehicles['distance']  # in km
         self.consumption = self.vehicles['consumption'] / 100000  # in MWh/km
@@ -121,21 +110,17 @@ class EV_multi_period(Flexibility_multi_period):
         self.v2g = self.vehicles['v2g']  # bool indicating if vehicle has V2G capability
         self.p_drive = np.where(self.p < 0, self.p, 0)
 
-        # self.controllable = self.vehicles['controllable']  # bool indicating if vehicle is controllable
-
-
         self.v2g_vehicles = np.where(np.array(self.v2g))[0]
         self.v1g_vehicles = np.where(~(np.array(self.v2g)))[0]
         self.nc_vehicles = []  # non controllable vehicles
 
         # market parameters
         file_path = _DATA_DIR / "da_prices_hourly_2022.xlsx"
-        # self.p_id = pd.read_excel(file_path, sheet_name='Intraday')['Price (€/MWh)'].values
-        # self.p_da_hourly = pd.read_excel(file_path, sheet_name='Day Ahead')['Price (€/MWh)'].values
         self.p_da_hourly = pd.read_excel(file_path)['Deutschland/Luxemburg [€/MWh]'].values
         self.p_da = np.repeat(self.p_da_hourly, 4)  # repeat the hourly prices 4 times to match the timesteps
 
     def get_opf_sets(self, model):
+        """Define vehicle, charging-point, and bus mapping sets."""
         # --SETS--
         model.veh = Set(initialize=self.vehicles['id'])  # vehicles
         model.cp = Set(initialize=self.chargingpoints['id'])  # charging points
@@ -146,6 +131,7 @@ class EV_multi_period(Flexibility_multi_period):
         model.veh_nc = Set(within=model.veh, initialize=self.nc_vehicles)  # vehicles with no controlled charging capability (p fixed to cpg reference charging)
 
     def get_opf_parameters(self, model):
+        """Attach vehicle and charging-point parameters (power limits, SOC bounds, profiles, prices)."""
         # --- parameters ---
         # non-time dependent parameters
         model.timestep_size = self.timestep_size
@@ -191,6 +177,7 @@ class EV_multi_period(Flexibility_multi_period):
         model.p_da = Param(model.T, initialize=lambda model, t: self.p_da[t])
 
     def get_opf_variables(self, model):
+        """Create SOC, charging, discharging, and buffer-SOC variables for all vehicles."""
         # --- variables ---
         model.soc = Var(model.veh, model.T, bounds=(0, 1))  # vehicle state of charge
         model.p_opf = Var(model.veh, model.T)  # EV controlled charging power
@@ -199,6 +186,7 @@ class EV_multi_period(Flexibility_multi_period):
         model.buffer_soc = Var(model.veh, model.T, within=NonNegativeReals)  # buffer soc for the min soc constraints
 
     def get_opf_constraints(self, model):
+        """Add mobility, SOC, and power-balance constraints for all vehicles."""
         # ---mobility constraints ---
 
         #  charging and discharging power limitations
@@ -332,6 +320,7 @@ class EV_multi_period(Flexibility_multi_period):
         model.non_controllable_power_constraint = Constraint(model.veh_nc, model.T, rule=non_controllable_power)
 
     def get_market_constraints(self, model):
+        """Add market-participation constraint requiring constant aggregated power per hour."""
         # --- market constraints ---
         # aggregated power has to be constant over 4 time steps (1 hour = 4 x 15 min)
         def constant_aggregated_power_per_hour(model, t):
@@ -345,27 +334,30 @@ class EV_multi_period(Flexibility_multi_period):
         pass
 
     def get_all(self, model):
+        """Attach EV sets, parameters, and variables to the model."""
         self.get_opf_sets(model)
         self.get_opf_parameters(model)
         self.get_opf_variables(model)
 
     def get_all_opf(self, model):
+        """Attach OPF constraints, objective, and fix simbench EV loads to zero."""
         self.get_opf_constraints(model)
         self.get_opf_objective(model)
         self.set_simbench_ev_to_zero(model)
-        # self.active_soc_constraints(model)
 
     def get_all_acopf(self, model):
         pass
 
     def fix_variables(self, model):
-        # fix the ev charging values as in cpg without optimizing , no discharging possibilty
+        """Fix EV charging power to the reference CPG profile (no optimisation, no V2G)."""
+        # fix the ev charging values as in cpg without optimizing, no discharging possibility
         for v in model.veh:
             for t in model.T:
                 model.p_opf[v, t].fix(model.p_req_ev[v, t])
         return True
 
     def set_simbench_ev_to_zero(self, model):
+        """Fix simbench HLS and APLS load profiles to zero so that the EV model represents them."""
         hls_loads = self.net.load[self.net.load.profile.str.startswith("HLS")].index
         apls_loads = self.net.load[self.net.load.profile.str.startswith("APLS")].index
         for d in model.D:

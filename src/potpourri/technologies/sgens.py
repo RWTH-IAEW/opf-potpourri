@@ -1,52 +1,38 @@
+"""Static generator (sgen) mix-in: attaches sgen profiles and OPF limits to a multi-period model."""
+
+import numpy as np
 import pandas as pd
 from pyomo.environ import *
-from math import pi
-import copy
-import numpy as np
-import pandapower as pp
-from src.potpourri.models_multi_period.flexibility_multi_period import Flexibility_multi_period
-from src.potpourri.models_multi_period.pyo_to_net_multi_period import pyo_sol_to_net_res
-import simbench as sb
-import os
+from src.potpourri.technologies.flexibility import Flexibility_multi_period
 
 
 class Sgens_multi_period(Flexibility_multi_period):
+    """Multi-period static generator device module; reads sgen profiles from net.profiles."""
 
     def __init__(self, net, T=None, scenario=None):
         super().__init__(net, T, scenario)
 
-        #psg = self.net.sgen.p_mw * self.net.sgen.scaling / self.baseMVA
+        # TODO: check whether q values are provided in simbench networks
         sgen_bus = self.bus_lookup[self.net.sgen.bus.values]
-        # self.static_generation_data = pd.DataFrame(
-        #     {'p': psg.values, 'in_service': self.net.sgen.in_service.values, 'bus': sgen_bus})
-        #TODO: Überprüfe ob q Werte in Simbenchnetzen angegeben werden
-        'Create a dictionary with the static generation data'
-        self.static_generation_data = {'p': (self.net.profiles[('sgen', 'p_mw')]), 'q': (self.net.profiles[('sgen', 'q_mvar')]),
-         'in_service': self.net.sgen.in_service.values, 'bus': sgen_bus}
-        #self.static_generation_data = pd.DataFrame()
-
-
+        self.static_generation_data = {
+            'p': self.net.profiles[('sgen', 'p_mw')],
+            'q': self.net.profiles[('sgen', 'q_mvar')],
+            'in_service': self.net.sgen.in_service.values,
+            'bus': sgen_bus,
+        }
         self.static_generation_data['gen_bus'] = list(enumerate(self.static_generation_data['bus']))
-
-        # generator and external grids voltage set points
 
 
 
     def get_all(self, model):
-        """"
-        **get_all** \n
-        This function gets the sets, parameters and variables of the class, fixes variables
-        """
+        """Attach sets, parameters, and variables; fix all sgen variables to profile values."""
         self.get_sets(model)
         self.get_parameters(model)
         self.get_variables(model)
         self.fix_variables(model)
 
     def get_all_opf(self, model):
-        """"
-        **get_all** \n
-        This function gets the sets, parameters and variables of the class
-        """
+        """Attach OPF sets, parameters, and real-power bound constraints for controllable sgens."""
         self.get_opf_sets(model)
         self.get_opf_parameters(model)
         self.get_all_Constraints_opf(model)

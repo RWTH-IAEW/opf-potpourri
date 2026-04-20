@@ -1,15 +1,19 @@
+"""Multi-period OPF mixin: adds operational limit constraints and thermal ratings over time."""
+
 import copy
 
 from pyomo.environ import *
 from src.potpourri.models_multi_period.basemodel_multi_period import Basemodel_multi_period
-from src.potpourri.models_multi_period.generator_multi_period import Generator_multi_period
-from src.potpourri.models_multi_period.sgens_multi_period import Sgens_multi_period
-from src.potpourri.models_multi_period.demand_multi_period import Demand_multi_period
+from src.potpourri.technologies.generator import Generator_multi_period
+from src.potpourri.technologies.sgens import Sgens_multi_period
+from src.potpourri.technologies.demand import Demand_multi_period
 import numpy as np
 
+
 class OPF_multi_period(Basemodel_multi_period):
-    def __init__(self, net, toT,  fromT=None, pf=1, num_vehicles=None):
-        super().__init__(net, toT,  fromT, pf, num_vehicles)
+    """OPF mixin for multi-period models: provides line/transformer ratings and generator/demand limits."""
+    def __init__(self, net, toT, fromT=None, pf=1, num_vehicles=None):
+        super().__init__(net, toT, fromT, pf, num_vehicles)
 
     def __calc_SLmax(self, max_loading_percent=100):
         vr = self.net.bus.loc[self.net.line["from_bus"].values, "vn_kv"].values * np.sqrt(3.)
@@ -18,6 +22,7 @@ class OPF_multi_period(Basemodel_multi_period):
         return max_loading_percent / 100. * max_i_ka * df * self.net.line.parallel.values * vr / self.baseMVA
 
     def _calc_opf_parameters(self, **kwargs):
+        """Compute line/transformer ratings and call generator/demand limit methods on flexibility objects."""
         max_load = self.net.line.max_loading_percent.values if "max_loading_percent" in self.net.line else 100.
         self.line_data['SLmax_data'] = self.__calc_SLmax(max_load)
 
@@ -28,10 +33,6 @@ class OPF_multi_period(Basemodel_multi_period):
         df_T = self.net.trafo.df
         SLmaxT_data = max_load_T * sn_mva * df_T * self.net.trafo.parallel / self.baseMVA
         self.trafo_data['SLmaxT_data'] = SLmaxT_data.values
-
-        # self.c0_data = pd.Series([1] * len(self.gen_all_set), self.gen_all_set)
-        # self.c1_data = pd.Series([2] * len(self.gen_all_set), self.gen_all_set)
-        # self.c2_data = pd.Series([3] * len(self.gen_all_set), self.gen_all_set)
 
         # create generator instance and call method generation_real_power_limits_opf
         generator_object = next((obj for obj in self.flexibilities if isinstance(obj, Generator_multi_period)), None)
@@ -47,25 +48,16 @@ class OPF_multi_period(Basemodel_multi_period):
         demand_object.get_demand_real_power_data(self.model)
 
     def add_OPF(self, **kwargs):
+        """Attach OPF parameters and constraints: ratings, generator limits, demand limits.
+
+        Args:
+            **kwargs: Forwarded to _calc_opf_parameters.
+        """
         self._calc_opf_parameters(**kwargs)
 
         # get all opf parameters from flexibility objects
         for flex in self.flexibilities:  # Gets all Opf parmas ands sets from flexibility objects
             flex.get_all_opf(self.model)
-
-        # lines and transformer chracteristics and ratings DONE: non time dependent
-        # self.SLmax_data_dict, self.SLmax_tuple = self.make_to_dict(self.model.L, self.model.T,
-        #                                                            self.line_data['SLmax_data'][self.model.L], False)
-        # self.SLmaxT_data_dict, self.SLmaxT_tuple = self.make_to_dict(self.model.TRANSF, self.model.T,
-        #                                                              self.trafo_data.SLmaxT_data[self.model.TRANSF], False)
-        #
-        #
-        # self.model.SLmax = Param(self.SLmax_tuple, within=NonNegativeReals,
-        #                          initialize=self.SLmax_data_dict,
-        #                          mutable=True)  # real power line limit
-        # self.model.SLmaxT = Param(self.SLmaxT_tuple, within=NonNegativeReals,
-        #                           initialize=self.SLmaxT_data_dict,
-        #                           mutable=True)  # real power transformer limit
 
         # lines and transformer chracteristics and ratings
         self.model.SLmax = Param(self.model.L, within=NonNegativeReals,
@@ -75,15 +67,6 @@ class OPF_multi_period(Basemodel_multi_period):
                                   initialize=self.trafo_data.SLmaxT_data[self.model.TRANSF],
                                   mutable=True)  # real power transformer limit
 
-
-        # cost data
-        # self.model.c2 = Param(self.model.G, within=NonNegativeReals,
-        #                       initialize=self.c2_data)  # generator cost coefficient c2 (*pG^2)
-        # self.model.c1 = Param(self.model.G, within=NonNegativeReals,
-        #                       initialize=self.c1_data)  # generator cost coefficient c1 (*pG)
-        # self.model.c0 = Param(self.model.G, within=NonNegativeReals,
-        #                       initialize=self.c0_data)  # generator cost coefficient c0
-        # self.model.VOLL = Param(self.model.D, within=Reals, initialize=10000)  # value of lost load
 
         # --- transformer tap ratio limits ---
 

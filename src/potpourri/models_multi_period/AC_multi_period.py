@@ -1,13 +1,16 @@
+"""Multi-period AC power flow mixin: adds full AC equations with voltage magnitudes over time."""
+
 from pyomo.environ import *
 from src.potpourri.models_multi_period.basemodel_multi_period import Basemodel_multi_period
-from src.potpourri.models_multi_period.demand_multi_period import Demand_multi_period
-from src.potpourri.models_multi_period.EVs_multi_period import EV_multi_period
-
+from src.potpourri.technologies.demand import Demand_multi_period
+from src.potpourri.technologies.evs import EV_multi_period
 
 
 class AC_multi_period(Basemodel_multi_period):
-    def __init__(self, net, toT,  fromT=None, pf=1, num_vehicles=None):
-        super().__init__(net, toT,  fromT, pf, num_vehicles)
+    """Multi-period AC power flow model with full AC equations indexed over time steps."""
+
+    def __init__(self, net, toT, fromT=None, pf=1, num_vehicles=None):
+        super().__init__(net, toT, fromT, pf, num_vehicles)
 
         self.BB_data = - self.net.shunt.q_mvar * self.net.shunt.step / self.baseMVA
 
@@ -31,14 +34,10 @@ class AC_multi_period(Basemodel_multi_period):
             **{'BiiT_data': BiiT[trafo_start:trafo_end], 'BikT_data': BikT[trafo_start:trafo_end],
                'GiiT_data': GiiT[trafo_start:trafo_end], 'GikT_data': GikT[trafo_start:trafo_end]})
 
-        # generator and external grids voltage set points
-        # self.generation_data['v'] = self.net._ppc['gen'][:, 5]
-
-        #self.QD_data = self.net.load.q_mvar * self.net.load.scaling / self.baseMVA
-
         self.create_model()
 
     def create_model(self):
+        """Build the multi-period AC Pyomo model with admittance parameters and AC KCL/KVL constraints."""
         super().create_model()
         self.model.name = "AC"
 
@@ -57,20 +56,6 @@ class AC_multi_period(Basemodel_multi_period):
         self.model.Gii = Param(self.Gii_tuple, within=Reals, initialize=self.Gii_data_dict)
         self.model.Gik = Param(self.Gik_tuple, within=Reals, initialize=self.Gik_data_dict)
 
-        ## derived transformer parameters DONE make non time dependent
-        # self.BiiT_data_dict, self.BiiT_tuple = self.make_to_dict(self.model.TRANSF, self.model.T, self.trafo_data.BiiT_data[self.model.TRANSF], False)
-        # self.BikT_data_dict, self.BikT_tuple = self.make_to_dict(self.model.TRANSF, self.model.T, self.trafo_data.BikT_data[self.model.TRANSF], False)
-        # self.GiiT_data_dict, self.GiiT_tuple = self.make_to_dict(self.model.TRANSF, self.model.T, self.trafo_data.GiiT_data[self.model.TRANSF], False)
-        # self.GikT_data_dict, self.GikT_tuple = self.make_to_dict(self.model.TRANSF, self.model.T, self.trafo_data.GikT_data[self.model.TRANSF], False)
-        # self.v_bPV_data_dict, self.v_bPV_tuple = self.make_to_dict(self.model.bPV, self.model.T, self.bus_data.v_m[self.model.bPV], False)
-        #
-        #
-        # self.model.BiiT = Param(self.BiiT_tuple, within=Reals, initialize=self.BiiT_data_dict)
-        # self.model.BikT = Param(self.BikT_tuple, within=Reals, initialize=self.BikT_data_dict)
-        # self.model.GiiT = Param(self.GiiT_tuple, within=Reals, initialize=self.GiiT_data_dict)
-        # self.model.GikT = Param(self.GikT_tuple, within=Reals, initialize=self.GikT_data_dict)
-        # self.model.v_bPV = Param(self.v_bPV_tuple, within=NonNegativeReals, initialize=self.v_bPV_data_dict)
-
         self.model.BiiT = Param(self.model.TRANSF, within=Reals,
                                 initialize=self.trafo_data.BiiT_data[self.model.TRANSF])
         self.model.BikT = Param(self.model.TRANSF, within=Reals,
@@ -79,8 +64,6 @@ class AC_multi_period(Basemodel_multi_period):
                                 initialize=self.trafo_data.GiiT_data[self.model.TRANSF])
         self.model.GikT = Param(self.model.TRANSF, within=Reals,
                                 initialize=self.trafo_data.GikT_data[self.model.TRANSF])
-        # self.model.v_bPV = Param(self.model.bPV, within=NonNegativeReals, initialize=self.bus_data.v_m[self.model.bPV]) bad constraint
-
         # create instance of demand
         demand_object = next((obj for obj in self.flexibilities if isinstance(obj, Demand_multi_period)), None)
         demand_object.get_all_ac(self.model)
@@ -236,18 +219,13 @@ class AC_multi_period(Basemodel_multi_period):
             for t in self.model.T:
                 self.model.qD[(d, t)].fix(self.model.QD[(d, t)])
 
-        # --- generator voltage operating point --- bad constraint, PV supplies power not voltage
-        # def v_bPV_setpoint_rule(model, b, t):
-        #     return model.v[b, t] == model.v_bPV[b, t]
-        #
-        # self.model.v_bPV_setpoint = Constraint(self.model.bPV, self.model.T, rule=v_bPV_setpoint_rule)
-
         # --- reference bus voltage constraint ---
         for b0 in self.model.b0:
             for t in self.model.T:
                 self.model.v[b0, t].fix(self.model.v_b0[b0])
 
     def KCL_flexibility(self, model, b, t):
+        """Return the net power injection from flexible assets (EVs) at bus b at time t."""
         power_sum = 0
         self.EV_object = next((obj for obj in self.flexibilities if isinstance(obj, EV_multi_period)), None)
 

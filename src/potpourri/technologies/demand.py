@@ -1,18 +1,13 @@
-import pandas as pd
+"""Demand mix-in: attaches load profiles and OPF demand bounds to a multi-period model."""
+
 from pyomo.environ import *
-from math import pi
-import copy
-import numpy as np
-import pandapower as pp
-from src.potpourri.models_multi_period.flexibility_multi_period import Flexibility_multi_period
-from src.potpourri.models_multi_period.pyo_to_net_multi_period import pyo_sol_to_net_res
-import simbench as sb
-import os
+from src.potpourri.technologies.flexibility import Flexibility_multi_period
 
 
 class Demand_multi_period(Flexibility_multi_period):
+    """Multi-period demand device module; reads load profiles from net.profiles."""
 
-    def __init__(self,net, T=None, scenario=None):
+    def __init__(self, net, T=None, scenario=None):
         super().__init__(net, T, scenario)
 
         self.demand_set = self.net.load.index[self.net.load.in_service]
@@ -20,21 +15,14 @@ class Demand_multi_period(Flexibility_multi_period):
 
 
     def get_all(self, model):
-        """"
-        **get_all** \n
-        This function gets the sets, parameters and variables of the class
-        """
+        """Attach demand sets, parameters, variables and fix them to profile values."""
         self.get_sets(model)
         self.get_parameters(model)
         self.get_variables(model)
         self.fix_variables(model)
 
-
     def get_all_opf(self, model):
-        """"
-        **get_all** \n
-        This function gets the sets, parameters and variables of the class
-        """
+        """Attach OPF demand sets, parameters, and real-power bound constraints."""
         self.get_opf_sets(model)
         self.get_opf_parameters(model)
         self.get_all_constraints_opf(model)
@@ -86,13 +74,6 @@ class Demand_multi_period(Flexibility_multi_period):
         # for d in model.D for t in model.T:
         #     model.pD[(d,t)].fix(model.PD[(d,t)])
 
-    # def unfix_variables(self, model):
-    #     # unfix the static generation values
-    #     for d in model.D:
-    #         for t in model.T:
-    #             model.pD[(d, t)].unfix()
-
-
     def get_opf_sets(self, model):
         model.Dc = Set(within=model.D, initialize=self.demand_controllable_set)  # controllable loads
 
@@ -123,7 +104,7 @@ class Demand_multi_period(Flexibility_multi_period):
         if 'controllable' not in self.net.load:
              self.demand_controllable_set = None  # create empty Set if no controllable load exist
         else:
-             self.demand_controllable_set = self.net.load.index[self.net.load.controllable == True]
+             self.demand_controllable_set = self.net.load.index[self.net.load.controllable.astype(bool)]
 
         # Aus dem Netzwerk die maximalen und minimalen Lasten holen
         if max_p_mw is not None:

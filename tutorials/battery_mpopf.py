@@ -22,7 +22,7 @@ import warnings
 warnings.filterwarnings('ignore', category=FutureWarning)
 
 from potpourri.models_multi_period.ACOPF_multi_period import ACOPF_multi_period
-from potpourri.models_multi_period.battery_multi_period import Battery_multi_period
+from potpourri.technologies.battery import Battery_multi_period
 
 #%% md
 # ## 2. Network and horizon
