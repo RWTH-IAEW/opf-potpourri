@@ -2,7 +2,7 @@
 
 import numpy as np
 import pandas as pd
-from pyomo.environ import *
+import pyomo.environ as pyo
 from loguru import logger
 from src.potpourri.technologies.sgens import Sgens_multi_period
 
@@ -30,17 +30,17 @@ class Windpower_multi_period(Sgens_multi_period):
     def get_opf_sets(self, model):
         """Define WIND_HC, WIND, and WINDc sets for HC and Q-control formulations."""
         # generators for hc calculation
-        model.WIND_HC = Set(within=model.sG, initialize=self.static_generation_data.index[
+        model.WIND_HC = pyo.Set(within=model.sG, initialize=self.static_generation_data.index[
             self.static_generation_data['wind_hc'] & self.static_generation_data.in_service])
         # all wind generators
-        model.WIND = model.WIND_HC | Set(
+        model.WIND = model.WIND_HC | pyo.Set(
             within=model.sG,
             initialize=self.static_generation_data.index[
                 (self.static_generation_data['type'] == 'Wind') & self.static_generation_data.in_service
             ],
         )
         # controllable wind generators, not for hc calculation
-        model.WINDc = model.WIND & model.sGc & Set(
+        model.WINDc = model.WIND & model.sGc & pyo.Set(
             initialize=self.static_generation_data.index[
                 self.static_generation_data['var_q'].values != None  # noqa: E711
             ],
@@ -66,25 +66,25 @@ class Windpower_multi_period(Sgens_multi_period):
 
     def get_hc_acopf_parameters(self, model, net):
         """Attach SWmax, SWmin, and optional pWmax parameters for HC-ACOPF."""
-        model.SWmax = Param(self.SWmax_tuple, initialize=self.SWmax_data_dict, mutable=True)
-        model.SWmin = Param(self.SWmin_data_dict, initialize=self.SWmin_data_dict, mutable=True)
+        model.SWmax = pyo.Param(self.SWmax_tuple, initialize=self.SWmax_data_dict, mutable=True)
+        model.SWmin = pyo.Param(self.SWmin_data_dict, initialize=self.SWmin_data_dict, mutable=True)
 
         if 'windpot_p_mw' in self.net.bus:
             self.Windpot_data_dict, self.Windpot_tuple = self.make_to_dict(
                 model.WIND_HC, model.T, self.static_generation_data['windpot']
             )
-            model.pWmax = Param(self.Windpot_tuple, initialize=self.Windpot_data_dict, mutable=True)
+            model.pWmax = pyo.Param(self.Windpot_tuple, initialize=self.Windpot_data_dict, mutable=True)
         return True
 
     def get_hc_acopf_variables(self, model):
         """Attach binary HC variable y for each wind generator over time."""
-        model.y = Var(self.Windpot_tuple, within=Binary, initialize=1.)
+        model.y = pyo.Var(self.Windpot_tuple, within=pyo.Binary, initialize=1.)
         return True
 
     def get_opf_parameters(self, model):
         """Attach var_q and PsG_inst parameters for controllable wind generators."""
-        model.var_q = Param(model.WINDc, model.T, initialize=self.static_generation_data['var_q'][model.WINDc])
-        model.PsG_inst = Param(model.WINDc, model.T, initialize=self.static_generation_data['p_inst'][model.WINDc])
+        model.var_q = pyo.Param(model.WINDc, model.T, initialize=self.static_generation_data['var_q'][model.WINDc])
+        model.PsG_inst = pyo.Param(model.WINDc, model.T, initialize=self.static_generation_data['p_inst'][model.WINDc])
         return True
 
     def static_generation_wind_var_q(self, net):
@@ -150,7 +150,7 @@ class Windpower_multi_period(Sgens_multi_period):
                 - sum(model.pThv[t] + model.pTlv[t] for t in model.TRANSF)
             )
 
-        model.obj = Objective(rule=obj_wind_loss_rule, sense=maximize)
+        model.obj = pyo.Objective(rule=obj_wind_loss_rule, sense=pyo.maximize)
 
     def get_constraints(self, model, net):
         """Add Q(P) and Q(U) constraints for controllable wind and HC generators."""

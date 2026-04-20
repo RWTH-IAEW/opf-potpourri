@@ -1,6 +1,6 @@
 """Shunt mix-in: attaches shunt conductance sets and parameters to a multi-period model."""
 
-from pyomo.environ import *
+import pyomo.environ as pyo
 from src.potpourri.technologies.flexibility import Flexibility_multi_period
 
 
@@ -27,13 +27,13 @@ class Shunts_multi_period(Flexibility_multi_period):
     def get_sets(self, model):
         """Define SHUNT and SHUNTbs sets from in-service shunts."""
         super().get_sets(model)
-        model.SHUNT = Set(initialize=self.shunt_set)  # set of shunts
-        model.SHUNTbs = Set(within=model.B * model.SHUNT,
+        model.SHUNT = pyo.Set(initialize=self.shunt_set)  # set of shunts
+        model.SHUNTbs = pyo.Set(within=model.B * model.SHUNT,
                             initialize=self.bus_shunt_set)  # set of shunt-bus mapping
         return True
 
     def get_parameters(self, model):
         """Attach shunt conductance parameter GB."""
-        model.GB = Param(model.SHUNT, within=Reals,
+        model.GB = pyo.Param(model.SHUNT, within=pyo.Reals,
                          initialize=self.GB_data[model.SHUNT])  # shunt conductance
         return True

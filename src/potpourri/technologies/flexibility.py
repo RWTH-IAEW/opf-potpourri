@@ -1,7 +1,7 @@
 """Base mix-in class for all multi-period flexibility device modules (batteries, EVs, demand, etc.)."""
 
 import pandas as pd
-from pyomo.environ import *
+import pyomo.environ as pyo
 from math import pi
 import numpy as np
 
@@ -43,7 +43,7 @@ class Flexibility_multi_period:
         if hasattr(model, 'B'):
             model.del_component(model.B)
         # Make B time-dependent # why?
-        model.B = Set(initialize=self.bus_data.index)
+        model.B = pyo.Set(initialize=self.bus_data.index)
         return True
 
     def make_to_dict(self, model_obj, model_time, data, time_dependent=True):

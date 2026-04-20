@@ -46,7 +46,7 @@ net.sgen['controllable'] = True
 # Now, we instantiate the multiperiod ACOPF model from potpourri and add the optimization problem. An optional input for the instance of the OPF is the number of electric vehicles 'num_vehicles' that can offer additional flexibility by optimizing their charging behaviour while taking their mobility needs into account. Currently, the optimization of up to 100 EVs is allowed. To take into account is that the addition of EVs increases the computation time of the optimization problem significantly.
 # The objective function can be set seperately. In this case, we are minimizing the voltage deviation.
 #%%
-opf = ACOPF_multi_period(net, toT, fromT, num_vehicles=5)
+opf = ACOPF_multi_period(net, toT, fromT)
 opf.add_OPF()
 opf.add_voltage_deviation_objective()
 #%% md

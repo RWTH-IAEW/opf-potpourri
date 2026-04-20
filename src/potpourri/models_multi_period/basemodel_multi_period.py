@@ -43,7 +43,7 @@ class Basemodel_multi_period:
             num_vehicles: If not None, creates an EV_multi_period instance.
         """
         self.net = copy.deepcopy(net)
-        pp.runpp(self.net)
+        pp.runpp(self.net, voltage_depend_loads=False)
 
         # --- initialize flexibility list ---
         self.flexibilities = []

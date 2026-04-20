@@ -2,7 +2,7 @@
 
 import numpy as np
 import pandas as pd
-from pyomo.environ import *
+import pyomo.environ as pyo
 from src.potpourri.technologies.flexibility import Flexibility_multi_period
 
 
@@ -44,9 +44,9 @@ class Sgens_multi_period(Flexibility_multi_period):
         super().get_sets(model)
         #list, no set, because list is ordered data source, set is not
         self.sgens_in_service_list = np.where(self.static_generation_data['in_service'] == True)[0].tolist()
-        model.sG = Set(
+        model.sG = pyo.Set(
             initialize= self.sgens_in_service_list)  # static generators
-        model.sGbs = Set(within=model.sG * model.B,
+        model.sGbs = pyo.Set(within=model.sG * model.B,
                          initialize=self.static_generation_data['gen_bus'])  # set of static generator-bus mapping
         return True
 
@@ -54,28 +54,28 @@ class Sgens_multi_period(Flexibility_multi_period):
         #list, no set, because list is ordered data source, set is not
         self.sgens_controllable_list = np.where(self.static_generation_data['controllable'] == True)[0].tolist()
 
-        model.sGc = Set(within=model.sG,
+        model.sGc = pyo.Set(within=model.sG,
                         initialize=[g for g in self.sgens_controllable_list if g in self.sgens_in_service_list]) # static generators that are controllable and in service
 
     def get_parameters(self, model):
         self.PsG_data_dict, self.PsG_tuple = self.make_to_dict(model.sG, model.T, self.static_generation_data['p'])
         self.QsG_data_dict, self.QsG_tuple = self.make_to_dict(model.sG, model.T, self.static_generation_data['q'])
         # --- Parameters ---
-        model.PsG = Param(self.PsG_tuple, initialize=self.PsG_data_dict)
+        model.PsG = pyo.Param(self.PsG_tuple, initialize=self.PsG_data_dict)
         # reactive generation
-        model.QsG = Param(self.QsG_tuple, initialize=self.QsG_data_dict)
+        model.QsG = pyo.Param(self.QsG_tuple, initialize=self.QsG_data_dict)
         return True
 
     def get_opf_parameters(self, model):
         # static generation real power limits
-        model.sPGmax = Param(self.PsGmax_tuple, initialize=self.PsGmax_data_dict)
-        model.sPGmin = Param(self.PsGmin_tuple, initialize=self.PsGmin_data_dict)
+        model.sPGmax = pyo.Param(self.PsGmax_tuple, initialize=self.PsGmax_data_dict)
+        model.sPGmin = pyo.Param(self.PsGmin_tuple, initialize=self.PsGmin_data_dict)
 
         # Only for AC OPF, maybe need to be moved into other function?
         # static generation reactive power limits
         # static generation reactive power limits
-        model.QsGmax = Param(self.QsGmax_tuple, within=Reals, initialize= self.QsGmax_data_dict, mutable=True)
-        model.QsGmin = Param(self.QsGmin_tuple, within=Reals, initialize=self.QsGmin_data_dict, mutable=True)
+        model.QsGmax = pyo.Param(self.QsGmax_tuple, within=pyo.Reals, initialize= self.QsGmax_data_dict, mutable=True)
+        model.QsGmin = pyo.Param(self.QsGmin_tuple, within=pyo.Reals, initialize=self.QsGmin_data_dict, mutable=True)
 
     def get_all_Constraints_opf(self, model):
         #psG Constraint
@@ -86,8 +86,8 @@ class Sgens_multi_period(Flexibility_multi_period):
 
     def get_variables(self, model):
         # --- Variables ---
-        model.psG = Var(self.PsG_tuple, domain=NonNegativeReals)  # real static generator power
-        model.qsG = Var(self.QsG_tuple, domain=Reals)  # reactive power of static generators
+        model.psG = pyo.Var(self.PsG_tuple, domain=pyo.NonNegativeReals)  # real static generator power
+        model.qsG = pyo.Var(self.QsG_tuple, domain=pyo.Reals)  # reactive power of static generators
         return True
 
 

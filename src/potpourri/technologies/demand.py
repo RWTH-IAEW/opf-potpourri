@@ -1,6 +1,6 @@
 """Demand mix-in: attaches load profiles and OPF demand bounds to a multi-period model."""
 
-from pyomo.environ import *
+import pyomo.environ as pyo
 from src.potpourri.technologies.flexibility import Flexibility_multi_period
 
 
@@ -37,9 +37,9 @@ class Demand_multi_period(Flexibility_multi_period):
 
     def get_sets(self, model):
         super().get_sets(model)
-        model.D = Set(initialize=self.demand_set)  #set of demands
+        model.D = pyo.Set(initialize=self.demand_set)  #set of demands
         # loads linked to each bus b
-        model.Dbs = Set(within=model.B * model.D,
+        model.Dbs = pyo.Set(within=model.B * model.D,
                              initialize=self.bus_demand_set)  # set of demand-bus mapping
         return True
 
@@ -47,24 +47,24 @@ class Demand_multi_period(Flexibility_multi_period):
         # make PD_data_dict index-able through the tuple list
         self.PD_data_dict, self.PD_tuple = self.make_to_dict(model.D, model.T, self.PD_data)
         # demand at each bus
-        model.PD = Param(self.PD_tuple, initialize=self.PD_data_dict)
+        model.PD = pyo.Param(self.PD_tuple, initialize=self.PD_data_dict)
         return True
 
     def get_ac_parameters(self, model):
         # reactive demand
         self.QD_data_dict, self.QD_tuple = self.make_to_dict(model.D, model.T, self.QD_data)
-        model.QD = Param(self.QD_tuple, initialize=self.QD_data_dict)
+        model.QD = pyo.Param(self.QD_tuple, initialize=self.QD_data_dict)
         return True
 
     def get_ac_variables(self, model):
         # reactive demand
-        model.qD = Var(self.QD_tuple, domain=Reals)
+        model.qD = pyo.Var(self.QD_tuple, domain=pyo.Reals)
         return True
 
     def get_variables(self, model):
         # --- Variables ---
         # demand at each bus
-        model.pD = Var(self.PD_tuple, domain=Reals)  # real power demand delivered
+        model.pD = pyo.Var(self.PD_tuple, domain=pyo.Reals)  # real power demand delivered
         return True
 
     def fix_variables(self, model):
@@ -75,17 +75,17 @@ class Demand_multi_period(Flexibility_multi_period):
         #     model.pD[(d,t)].fix(model.PD[(d,t)])
 
     def get_opf_sets(self, model):
-        model.Dc = Set(within=model.D, initialize=self.demand_controllable_set)  # controllable loads
+        model.Dc = pyo.Set(within=model.D, initialize=self.demand_controllable_set)  # controllable loads
 
     def get_opf_parameters(self, model):
         # real demand
-        model.PDmax = Param(self.PDmax_tuple, initialize=self.PDmax_data_dict)
-        model.PDmin = Param(self.PDmin_tuple, initialize=self.PDmin_data_dict)
+        model.PDmax = pyo.Param(self.PDmax_tuple, initialize=self.PDmax_data_dict)
+        model.PDmin = pyo.Param(self.PDmin_tuple, initialize=self.PDmin_data_dict)
 
     def get_acopf_parameters(self, model):
         # reactive demand
-        model.QDmax = Param( self.QDmax_tuple, initialize=self.QDmax_data_dict)
-        model.QDmin = Param(self.QDmin_tuple, initialize=self.QDmin_data_dict)
+        model.QDmax = pyo.Param( self.QDmax_tuple, initialize=self.QDmax_data_dict)
+        model.QDmin = pyo.Param(self.QDmin_tuple, initialize=self.QDmin_data_dict)
 
     def get_all_constraints_opf(self, model):
         @model.Constraint(model.Dc, model.T)

@@ -1,7 +1,7 @@
 """PV mix-in: attaches PV generation sets, parameters, variables, and power-bound constraints to a multi-period model."""
 
 import numpy as np
-from pyomo.environ import *
+import pyomo.environ as pyo
 from src.potpourri.technologies.flexibility import Flexibility_multi_period
 
 
@@ -51,8 +51,8 @@ class PV_multi_period(Flexibility_multi_period):
     def get_sets(self, model):
         """Define PV and PV_bus sets from randomly placed PV units."""
         super().get_sets(model)
-        model.PV = Set(initialize=list(range(len(self.random_indexes))))
-        model.PV_bus = Set(initialize=list(enumerate(self.random_indexes)))
+        model.PV = pyo.Set(initialize=list(range(len(self.random_indexes))))
+        model.PV_bus = pyo.Set(initialize=list(enumerate(self.random_indexes)))
         return True
 
     def get_parameters(self, model):
@@ -60,13 +60,13 @@ class PV_multi_period(Flexibility_multi_period):
         self.PV_Pmax_dict, self.PV_Pmax_tuple = self.make_to_dict(model.PV, model.T, self.pv_pmax)
         self.PV_Pmin_dict, self.PV_Pmin_tuple = self.make_to_dict(model.PV, model.T, self.pv_pmin, False)
 
-        model.PV_Pmax = Param(self.PV_Pmax_tuple, within=Reals, initialize=self.PV_Pmax_dict)
-        model.PV_Pmin = Param(self.PV_Pmin_tuple, within=Reals, initialize=self.PV_Pmin_dict)
+        model.PV_Pmax = pyo.Param(self.PV_Pmax_tuple, within=pyo.Reals, initialize=self.PV_Pmax_dict)
+        model.PV_Pmin = pyo.Param(self.PV_Pmin_tuple, within=pyo.Reals, initialize=self.PV_Pmin_dict)
 
     def get_variables(self, model):
         """Create pPV variable initialised from the load profile."""
         self.pPV_data_dict, self.pPV_tuple = self.make_to_dict(model.PV, model.T, self.pv_load_profile)
-        model.pPV = Var(self.pPV_tuple, within=Reals, initialize=self.pPV_data_dict)
+        model.pPV = pyo.Var(self.pPV_tuple, within=pyo.Reals, initialize=self.pPV_data_dict)
 
     def get_all_constraints(self, model):
         """Add real-power bound constraints for all PV units over all time steps."""

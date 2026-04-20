@@ -1,7 +1,7 @@
 """Generator mix-in: attaches external grid and generator variables and OPF limits to a multi-period model."""
 
 import pandas as pd
-from pyomo.environ import *
+import pyomo.environ as pyo
 import numpy as np
 
 from src.potpourri.technologies.flexibility import Flexibility_multi_period
@@ -46,21 +46,21 @@ class Generator_multi_period(Flexibility_multi_period):
     def get_sets(self, model):
 
         # external grids and generators
-        model.G = Set(initialize=self.generation_data.index[self.generation_data.in_service])
+        model.G = pyo.Set(initialize=self.generation_data.index[self.generation_data.in_service])
 
         # external grids and slack generators
-        model.eG = Set(initialize=self.generation_data.index[self.generation_data.ref], within=model.G)
+        model.eG = pyo.Set(initialize=self.generation_data.index[self.generation_data.ref], within=model.G)
 
         # generators (not static) not slack generators
-        model.gG = Set(initialize=self.generation_data.index[self.generation_data.ref == False], within=model.G)
+        model.gG = pyo.Set(initialize=self.generation_data.index[self.generation_data.ref == False], within=model.G)
 
         # generators linked to each bus b
-        model.Gbs = Set(within=model.G * model.B, initialize=self.generation_data['gen_bus'][model.G])
+        model.Gbs = pyo.Set(within=model.G * model.B, initialize=self.generation_data['gen_bus'][model.G])
 
     def get_parameters(self, model):
         """Create time-indexed PG parameter from generation_data['pg']."""
         self.PG_data_dict, self.PG_tuple = self.make_to_dict(model.G, model.T, self.generation_data['pg'], False)
-        model.PG = Param(self.PG_tuple, initialize=self.PG_data_dict)
+        model.PG = pyo.Param(self.PG_tuple, initialize=self.PG_data_dict)
 
     def get_opf_parameters(self, model):
         """Create PGmax and PGmin parameters for OPF real-power limits."""
@@ -71,8 +71,8 @@ class Generator_multi_period(Flexibility_multi_period):
                                                                    self.generation_data['min_p'], False)
 
         # generation real power limits multi period, TODO not necessarily time dependent
-        model.PGmax = Param(self.Pgmax_tuple, initialize=self.Pgmax_data_dict)
-        model.PGmin = Param(self.PGmin_tuple, initialize=self.PGmin_data_dict)
+        model.PGmax = pyo.Param(self.Pgmax_tuple, initialize=self.Pgmax_data_dict)
+        model.PGmin = pyo.Param(self.PGmin_tuple, initialize=self.PGmin_data_dict)
 
     def get_acopf_parameters(self, model):
         """Create QGmax and QGmin parameters for AC OPF reactive-power limits."""
@@ -81,12 +81,12 @@ class Generator_multi_period(Flexibility_multi_period):
         self.QGmin_data_dict, self.QGmin_tuple = self.make_to_dict(model.G, model.T, self.generation_data['min_q'], False)
 
         # generation reactive power limits multi period
-        model.QGmax = Param(self.QGmax_tuple, initialize=self.QGmax_data_dict)
-        model.QGmin = Param(self.QGmin_tuple, initialize=self.QGmin_data_dict)
+        model.QGmax = pyo.Param(self.QGmax_tuple, initialize=self.QGmax_data_dict)
+        model.QGmin = pyo.Param(self.QGmin_tuple, initialize=self.QGmin_data_dict)
 
     def get_variables(self, model):
         """Create pG variable for real power injection over all generators and time steps."""
-        model.pG = Var(self.PG_tuple, domain=Reals)  # real power injection from static generators
+        model.pG = pyo.Var(self.PG_tuple, domain=pyo.Reals)  # real power injection from static generators
 
     def fix_variables(self, model):
         """Fix non-slack (non-reference) generators to their profile values."""

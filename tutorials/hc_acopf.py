@@ -58,7 +58,7 @@ net.line["max_loading_percent"] = 80.
 net.ext_grid["max_q_mvar"]      = 500.
 net.ext_grid["min_q_mvar"]      = -500.
 
-pp.runpp(net)
+pp.runpp(net, voltage_depend_loads=False)
 print(f"Baseline max line loading:  {net.res_line.loading_percent.max():.1f}%")
 print(f"Baseline voltage range:     {net.res_bus.vm_pu.min():.3f} – {net.res_bus.vm_pu.max():.3f} p.u.")
 

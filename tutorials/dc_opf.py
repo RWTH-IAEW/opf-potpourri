@@ -102,7 +102,7 @@ dcopf.model.obj = pe.Objective(
     sense=pe.minimize
 )
 
-dcopf.solve(solver='glpk', print_solver_output=False)
+dcopf.solve(solver='gurobi_direct', print_solver_output=False)
 
 #%% md
 # ## 5. Results

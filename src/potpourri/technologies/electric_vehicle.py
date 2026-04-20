@@ -1,7 +1,7 @@
 """Electric vehicle mix-in: attaches simplified EV charging sets, parameters, and constraints to a multi-period model."""
 
 import numpy as np
-from pyomo.environ import *
+import pyomo.environ as pyo
 from loguru import logger
 from src.potpourri.technologies.flexibility import Flexibility_multi_period
 
@@ -80,51 +80,51 @@ class Electric_vehicle_multi_period(Flexibility_multi_period):
     def get_sets(self, model):
         """Define EV and EV_bus sets from randomly placed electric vehicles."""
         super().get_sets(model)
-        model.EV = Set(initialize=list(range(len(self.random_indexes))))
-        model.EV_bus = Set(initialize=list(enumerate(self.random_indexes)))
+        model.EV = pyo.Set(initialize=list(range(len(self.random_indexes))))
+        model.EV_bus = pyo.Set(initialize=list(enumerate(self.random_indexes)))
         return True
 
     def get_parameters(self, model):
         """Attach EV power limits, SOC bounds, capacity, efficiency, and drive profiles."""
-        model.EV_P_to_grid = Param(model.EV, within=Reals, initialize=self.ev_power_to_grid)
-        model.EV_P_to_bat = Param(model.EV, within=Reals, initialize=-self.ev_power_to_bat)
-        model.EV_SOCmax = Param(model.EV, within=Reals, initialize=self.ev_soc_max)
-        model.EV_SOCmin = Param(model.EV, within=Reals, initialize=self.ev_soc_min)
-        model.EV_Cap = Param(model.EV, within=Reals, initialize=self.ev_cap)
-        model.EV_batt_eff = Param(model.EV, within=Reals, initialize=self.ev_batt_eff)
+        model.EV_P_to_grid = pyo.Param(model.EV, within=pyo.Reals, initialize=self.ev_power_to_grid)
+        model.EV_P_to_bat = pyo.Param(model.EV, within=pyo.Reals, initialize=-self.ev_power_to_bat)
+        model.EV_SOCmax = pyo.Param(model.EV, within=pyo.Reals, initialize=self.ev_soc_max)
+        model.EV_SOCmin = pyo.Param(model.EV, within=pyo.Reals, initialize=self.ev_soc_min)
+        model.EV_Cap = pyo.Param(model.EV, within=pyo.Reals, initialize=self.ev_cap)
+        model.EV_batt_eff = pyo.Param(model.EV, within=pyo.Reals, initialize=self.ev_batt_eff)
 
         self.plugged_in_dict = {t: value for t, value in zip(model.T, self.plugged_in_set)}
-        model.Plugged_in_profile = Param(model.T, initialize=self.plugged_in_dict)
+        model.Plugged_in_profile = pyo.Param(model.T, initialize=self.plugged_in_dict)
         self.not_plugged_in_dict = {t: value for t, value in zip(model.T, self.not_plugged_in_set)}
-        model.Not_plugged_in_profile = Param(model.T, initialize=self.not_plugged_in_dict)
+        model.Not_plugged_in_profile = pyo.Param(model.T, initialize=self.not_plugged_in_dict)
         self.drive_away_dict = {t: value for t, value in zip(model.T, self.drive_away_set)}
-        model.Drive_profile = Param(model.T, initialize=self.drive_away_dict)
+        model.Drive_profile = pyo.Param(model.T, initialize=self.drive_away_dict)
         return True
 
     def get_variables(self, model):
         """Create EV_P (power) and EV_SOC (state of charge) variables."""
-        model.EV_P = Var(model.EV, model.T, within=Reals)
-        model.EV_SOC = Var(model.EV, model.T, within=Reals)
+        model.EV_P = pyo.Var(model.EV, model.T, within=pyo.Reals)
+        model.EV_SOC = pyo.Var(model.EV, model.T, within=pyo.Reals)
         return True
 
     def get_all_constraints(self, model):
         """Add power limits, SOC limits, and SOC update constraints for all EVs."""
         def ev_power_rule(model, e, t):
             return model.EV_P_to_grid[e], model.EV_P[e, t], model.EV_P_to_bat[e]
-        model.ev_power_constr = Constraint(model.EV, model.T, rule=ev_power_rule)
+        model.ev_power_constr = pyo.Constraint(model.EV, model.T, rule=ev_power_rule)
 
         def ev_soc_rule(model, e, t):
             if t == model.T.at(1):
                 return model.EV_SOC[e, t] == 0.5
             return model.EV_SOCmin[e], model.EV_SOC[e, t], model.EV_SOCmax[e]
-        model.ev_soc_constr = Constraint(model.EV, model.T, rule=ev_soc_rule)
+        model.ev_soc_constr = pyo.Constraint(model.EV, model.T, rule=ev_soc_rule)
 
         def ev_soc_update_rule(model, e, t):
             if t == model.T.at(1):
-                return Constraint.Skip
+                return pyo.Constraint.Skip
             return (model.EV_SOC[e, t] == model.EV_SOC[e, t - 1]
                     + model.deltaT * (model.EV_P[e, t] * model.EV_batt_eff[e]) / model.EV_Cap[e])
-        model.ev_soc_update_constr = Constraint(model.EV, model.T, rule=ev_soc_update_rule)
+        model.ev_soc_update_constr = pyo.Constraint(model.EV, model.T, rule=ev_soc_update_rule)
 
     def get_all_opf(self, model):
         pass

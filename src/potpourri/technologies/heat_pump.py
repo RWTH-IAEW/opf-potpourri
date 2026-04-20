@@ -1,7 +1,7 @@
-"""Heat pump mix-in: attaches heat pump storage sets, parameters, variables, and constraints to a multi-period model."""
+"""Heat pump mix-in: attaches heat pump storage pyo.Sets, pyo.Parameters, variables, and constraints to a multi-period model."""
 
 import numpy as np
-from pyomo.environ import *
+import pyomo.environ as pyo
 from src.potpourri.technologies.flexibility import Flexibility_multi_period
 
 
@@ -42,9 +42,9 @@ class Heatpump_multi_period(Flexibility_multi_period):
         # heat capacity of the house in MWh/K
         self.heat_cap = (self.air_mass * self.air_capacity + self.concrete_mass * self.concrete_capacity) / 3600000
 
-        # TODO: Translate to temperature parameters for heat pump
+        # TODO: Translate to temperature pyo.Parameters for heat pump
 
-        # --- heat pump parameter values ---
+        # --- heat pump pyo.Parameter values ---
         self.hp_power_max = 0.005  # in MW_heat
         self.hp_cop = 4  # coefficient of performance in MW_el/MW_heat
 
@@ -56,52 +56,52 @@ class Heatpump_multi_period(Flexibility_multi_period):
         self.heat_load = self.heat_scaling_fac * self.net.profiles[('load', 'p_mw')][0]
 
     def get_all(self, model):
-        """Attach heat pump sets, parameters, variables, and constraints to the model."""
+        """Attach heat pump pyo.Sets, pyo.Parameters, variables, and constraints to the model."""
         self.get_sets(model)
         self.get_parameters(model)
         self.get_variables(model)
         self.get_all_constraints(model)
 
     def get_sets(self, model):
-        """Define HP and HP_bus sets from randomly placed heat pumps."""
+        """Define HP and HP_bus pyo.Sets from randomly placed heat pumps."""
         super().get_sets(model)
-        model.HP = Set(initialize=list(range(len(self.random_indexes))))  # set of heat pumps
-        model.HP_bus = Set(initialize=list(enumerate(self.random_indexes)))  # set of heat pump-bus mapping
+        model.HP = pyo.Set(initialize=list(range(len(self.random_indexes))))  # pyo.Set of heat pumps
+        model.HP_bus = pyo.Set(initialize=list(enumerate(self.random_indexes)))  # pyo.Set of heat pump-bus mapping
         return True
 
     def get_parameters(self, model):
         """Attach heat pump power limits, temperature bounds, and heat loss profile."""
-        model.HP_Pmax = Param(model.HP, within=Reals, initialize=self.hp_power_max)
-        model.HP_Pmin = Param(model.HP, within=Reals, initialize=0)
-        model.TempMax = Param(model.HP, within=Reals, initialize=self.temp_max)
-        model.TempMin = Param(model.HP, within=Reals, initialize=self.temp_min)
+        model.HP_Pmax = pyo.Param(model.HP, within=pyo.Reals, initialize=self.hp_power_max)
+        model.HP_Pmin = pyo.Param(model.HP, within=pyo.Reals, initialize=0)
+        model.TempMax = pyo.Param(model.HP, within=pyo.Reals, initialize=self.temp_max)
+        model.TempMin = pyo.Param(model.HP, within=pyo.Reals, initialize=self.temp_min)
 
         self.Qloss_data_dict, self.Qloss_tuple = self.make_to_dict(model.HP, model.T, self.heat_load, True)
-        model.Qloss = Param(self.Qloss_tuple, initialize=self.Qloss_data_dict)
+        model.Qloss = pyo.Param(self.Qloss_tuple, initialize=self.Qloss_data_dict)
         return True
 
     def get_variables(self, model):
         """Create hp_p (electrical power) and temp (indoor temperature) variables."""
-        model.hp_p = Var(model.HP, model.T, within=Reals)
-        model.temp = Var(model.HP, model.T, within=Reals)
+        model.hp_p = pyo.Var(model.HP, model.T, within=pyo.Reals)
+        model.temp = pyo.Var(model.HP, model.T, within=pyo.Reals)
         return True
 
     def get_all_constraints(self, model):
         """Add power limits, temperature bounds, and thermal state update constraints."""
         def hp_power_rule(model, h, t):
             return model.HP_Pmin[h], model.hp_p[h, t], model.HP_Pmax[h]
-        model.temperature_rule = Constraint(model.HP, model.T, rule=hp_power_rule)
+        model.temperature_rule = pyo.Constraint(model.HP, model.T, rule=hp_power_rule)
 
         def hp_temp_rule(model, h, t):
             return model.TempMin[h], model.temp[h, t], model.TempMax[h]
-        model.hp_temp_con = Constraint(model.HP, model.T, rule=hp_temp_rule)
+        model.hp_temp_con = pyo.Constraint(model.HP, model.T, rule=hp_temp_rule)
 
         def hp_temp_update_rule(model, h, t):
             if t == model.T.at(1):
-                return Constraint.Skip
+                return pyo.Constraint.Skip
             return (model.temp[h, t] == model.temp[h, t - 1]
                     + model.deltaT * ((model.hp_p[h, t] * self.hp_cop) - model.Qloss[h, t]) / self.heat_cap)
-        model.hp_temp_update_con = Constraint(model.HP, model.T, rule=hp_temp_update_rule)
+        model.hp_temp_update_con = pyo.Constraint(model.HP, model.T, rule=hp_temp_update_rule)
         return True
 
     def get_all_opf(self, model):

@@ -1,7 +1,7 @@
 """Battery mix-in: attaches battery storage sets, parameters, variables, and constraints to a multi-period model."""
 
 import numpy as np
-from pyomo.environ import *
+import pyomo.environ as pyo
 from src.potpourri.technologies.flexibility import Flexibility_multi_period
 
 
@@ -40,44 +40,44 @@ class Battery_multi_period(Flexibility_multi_period):
     def get_sets(self, model):
         """Define BAT and BAT_bus sets from randomly placed batteries."""
         super().get_sets(model)
-        model.BAT = Set(initialize=list(range(len(self.random_indexes))))  # set of batteries
-        model.BAT_bus = Set(initialize=list(enumerate(self.random_indexes)))  # set of battery-bus mapping
+        model.BAT = pyo.Set(initialize=list(range(len(self.random_indexes))))  # set of batteries
+        model.BAT_bus = pyo.Set(initialize=list(enumerate(self.random_indexes)))  # set of battery-bus mapping
         return True
 
     def get_parameters(self, model):
         """Attach battery power, SOC, capacity, and efficiency parameters."""
-        model.BAT_Pmax = Param(model.BAT, within=Reals, initialize=self.bat_power)
-        model.BAT_Pmin = Param(model.BAT, within=Reals, initialize=-self.bat_power)
-        model.BAT_SOCmax = Param(model.BAT, within=Reals, initialize=self.bat_soc_max)
-        model.BAT_SOCmin = Param(model.BAT, within=Reals, initialize=self.bat_soc_min)
-        model.BAT_Cap = Param(model.BAT, within=Reals, initialize=self.bat_cap)
-        model.BAT_Eff = Param(model.BAT, within=Reals, initialize=0.9)
+        model.BAT_Pmax = pyo.Param(model.BAT, within=pyo.Reals, initialize=self.bat_power)
+        model.BAT_Pmin = pyo.Param(model.BAT, within=pyo.Reals, initialize=-self.bat_power)
+        model.BAT_SOCmax = pyo.Param(model.BAT, within=pyo.Reals, initialize=self.bat_soc_max)
+        model.BAT_SOCmin = pyo.Param(model.BAT, within=pyo.Reals, initialize=self.bat_soc_min)
+        model.BAT_Cap = pyo.Param(model.BAT, within=pyo.Reals, initialize=self.bat_cap)
+        model.BAT_Eff = pyo.Param(model.BAT, within=pyo.Reals, initialize=0.9)
         return True
 
     def get_variables(self, model):
         """Create BAT_P (power) and BAT_SOC (state of charge) variables."""
-        model.BAT_P = Var(model.BAT, model.T, within=Reals)
-        model.BAT_SOC = Var(model.BAT, model.T, within=Reals)
+        model.BAT_P = pyo.Var(model.BAT, model.T, within=pyo.Reals)
+        model.BAT_SOC = pyo.Var(model.BAT, model.T, within=pyo.Reals)
         return True
 
     def get_all_constraints(self, model):
         """Add power limits, SOC limits, and SOC update constraints for all batteries."""
         def bat_power_rule(model, b, t):
             return model.BAT_Pmin[b], model.BAT_P[b, t], model.BAT_Pmax[b]
-        model.bat_power_con = Constraint(model.BAT, model.T, rule=bat_power_rule)
+        model.bat_power_con = pyo.Constraint(model.BAT, model.T, rule=bat_power_rule)
 
         def bat_soc_rule(model, b, t):
             if t == model.T.at(1):
                 return model.BAT_SOC[b, t] == 0.5 * model.BAT_SOCmax[b]
             return model.BAT_SOCmin[b], model.BAT_SOC[b, t], model.BAT_SOCmax[b]
-        model.bat_soc_con = Constraint(model.BAT, model.T, rule=bat_soc_rule)
+        model.bat_soc_con = pyo.Constraint(model.BAT, model.T, rule=bat_soc_rule)
 
         def bat_soc_update_rule(model, b, t):
             if t == model.T.at(1):
-                return Constraint.Skip
+                return pyo.Constraint.Skip
             return (model.BAT_SOC[b, t] == model.BAT_SOC[b, t - 1]
                     + model.deltaT * (model.BAT_P[b, t] * model.BAT_Eff[b]) / model.BAT_Cap[b])
-        model.bat_soc_update_con = Constraint(model.BAT, model.T, rule=bat_soc_update_rule)
+        model.bat_soc_update_con = pyo.Constraint(model.BAT, model.T, rule=bat_soc_update_rule)
         return True
 
     def get_all_acopf(self, model):
