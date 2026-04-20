@@ -10,6 +10,38 @@ POTPOURRI is a Python library for AC/DC Optimal Power Flow (OPF) in distribution
 
 ---
 
+## Documentation
+
+The project documentation is built with [MkDocs](https://www.mkdocs.org/).
+
+To serve the documentation locally:
+
+```bash
+mkdocs serve
+```
+
+This starts a local development server, usually at:
+
+```
+(opf-potpourri) (base) kortmann@kortmann:~/opf-potpourri$ mkdocs serve
+INFO    -  Building documentation...
+INFO    -  Cleaning site directory
+INFO    -  Documentation built in 0.17 seconds
+INFO    -  [11:01:44] Serving on http://127.0.0.1:8000/
+```
+
+If MkDocs is not installed yet, install the documentation dependencies first:
+
+```bash
+pip install -e .[docs]
+```
+
+then run:
+
+```bash
+mkdocs serve
+```
+
 ## Installation
 
 Requires Python ≤ 3.12 and Conda.
