@@ -15,6 +15,8 @@
 # ## 1. Imports
 
 #%%
+import os
+os.environ['NEOS_EMAIL'] = "test-email@test.com"
 import numpy as np
 import pyomo.environ as pe
 import pandapower as pp
@@ -53,7 +55,7 @@ net.load["q_mvar"]  = profiles[("load", "q_mvar")].iloc[select_profile_idx]
 pp.rundcpp(net)                   # pandapower reference
 
 pf = DC(net)
-pf.solve(solver="gurobi_direct", print_solver_output=False)
+pf.solve(solver="neos", neos_opt="cplex", print_solver_output=False)
 
 # Compare angle results at each bus
 print("Bus voltage angles — pandapower vs Pyomo DC:")

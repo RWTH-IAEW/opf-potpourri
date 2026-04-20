@@ -1,3 +1,5 @@
+import os
+os.environ['NEOS_EMAIL'] = "test-email@test.com"
 import pandapower as pp
 import pyomo.environ as pyo
 
@@ -26,7 +28,7 @@ def test_acopf_solves_with_ipopt():
     acopf = ACOPF(net)
     acopf.add_OPF()
     acopf.add_voltage_deviation_objective()
-    acopf.solve(solver='ipopt')
+    acopf.solve(solver='neos', neos_opt='ipopt')
 
     assert pyo.check_optimal_termination(acopf.results)
     assert acopf.net.res_bus is not None

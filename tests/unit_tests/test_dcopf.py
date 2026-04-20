@@ -1,3 +1,5 @@
+import os
+os.environ['NEOS_EMAIL'] = "test-email@test.com"
 import pandapower as pp
 import pyomo.environ as pyo
 
@@ -30,7 +32,7 @@ def test_dcopf_solves_with_glpk():
         expr=sum(dcopf.model.pG[g] for g in dcopf.model.G),
         sense=pyo.minimize,
     )
-    dcopf.solve(solver='glpk', to_net=False)
+    dcopf.solve(solver="neos", neos_opt="cplex", to_net=False)
 
     assert pyo.check_optimal_termination(dcopf.results)
 
