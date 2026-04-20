@@ -2,11 +2,11 @@
 magnitudes over time."""
 
 from pyomo.environ import *
-from src.potpourri.models_multi_period.basemodel_multi_period import (
+from potpourri.models_multi_period.basemodel_multi_period import (
     Basemodel_multi_period,
 )
-from src.potpourri.technologies.demand import Demand_multi_period
-from src.potpourri.technologies.evs import EV_multi_period
+from potpourri.technologies.demand import Demand_multi_period
+from potpourri.technologies.evs import EV_multi_period
 
 
 class AC_multi_period(Basemodel_multi_period):

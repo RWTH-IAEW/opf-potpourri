@@ -8,7 +8,7 @@ import pandas as pd
 import pickle
 from pathlib import Path
 import pyomo.environ as pyo
-from src.potpourri.technologies.flexibility import Flexibility_multi_period
+from potpourri.technologies.flexibility import Flexibility_multi_period
 
 _DATA_DIR = Path(__file__).parent.parent / "data"
 

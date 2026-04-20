@@ -2,7 +2,7 @@
 multi-period model."""
 
 import pyomo.environ as pyo
-from src.potpourri.technologies.flexibility import Flexibility_multi_period
+from potpourri.technologies.flexibility import Flexibility_multi_period
 
 
 class Demand_multi_period(Flexibility_multi_period):

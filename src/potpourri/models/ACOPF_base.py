@@ -2,8 +2,8 @@
 
 import pandas as pd
 import pyomo.environ as pyo
-from src.potpourri.models.AC import AC
-from src.potpourri.models.OPF import OPF
+from potpourri.models.AC import AC
+from potpourri.models.OPF import OPF
 import numpy as np
 from loguru import logger
 

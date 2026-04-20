@@ -4,10 +4,10 @@ studies."""
 import copy
 
 from pyomo.environ import *
-from src.potpourri.models_multi_period.ACOPF_multi_period import (
+from potpourri.models_multi_period.ACOPF_multi_period import (
     ACOPF_multi_period,
 )
-from src.potpourri.technologies.windpower import Windpower_multi_period
+from potpourri.technologies.windpower import Windpower_multi_period
 import pandapower as pp
 
 # TODO make multiperiod

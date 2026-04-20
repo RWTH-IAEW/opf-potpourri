@@ -11,7 +11,7 @@ import pyomo.environ as pyo
 from loguru import logger
 
 
-from src.potpourri.models.pyo_to_net import pyo_sol_to_net_res
+from potpourri.models.pyo_to_net import pyo_sol_to_net_res
 
 
 class Basemodel:
@@ -257,8 +257,12 @@ class Basemodel:
         )
 
         # --- Variables ---
+        delta_init = self.bus_data.v_a_rad.fillna(0.0).to_dict()
         self.model.delta = pyo.Var(
-            self.model.B, domain=pyo.Reals, initialize=0.0, bounds=(-pi, pi)
+            self.model.B,
+            domain=pyo.Reals,
+            initialize=delta_init,
+            bounds=(-pi, pi),
         )  # voltage phase angle at bus b, rad
         self.model.pD = pyo.Var(
             self.model.D, domain=pyo.Reals
@@ -405,6 +409,8 @@ class Basemodel:
                 )
         except AttributeError as err:
             logger.error("Could not check termination condition: {}", err)
+
+        return self.results
 
     def change_vals(self, key, value):
         """Set all indices of a named Pyomo component to value."""

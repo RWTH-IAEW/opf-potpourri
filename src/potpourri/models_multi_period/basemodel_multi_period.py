@@ -10,12 +10,12 @@ import pandapower as pp
 import simbench as sb
 import time as ctime
 from loguru import logger
-from src.potpourri.technologies.generator import Generator_multi_period
-from src.potpourri.technologies.shunts import Shunts_multi_period
-from src.potpourri.technologies.sgens import Sgens_multi_period
-from src.potpourri.technologies.demand import Demand_multi_period
-from src.potpourri.technologies.windpower import Windpower_multi_period
-from src.potpourri.technologies.evs import EV_multi_period
+from potpourri.technologies.generator import Generator_multi_period
+from potpourri.technologies.shunts import Shunts_multi_period
+from potpourri.technologies.sgens import Sgens_multi_period
+from potpourri.technologies.demand import Demand_multi_period
+from potpourri.technologies.windpower import Windpower_multi_period
+from potpourri.technologies.evs import EV_multi_period
 
 
 class Basemodel_multi_period:

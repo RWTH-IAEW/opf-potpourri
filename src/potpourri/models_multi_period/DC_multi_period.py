@@ -2,7 +2,7 @@
 over time steps."""
 
 from pyomo.environ import *
-from src.potpourri.models_multi_period.basemodel_multi_period import (
+from potpourri.models_multi_period.basemodel_multi_period import (
     Basemodel_multi_period,
 )
 

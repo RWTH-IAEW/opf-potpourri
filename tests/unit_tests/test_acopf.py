@@ -1,6 +1,7 @@
 import os
 
 os.environ["NEOS_EMAIL"] = "test-email@test.com"
+
 import pandapower as pp
 import pyomo.environ as pyo
 

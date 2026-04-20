@@ -2,13 +2,13 @@
 operational limits."""
 
 from pyomo.environ import *
-from src.potpourri.models_multi_period.AC_multi_period import AC_multi_period
-from src.potpourri.models_multi_period.OPF_multi_period import OPF_multi_period
-from src.potpourri.technologies.generator import Generator_multi_period
-from src.potpourri.technologies.demand import Demand_multi_period
-from src.potpourri.technologies.windpower import Windpower_multi_period
-from src.potpourri.technologies.sgens import Sgens_multi_period
-from src.potpourri.technologies.evs import EV_multi_period
+from potpourri.models_multi_period.AC_multi_period import AC_multi_period
+from potpourri.models_multi_period.OPF_multi_period import OPF_multi_period
+from potpourri.technologies.generator import Generator_multi_period
+from potpourri.technologies.demand import Demand_multi_period
+from potpourri.technologies.windpower import Windpower_multi_period
+from potpourri.technologies.sgens import Sgens_multi_period
+from potpourri.technologies.evs import EV_multi_period
 
 
 import numpy as np

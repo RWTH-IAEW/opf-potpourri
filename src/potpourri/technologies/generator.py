@@ -5,7 +5,7 @@ import pandas as pd
 import pyomo.environ as pyo
 import numpy as np
 
-from src.potpourri.technologies.flexibility import Flexibility_multi_period
+from potpourri.technologies.flexibility import Flexibility_multi_period
 
 
 class Generator_multi_period(Flexibility_multi_period):

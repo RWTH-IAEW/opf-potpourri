@@ -4,12 +4,12 @@ ratings over time."""
 import copy
 
 from pyomo.environ import *
-from src.potpourri.models_multi_period.basemodel_multi_period import (
+from potpourri.models_multi_period.basemodel_multi_period import (
     Basemodel_multi_period,
 )
-from src.potpourri.technologies.generator import Generator_multi_period
-from src.potpourri.technologies.sgens import Sgens_multi_period
-from src.potpourri.technologies.demand import Demand_multi_period
+from potpourri.technologies.generator import Generator_multi_period
+from potpourri.technologies.sgens import Sgens_multi_period
+from potpourri.technologies.demand import Demand_multi_period
 import numpy as np
 
 

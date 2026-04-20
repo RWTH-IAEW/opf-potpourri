@@ -2,7 +2,7 @@
 power) to Basemodel."""
 
 import pyomo.environ as pyo
-from src.potpourri.models.basemodel import Basemodel
+from potpourri.models.basemodel import Basemodel
 
 
 class AC(Basemodel):
@@ -178,9 +178,13 @@ class AC(Basemodel):
             self.model.TRANSF, domain=pyo.Reals
         )  # reactive power injected at b' onto transformer
 
+        v_init = self.bus_data.v_m.fillna(1.0).to_dict()
         self.model.v = pyo.Var(
-            self.model.B, domain=pyo.NonNegativeReals, initialize=1.0
-        )  # voltage magnitude at bus b, rad
+            self.model.B,
+            domain=pyo.NonNegativeReals,
+            bounds=(0.0, 2.0),
+            initialize=v_init,
+        )  # voltage magnitude at bus b (p.u.)
 
         self.model.qG = pyo.Var(self.model.G, domain=pyo.Reals)
 

@@ -3,7 +3,7 @@ variables, and constraints to a multi-period model."""
 
 import numpy as np
 import pyomo.environ as pyo
-from src.potpourri.technologies.flexibility import Flexibility_multi_period
+from potpourri.technologies.flexibility import Flexibility_multi_period
 
 
 class Heatpump_multi_period(Flexibility_multi_period):
