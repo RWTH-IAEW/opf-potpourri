@@ -1,13 +1,13 @@
 # Flexible Devices API
 
-All device classes live in `src/potpourri/models_multi_period/` and inherit from `Flexibility_multi_period`.
+All device classes live in `src/potpourri/technologies/` and inherit from `Flexibility_multi_period`.
 
 ---
 
 ## Flexibility_multi_period
 
 ```
-potpourri.models_multi_period.flexibility_multi_period.Flexibility_multi_period
+potpourri.technologies.flexibility.Flexibility_multi_period
 ```
 
 Abstract base class for all modular flexible device extensions. Provides common data extraction from the network and the standard interface that all device classes must implement.
@@ -54,7 +54,7 @@ Converts data arrays or dicts into Pyomo parameter initialisation format.
 ## Battery_multi_period
 
 ```
-potpourri.models_multi_period.battery_multi_period.Battery_multi_period
+potpourri.technologies.battery.Battery_multi_period
 ```
 
 Models grid-connected battery storage with SOC dynamics.
@@ -87,7 +87,7 @@ Randomly places batteries on network buses. The fraction of buses with batteries
 ## EV_multi_period
 
 ```
-potpourri.models_multi_period.EVs_multi_period.EV_multi_period
+potpourri.technologies.evs.EV_multi_period
 ```
 
 Models a fleet of electric vehicles with driving profiles, charging point assignments, and optional V2G capability. Profiles are loaded from `data/emob_profiles.pkl`.
@@ -134,10 +134,10 @@ Sets SimBench EV load profiles to zero to avoid double-counting when explicit EV
 
 ---
 
-## HeatPump_multi_period
+## Heatpump_multi_period
 
 ```
-potpourri.models_multi_period.heat_pump_multi_period.HeatPump_multi_period
+potpourri.technologies.heat_pump.Heatpump_multi_period
 ```
 
 Models thermal loads with an electric heat pump and building thermal mass.
@@ -152,7 +152,7 @@ Uses a simplified building model with heat capacity, thermal mass, and heat loss
 
 - Sets: heat pump indices, bus-HP mapping
 - Params: `hp_power`, COP, thermal mass, heat loss coefficients
-- Vars: `hp_p[h, t]` (electrical power), `T_room[h, t]` (indoor temperature)
+- Vars: `hp_p[h, t]` (electrical power), `temp[h, t]` (indoor temperature)
 - Constraints: thermal dynamics, temperature bounds, power limits
 
 ---
@@ -160,7 +160,7 @@ Uses a simplified building model with heat capacity, thermal mass, and heat loss
 ## PV_multi_period
 
 ```
-potpourri.models_multi_period.pv_multi_period.PV_multi_period
+potpourri.technologies.pv.PV_multi_period
 ```
 
 Models controllable PV generators with generation profiles from `net.profiles`. Percentages of PV penetration are configurable.
@@ -172,7 +172,7 @@ Models controllable PV generators with generation profiles from `net.profiles`. 
 ## Windpower_multi_period
 
 ```
-potpourri.models_multi_period.windpower_multi_period.Windpower_multi_period
+potpourri.technologies.windpower.Windpower_multi_period
 ```
 
 Extends `Sgens_multi_period` with grid-code Q-curve constraints for wind generators. Reactive power control variants (0–2) correspond to different Q-P and Q-U slope/intercept parameters.
@@ -192,7 +192,7 @@ Adds a wind generation maximisation objective to the model.
 ## Demand_multi_period
 
 ```
-potpourri.models_multi_period.demand_multi_period.Demand_multi_period
+potpourri.technologies.demand.Demand_multi_period
 ```
 
 Handles time-indexed load power (P and Q) from SimBench profiles. Fixes load variables to profile values in base operation; adds controllable load bounds in OPF mode.
@@ -212,7 +212,7 @@ Reads load reactive power bounds and attaches `QDmax`, `QDmin` parameters and `Q
 ## Sgens_multi_period
 
 ```
-potpourri.models_multi_period.sgens_multi_period.Sgens_multi_period
+potpourri.technologies.sgens.Sgens_multi_period
 ```
 
 Handles time-indexed static generator (sgen) real and reactive power from profiles. In OPF mode, adds controllable sgen power bounds.
@@ -232,7 +232,7 @@ Reads `sgen.max_q_mvar` / `min_q_mvar` and adds `QsGmax`, `QsGmin` params and `Q
 ## Generator_multi_period
 
 ```
-potpourri.models_multi_period.generator_multi_period.Generator_multi_period
+potpourri.technologies.generator.Generator_multi_period
 ```
 
 Handles time-indexed external grid and synchronous generator real and reactive power. Provides OPF limits for real power and ACOPF limits for reactive power.

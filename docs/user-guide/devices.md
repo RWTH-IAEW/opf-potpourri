@@ -32,7 +32,7 @@ BAT_SOC[b, t] = BAT_SOC[b, t-1] + ΔT · BAT_P[b, t] · η / BAT_Cap[b]
 **Usage:**
 
 ```python
-from potpourri.models_multi_period.battery_multi_period import Battery_multi_period
+from potpourri.technologies.battery import Battery_multi_period
 
 opf = ACOPF_multi_period(net, toT=96)
 battery = Battery_multi_period(opf.net)
@@ -93,7 +93,7 @@ opf.model.ev_object.get_market_constraints(opf.model)
 
 ## Heat pump
 
-`HeatPump_multi_period` models thermal loads with a thermal storage buffer. It uses a simple building thermal model with heat capacity and heat loss parameters.
+`Heatpump_multi_period` models thermal loads with a thermal storage buffer. It uses a simple building thermal model with heat capacity and heat loss parameters.
 
 **Key parameters:**
 
@@ -104,15 +104,15 @@ opf.model.ev_object.get_market_constraints(opf.model)
 **Variables:**
 
 - `hp_p[h, t]` — heat pump electrical power consumption
-- `T_room[h, t]` — indoor temperature (°C)
+- `temp[h, t]` — indoor temperature (°C)
 
 **Usage:**
 
 ```python
-from potpourri.models_multi_period.heat_pump_multi_period import HeatPump_multi_period
+from potpourri.technologies.heat_pump import Heatpump_multi_period
 
 opf = ACOPF_multi_period(net, toT=96)
-hp = HeatPump_multi_period(opf.net)
+hp = Heatpump_multi_period(opf.net)
 hp.get_all(opf.model)
 opf.add_OPF()
 opf.solve(solver="ipopt")
@@ -127,7 +127,7 @@ opf.solve(solver="ipopt")
 **Usage:**
 
 ```python
-from potpourri.models_multi_period.pv_multi_period import PV_multi_period
+from potpourri.technologies.pv import PV_multi_period
 
 opf = ACOPF_multi_period(net, toT=96)
 pv = PV_multi_period(opf.net)
@@ -143,7 +143,7 @@ pv.get_all(opf.model)
 **Usage:**
 
 ```python
-from potpourri.models_multi_period.windpower_multi_period import Windpower_multi_period
+from potpourri.technologies.windpower import Windpower_multi_period
 
 # Windpower is typically instantiated automatically by ACOPF_multi_period
 # when net.bus has a windpot_p_mw column. It can also be added manually:
@@ -159,7 +159,7 @@ wind.get_all(opf.model)
 Any class that implements the following interface can be used as a flexible device:
 
 ```python
-from potpourri.models_multi_period.flexibility_multi_period import Flexibility_multi_period
+from potpourri.technologies.flexibility import Flexibility_multi_period
 
 class MyDevice(Flexibility_multi_period):
     def __init__(self, net, T=None, scenario=None):

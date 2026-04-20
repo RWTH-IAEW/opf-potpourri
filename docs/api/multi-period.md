@@ -1,6 +1,6 @@
 # Multi-Period Models API
 
-All multi-period models live in `src/potpourri/models_multi_period/`.
+Multi-period OPF model classes live in `src/potpourri/models_multi_period/`. Device/technology mix-in classes (batteries, EVs, heat pumps, PV, wind, demand, generators) live in `src/potpourri/technologies/`.
 
 ---
 
