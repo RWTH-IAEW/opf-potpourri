@@ -1,18 +1,27 @@
 import pandas as pd
 import simbench as sb
 import pandapower as pp
-import pickle
 from tqdm import tqdm
 
 from src.potpourri.models.AC import AC
 
 
 if __name__ == "__main__":
-    results_dir = '../potpourri/results'
+    results_dir = "../potpourri/results"
 
-    delta_keys = {'res_bus': ['vm_pu', 'va_degree'], 'res_line': ['pl_mw', 'ql_mvar']}
+    delta_keys = {
+        "res_bus": ["vm_pu", "va_degree"],
+        "res_line": ["pl_mw", "ql_mvar"],
+    }
 
-    nets = ['1-HV-mixed--0-sw', '1-HV-urban--0-sw', '1-MV-rural--0-sw', '1-MV-urban--0-sw', '1-LV-urban6--0-sw', '1-LV-rural1--0-sw']
+    nets = [
+        "1-HV-mixed--0-sw",
+        "1-HV-urban--0-sw",
+        "1-MV-rural--0-sw",
+        "1-MV-urban--0-sw",
+        "1-LV-urban6--0-sw",
+        "1-LV-rural1--0-sw",
+    ]
 
     keys_flat = [item for sublist in delta_keys.values() for item in sublist]
     results_df = pd.DataFrame(columns=[keys_flat], index=nets)
@@ -43,6 +52,3 @@ if __name__ == "__main__":
     #
     # # Rename the index column to 'nets'
     # results_df.rename(columns={'index': 'nets'}, inplace=True)
-
-
-

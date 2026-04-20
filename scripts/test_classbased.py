@@ -1,6 +1,5 @@
 import copy
 import time
-import pickle
 
 import pyomo.environ as pe
 import random
@@ -16,15 +15,31 @@ from src.potpourri.models.init_pyo_from_pp_res import init_pyo_from_dcpp
 
 import pandapower as pp
 
+
 def create_testnet():
     net = pp.create_empty_network()
 
-    pp.create_buses(net, 3, name=["b1", "b2", "b3"], vn_kv=110, max_vm_pu=1.118, min_vm_pu=0.9)
-    pp.create_lines(net, [0, 0, 1], [1, 2, 2], name=["l1", "l2", "l3"], length_km=[3, 3, 3],
-                    std_type='305-AL1/39-ST1A 110.0')
+    pp.create_buses(
+        net,
+        3,
+        name=["b1", "b2", "b3"],
+        vn_kv=110,
+        max_vm_pu=1.118,
+        min_vm_pu=0.9,
+    )
+    pp.create_lines(
+        net,
+        [0, 0, 1],
+        [1, 2, 2],
+        name=["l1", "l2", "l3"],
+        length_km=[3, 3, 3],
+        std_type="305-AL1/39-ST1A 110.0",
+    )
     pp.create_sgens(net, [0, 1, 2], p_mw=[10, 10, 10])
     pp.create_ext_grid(net, 0)
-    pp.create_loads(net, [0, 1, 2], name=["load1", "load2", "load3"], p_mw=[1, 17, 10])
+    pp.create_loads(
+        net, [0, 1, 2], name=["load1", "load2", "load3"], p_mw=[1, 17, 10]
+    )
     # pp.createsgen(net, 0, p_mw=1, controllable=True)
     # pp.create_sgen(net, 0, p_mw=1, controllable=True, max_p_mw=10)
     # pp.create_load(net, 1, p_mw=1, controllable=True)
@@ -36,12 +51,12 @@ def create_testnet():
     return net
 
 
-def test_pf(net, mode, save: bool = False, folder='../hc_test_results/'):
+def test_pf(net, mode, save: bool = False, folder="../hc_test_results/"):
     pp.clear_result_tables(net)
-    if mode == 'ac':
+    if mode == "ac":
         pp.runpp(net)
         pf = AC(net)
-    elif mode == 'dc':
+    elif mode == "dc":
         pp.rundcpp(net)
         pf = DC(net)
 
@@ -49,8 +64,8 @@ def test_pf(net, mode, save: bool = False, folder='../hc_test_results/'):
     pyo_sol_to_net_res(pf.net, pf.model)
 
     if save:
-        pp.to_excel(pf.net, folder + mode + '_pyo.xlsx')
-        pp.to_excel(net, folder + mode + '.xlsx')
+        pp.to_excel(pf.net, folder + mode + "_pyo.xlsx")
+        pp.to_excel(net, folder + mode + ".xlsx")
 
     return net, pf, pp.nets_equal(net, pf.net, True)
 
@@ -73,11 +88,18 @@ def get_limiting_constraints(model, tolerance=1e-4):
                 continue
             if c[index].slack() < tolerance:
                 # don't consider wind constraints when y = 0
-                if ('W_max_constraint' in c[index].name) | ('W_min_constraint' in c[index].name) | (
-                        'U_max_hc_constraint' in c[index].name) | ('U_min_hc_constraint' in c[index].name):
-                    if model.y[index].value == 0.:
+                if (
+                    ("W_max_constraint" in c[index].name)
+                    | ("W_min_constraint" in c[index].name)
+                    | ("U_max_hc_constraint" in c[index].name)
+                    | ("U_min_hc_constraint" in c[index].name)
+                ):
+                    if model.y[index].value == 0.0:
                         continue
-                    if model.psG[index].value + model.qsG[index].value <= tolerance:
+                    if (
+                        model.psG[index].value + model.qsG[index].value
+                        <= tolerance
+                    ):
                         continue
                 lim_constr.append(c[index])
             # negative slack means constraint is violated
@@ -93,7 +115,7 @@ def hc_nlp_swmin(net, SWmin=10):
     initial_solve = hc.results.solver.Time
 
     hc.add_OPF()
-    hc.fix_vars('y', 1.)
+    hc.fix_vars("y", 1.0)
 
     total_solve_time = 0
     start = time.perf_counter()
@@ -101,11 +123,13 @@ def hc_nlp_swmin(net, SWmin=10):
     hc.solve(to_net=False)
     total_solve_time += hc.results.solver.Time
 
-    hc.change_vals('SWmin', SWmin / hc.baseMVA)
+    hc.change_vals("SWmin", SWmin / hc.baseMVA)
 
     for w in hc.model.WIND:
-        if (hc.model.pG[w].value ** 2 + hc.model.qG[w].value ** 2) < (SWmin / hc.baseMVA) ** 2:
-            hc.model.y[w].fix(0.)
+        if (hc.model.pG[w].value ** 2 + hc.model.qG[w].value ** 2) < (
+            SWmin / hc.baseMVA
+        ) ** 2:
+            hc.model.y[w].fix(0.0)
 
     hc.solve(to_net=False)
     total_solve_time += hc.results.solver.Time
@@ -115,7 +139,11 @@ def hc_nlp_swmin(net, SWmin=10):
 
     pyo_sol_to_net_res(hc.net, hc.model)
 
-    return hc, {'total_time': total_time, 'total_solve_time': total_solve_time, 'initial_solve': initial_solve}
+    return hc, {
+        "total_time": total_time,
+        "total_solve_time": total_solve_time,
+        "initial_solve": initial_solve,
+    }
 
 
 def hc_nlp_swmin_steps(net, SWmin=10, stepsize=1):
@@ -127,13 +155,13 @@ def hc_nlp_swmin_steps(net, SWmin=10, stepsize=1):
     initial_solve = hc.results.solver.Time
 
     hc.add_OPF()
-    hc.fix_vars('y', 1.)
+    hc.fix_vars("y", 1.0)
 
     for w in hc.model.WIND_HC:
         if hc.model.pWmax[w].value == 0:
             hc.model.y[w].fix(0)
-            hc.model.psG[w].fix(0.)
-            hc.model.qsG[w].fix(0.)
+            hc.model.psG[w].fix(0.0)
+            hc.model.qsG[w].fix(0.0)
 
     total_solve_time = 0
     start = time.perf_counter()
@@ -145,13 +173,15 @@ def hc_nlp_swmin_steps(net, SWmin=10, stepsize=1):
     for i in range(stepsize, SWmin + 1, stepsize):
         print(hc.model.obj.value)
         print(i / hc.baseMVA)
-        hc.change_vals('SWmin', i / hc.baseMVA)
+        hc.change_vals("SWmin", i / hc.baseMVA)
 
         for w in hc.model.WIND_HC:
-            if (hc.model.psG[w].value ** 2 + hc.model.qsG[w].value ** 2) < (i / hc.baseMVA) ** 2:
-                hc.model.y[w].fix(0.)
-                hc.model.psG[w] = 0.
-                hc.model.qsG[w] = 0.
+            if (hc.model.psG[w].value ** 2 + hc.model.qsG[w].value ** 2) < (
+                i / hc.baseMVA
+            ) ** 2:
+                hc.model.y[w].fix(0.0)
+                hc.model.psG[w] = 0.0
+                hc.model.qsG[w] = 0.0
 
         hc.solve(to_net=False)
         total_solve_time += hc.results.solver.Time
@@ -160,23 +190,31 @@ def hc_nlp_swmin_steps(net, SWmin=10, stepsize=1):
     total_time = end - start
     pyo_sol_to_net_res(hc.net, hc.model)
 
-    return hc, {'total_time': total_time, 'total_solve_time': total_solve_time, 'initial_solve': initial_solve}
+    return hc, {
+        "total_time": total_time,
+        "total_solve_time": total_solve_time,
+        "initial_solve": initial_solve,
+    }
 
 
 def compare_hc_nlp_minlp_nlpstep(net):
-    print('nlp')
+    print("nlp")
     hc_nlp, time_nlp = hc_nlp_swmin_steps(net, 10, 10)
 
-    print('minlp')
+    print("minlp")
     hc_minlp = HC_ACOPF(net, SWmax=10000, SWmin=10, peGmax=1000000)
     hc_minlp.solve()
     initial_solve = hc_minlp.results.solver.Time
     hc_minlp.add_OPF()
-    hc_minlp.solve(solver='mindtpy')
-    total_solve_time = hc_minlp.results.solver[0]['Wallclock time']
-    time_minlp = {'total_time': total_solve_time, 'total_solve_time': total_solve_time, 'initial_solve': initial_solve}
+    hc_minlp.solve(solver="mindtpy")
+    total_solve_time = hc_minlp.results.solver[0]["Wallclock time"]
+    time_minlp = {
+        "total_time": total_solve_time,
+        "total_solve_time": total_solve_time,
+        "initial_solve": initial_solve,
+    }
 
-    print('nlp step')
+    print("nlp step")
     hc_nlp_step, time_nlp_step = hc_nlp_swmin_steps(net, SWmin=10, stepsize=1)
     pyo_sol_to_net_res(hc_nlp_step.net, hc_nlp_step.model)
 
@@ -188,22 +226,49 @@ def compare_hc_nlp_minlp_nlpstep(net):
 
     lim_c_nlp, viol_c_nlp = get_limiting_constraints(hc_nlp.model)
     lim_c_minlp, viol_c_minlp = get_limiting_constraints(hc_minlp.model)
-    lim_c_nlp_step, viol_c_nlp_step = get_limiting_constraints(hc_nlp_step.model)
+    lim_c_nlp_step, viol_c_nlp_step = get_limiting_constraints(
+        hc_nlp_step.model
+    )
 
-    return hc_nlp, hc_minlp, hc_nlp_step, {
-        'time': {'time_nlp': time_nlp, 'time_minlp': time_minlp, 'time_nlp_step': time_nlp_step},
-        'sl_loss': {'sl_loss_nlp': sl_loss_nlp, 'sl_loss_minlp': sl_loss_minlp,
-                    'sl_loss_nlp_step': sl_loss_nlp_step},
-        'lim_c': {'lim_c_nlp': lim_c_nlp, 'lim_c_minlp': lim_c_minlp, 'lim_c_minlp_step': lim_c_nlp_step},
-        'viol_c': {'viol_c_nlp': viol_c_nlp, 'viol_c_minlp': viol_c_minlp, 'viol_c_minlp_step': viol_c_nlp_step}}
+    return (
+        hc_nlp,
+        hc_minlp,
+        hc_nlp_step,
+        {
+            "time": {
+                "time_nlp": time_nlp,
+                "time_minlp": time_minlp,
+                "time_nlp_step": time_nlp_step,
+            },
+            "sl_loss": {
+                "sl_loss_nlp": sl_loss_nlp,
+                "sl_loss_minlp": sl_loss_minlp,
+                "sl_loss_nlp_step": sl_loss_nlp_step,
+            },
+            "lim_c": {
+                "lim_c_nlp": lim_c_nlp,
+                "lim_c_minlp": lim_c_minlp,
+                "lim_c_minlp_step": lim_c_nlp_step,
+            },
+            "viol_c": {
+                "viol_c_nlp": viol_c_nlp,
+                "viol_c_minlp": viol_c_minlp,
+                "viol_c_minlp_step": viol_c_nlp_step,
+            },
+        },
+    )
 
 
 def get_total_line_loss_mvar(net):
-    return np.sqrt(net.res_line.pl_mw.sum() ** 2 + net.res_line.ql_mvar.sum() ** 2)
+    return np.sqrt(
+        net.res_line.pl_mw.sum() ** 2 + net.res_line.ql_mvar.sum() ** 2
+    )
 
 
 def get_total_trafo_loss_mvar(net):
-    return np.sqrt(net.res_trafo.pl_mw.sum() ** 2 + net.res_trafo.ql_mvar.sum() ** 2)
+    return np.sqrt(
+        net.res_trafo.pl_mw.sum() ** 2 + net.res_trafo.ql_mvar.sum() ** 2
+    )
 
 
 def vary_pg_pd(net):
@@ -211,10 +276,10 @@ def vary_pg_pd(net):
     res_obj = []
 
     for i in range(10):
-        net.sgen.scaling[net.sgen.wind_hc == False] = random.uniform(0.1, 1)
+        net.sgen.scaling[~net.sgen.wind_hc] = random.uniform(0.1, 1)
         hc = HC_ACOPF(net, SWmax=10000, SWmin=10, peGmax=1000000)
         hc.add_OPF()
-        hc.solve(solver='mindtpy')
+        hc.solve(solver="mindtpy")
         pyo_sol_to_net_res(hc.net, hc.model)
 
         res_nets.append(hc.net)
@@ -222,7 +287,9 @@ def vary_pg_pd(net):
 
     for sgen in net.sgen.index:
         net.sgen.p_mw[sgen] = max([res.sgen.p_mw[sgen] for res in res_nets])
-        net.sgen.q_mvar[sgen] = max([res.sgen.q_mvar[sgen] for res in res_nets])
+        net.sgen.q_mvar[sgen] = max(
+            [res.sgen.q_mvar[sgen] for res in res_nets]
+        )
 
 
 def vary_load(net):
@@ -233,22 +300,26 @@ def vary_load(net):
         net.load.scaling = np.random.rand(len(net.load))
         hc = HC_ACOPF(net, SWmax=10000, SWmin=10, peGmax=1000000)
         hc.add_OPF()
-        hc.solve(solver='mindtpy', mip_solver='gurobi')
+        hc.solve(solver="mindtpy", mip_solver="gurobi")
 
         hcs.append(copy.deepcopy(hc))
         res_obj.append(hc.model.obj_hc())
 
 
 def diff_trafos(net):
-    std_types_220 = pp.find_std_type_by_parameter(net, data={"vn_lv_kv": 110., "vn_hv_kv": 220.}, element='trafo')
-    std_types_380 = pp.find_std_type_by_parameter(net, data={"vn_lv_kv": 110., "vn_hv_kv": 380.}, element='trafo')
+    std_types_220 = pp.find_std_type_by_parameter(
+        net, data={"vn_lv_kv": 110.0, "vn_hv_kv": 220.0}, element="trafo"
+    )
+    std_types_380 = pp.find_std_type_by_parameter(
+        net, data={"vn_lv_kv": 110.0, "vn_hv_kv": 380.0}, element="trafo"
+    )
 
     for i in len(std_types_220):
-        net.trafo.std_type[net.trafo.vn_hv_kv == 220.] = std_types_220[i]
-        net.trafo.std_type[net.trafo.vn_hv_kv == 380.] = std_types_380[i]
+        net.trafo.std_type[net.trafo.vn_hv_kv == 220.0] = std_types_220[i]
+        net.trafo.std_type[net.trafo.vn_hv_kv == 380.0] = std_types_380[i]
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # net = create_testnet()
     net = pp.networks.simple_four_bus_system()
     #
@@ -288,8 +359,6 @@ if __name__ == '__main__':
     #     hcs.append(copy.deepcopy(hc))
 
     # plot hc.model.pG[w] where hc.model.y[w] == 1. for all w in hc.model.WINd and all hcs in a bar plot
-
-
 
     # net = pp.networks.simple_mv_open_ring_net()
     # net.switch.closed = True

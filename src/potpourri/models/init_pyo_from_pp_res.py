@@ -21,7 +21,7 @@ def init_pyo_from_pp_res(net, model):
     # bus angles and voltage magnitudes
     for b in net.bus.index:
         model.delta[bus_lookup[b]] = net.res_bus.va_degree[b] * math.pi / 180
-        if hasattr(model, 'v'):
+        if hasattr(model, "v"):
             model.v[bus_lookup[b]] = net.res_bus.vm_pu[b]
 
     # line flows — Pyomo L index matches net.line.index
@@ -32,13 +32,19 @@ def init_pyo_from_pp_res(net, model):
     # transformer flows — trafo_data uses 0-based position indices
     for pos, net_ind in enumerate(net.trafo.index):
         if pos in model.TRANSF:
-            model.pThv[pos] = net.res_trafo.p_hv_mw[net_ind] / model.baseMVA.value
-            model.pTlv[pos] = net.res_trafo.p_lv_mw[net_ind] / model.baseMVA.value
+            model.pThv[pos] = (
+                net.res_trafo.p_hv_mw[net_ind] / model.baseMVA.value
+            )
+            model.pTlv[pos] = (
+                net.res_trafo.p_lv_mw[net_ind] / model.baseMVA.value
+            )
 
     # generator injections — G index follows _gen_order contiguous ranges
     for element, (f, t) in net._gen_order.items():
-        res_table = net['res_' + element]
+        res_table = net["res_" + element]
         for i, net_ind in enumerate(net[element].index):
             pyo_ind = f + i
             if pyo_ind in model.G:
-                model.pG[pyo_ind] = res_table.p_mw.iloc[i] / model.baseMVA.value
+                model.pG[pyo_ind] = (
+                    res_table.p_mw.iloc[i] / model.baseMVA.value
+                )

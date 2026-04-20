@@ -1,5 +1,6 @@
 import os
-os.environ['NEOS_EMAIL'] = "test-email@test.com"
+
+os.environ["NEOS_EMAIL"] = "test-email@test.com"
 import pandapower as pp
 import pyomo.environ as pyo
 
@@ -12,18 +13,24 @@ def test_dcopf_model_structure():
     dcopf = DCOPF(net)
     dcopf.add_OPF()
 
-    assert hasattr(dcopf.model, 'B'), "missing bus set"
-    assert hasattr(dcopf.model, 'L'), "missing line set"
-    assert hasattr(dcopf.model, 'SLmax'), "missing line thermal limit param"
-    assert hasattr(dcopf.model, 'line_lim_from'), "missing line upper limit constraint"
-    assert hasattr(dcopf.model, 'line_lim_to'), "missing line lower limit constraint"
-    assert hasattr(dcopf.model, 'PG_Constraint'), "missing generator power limit"
+    assert hasattr(dcopf.model, "B"), "missing bus set"
+    assert hasattr(dcopf.model, "L"), "missing line set"
+    assert hasattr(dcopf.model, "SLmax"), "missing line thermal limit param"
+    assert hasattr(dcopf.model, "line_lim_from"), (
+        "missing line upper limit constraint"
+    )
+    assert hasattr(dcopf.model, "line_lim_to"), (
+        "missing line lower limit constraint"
+    )
+    assert hasattr(dcopf.model, "PG_Constraint"), (
+        "missing generator power limit"
+    )
     assert len(list(dcopf.model.B)) > 0
     assert len(list(dcopf.model.L)) > 0
 
 
-def test_dcopf_solves_with_glpk():
-    """DCOPF finds an optimal solution using the local GLPK solver."""
+def test_dcopf_solves_with_cplex():
+    """DCOPF finds an optimal solution using the NEOS CPLEX solver."""
     net = pp.networks.simple_four_bus_system()
     dcopf = DCOPF(net)
     dcopf.add_OPF()
@@ -37,6 +44,6 @@ def test_dcopf_solves_with_glpk():
     assert pyo.check_optimal_termination(dcopf.results)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test_dcopf_model_structure()
-    test_dcopf_solves_with_glpk()
+    test_dcopf_solves_with_cplex()

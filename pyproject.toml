@@ -17,6 +17,7 @@ authors = [
     { name = "Alexander Och",    email = "a.och@iaew.rwth-aachen.de" },
     { name = "Farah Nasr",       email = "f.nasr@iaew.rwth-aachen.de" },
     { name = "Philip Kvesic",    email = "p.kvesic@iaew.rwth-aachen.de" },
+    { name = "Nina Stumberger",    email = "n.stumberger@iaew.rwth-aachen.de" },
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -37,6 +38,7 @@ dependencies = [
     "openpyxl>=3.1",
     "pandapower>=2.13",
     "pandas>=2.0",
+    "pre-commit>=4.3.0",
     "pyomo>=6.7",
     "simbench>=1.4",
 ]
@@ -76,4 +78,29 @@ dev = [
     "black>=25.1.0",
     "flake8>=7.3.0",
     "pytest>=8.4.2",
+    "ruff>=0.15.11",
 ]
+
+[tool.ruff]
+# Set the maximum line length to 79.
+line-length = 79
+
+[tool.ruff.lint]
+# Add the `line-too-long` rule to the enforced rule set. By default, Ruff omits rules that
+# overlap with the use of a formatter, like Black, but we can override this behavior by
+# explicitly adding the rule.
+extend-select = ["E501"]
+# F403/F405: `from pyomo.environ import *` is standard Pyomo convention.
+# E741: single-letter `l` is the standard line-index variable in power systems math.
+ignore = ["E741", "F403", "F405"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tutorial files are Jupyter notebooks converted to scripts; imports appear mid-file
+# because they belong to individual notebook cells.
+"tutorials/*.py" = ["E402", "E501"]
+"tutorials/*.ipynb" = ["E501"]
+"scripts/*.py" = ["E501"]
+"tests/**/*.py" = ["E501"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"

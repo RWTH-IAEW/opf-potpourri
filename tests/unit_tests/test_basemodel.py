@@ -34,7 +34,7 @@ def test_basemodel_sets_populated():
     net = _four_bus_net()
     acopf = ACOPF(net)
 
-    required_sets = ['B', 'b0', 'D', 'L', 'TRANSF', 'G', 'sG', 'Dbs', 'Gbs']
+    required_sets = ["B", "b0", "D", "L", "TRANSF", "G", "sG", "Dbs", "Gbs"]
     for name in required_sets:
         assert hasattr(acopf.model, name), f"missing Pyomo set '{name}'"
 
@@ -48,7 +48,9 @@ def test_basemodel_demand_fixed():
     acopf = ACOPF(net)
 
     for d in acopf.model.D:
-        assert acopf.model.pD[d].is_fixed(), f"demand variable pD[{d}] should be fixed"
+        assert acopf.model.pD[d].is_fixed(), (
+            f"demand variable pD[{d}] should be fixed"
+        )
 
 
 def test_acopf_voltage_params_within_bounds():
@@ -58,9 +60,9 @@ def test_acopf_voltage_params_within_bounds():
     acopf.add_OPF()
 
     for b in acopf.model.B:
-        assert pyo.value(acopf.model.Vmax[b]) > pyo.value(acopf.model.Vmin[b]), (
-            f"Vmax <= Vmin at bus {b}"
-        )
+        assert pyo.value(acopf.model.Vmax[b]) > pyo.value(
+            acopf.model.Vmin[b]
+        ), f"Vmax <= Vmin at bus {b}"
 
 
 def test_dcopf_line_limits_non_negative():
@@ -70,10 +72,12 @@ def test_dcopf_line_limits_non_negative():
     dcopf.add_OPF()
 
     for l in dcopf.model.L:
-        assert pyo.value(dcopf.model.SLmax[l]) >= 0, f"negative SLmax for line {l}"
+        assert pyo.value(dcopf.model.SLmax[l]) >= 0, (
+            f"negative SLmax for line {l}"
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test_basemodel_rejects_non_pandapower_input()
     test_basemodel_deep_copies_network()
     test_basemodel_sets_populated()

@@ -1,4 +1,5 @@
-"""Hosting Capacity AC OPF model for sizing wind generation in distribution grids."""
+"""Hosting Capacity AC OPF model for sizing wind generation in distribution
+grids."""
 
 import copy
 
@@ -25,8 +26,10 @@ class HC_ACOPF(ACOPF):
 
     def __init__(self, net):
         net = copy.deepcopy(net)
-        if 'wind_hc' not in net.sgen:
-            buses_excl_extGrids = net.bus.loc[~net.bus.index.isin(net.ext_grid.bus)].index
+        if "wind_hc" not in net.sgen:
+            buses_excl_extGrids = net.bus.loc[
+                ~net.bus.index.isin(net.ext_grid.bus)
+            ].index
             pp.create_sgens(net, buses_excl_extGrids, p_mw=0, wind_hc=True)
         net.sgen.wind_hc.fillna(False, inplace=True)
 
@@ -45,10 +48,14 @@ class HC_ACOPF(ACOPF):
         """
         super()._calc_opf_parameters()
 
-        if 'windpot_p_mw' in self.net.bus:
-            self.static_generation_data['windpot'] = self.net.bus.windpot_p_mw[self.net.sgen.bus.values].values
+        if "windpot_p_mw" in self.net.bus:
+            self.static_generation_data["windpot"] = self.net.bus.windpot_p_mw[
+                self.net.sgen.bus.values
+            ].values
 
-        wind_hc_set = np.arange(len(self.net.sgen))[self.net.sgen.wind_hc & self.net.sgen.in_service]
+        wind_hc_set = np.arange(len(self.net.sgen))[
+            self.net.sgen.wind_hc & self.net.sgen.in_service
+        ]
         self.SWmax_data = pd.Series(SWmax / self.baseMVA, wind_hc_set)
         self.SWmin_data = pd.Series(SWmin / self.baseMVA, wind_hc_set)
 
@@ -73,29 +80,59 @@ class HC_ACOPF(ACOPF):
 
         self.model.name = "HC_ACOPF"
 
-        self.model.SWmax = pyo.Param(self.model.WIND_HC, initialize=self.SWmax_data[self.model.WIND_HC], mutable=True)
-        self.model.SWmin = pyo.Param(self.model.WIND_HC, initialize=self.SWmin_data[self.model.WIND_HC], mutable=True)
+        self.model.SWmax = pyo.Param(
+            self.model.WIND_HC,
+            initialize=self.SWmax_data[self.model.WIND_HC],
+            mutable=True,
+        )
+        self.model.SWmin = pyo.Param(
+            self.model.WIND_HC,
+            initialize=self.SWmin_data[self.model.WIND_HC],
+            mutable=True,
+        )
 
-        if 'windpot_p_mw' in self.net.bus:
-            self.model.pWmax = pyo.Param(self.model.WIND_HC,
-                                     initialize=self.static_generation_data['windpot'][self.model.WIND_HC],
-                                     mutable=True)
+        if "windpot_p_mw" in self.net.bus:
+            self.model.pWmax = pyo.Param(
+                self.model.WIND_HC,
+                initialize=self.static_generation_data["windpot"][
+                    self.model.WIND_HC
+                ],
+                mutable=True,
+            )
 
-        self.model.y = pyo.Var(self.model.WIND_HC, within=pyo.Binary, initialize=1.)
+        self.model.y = pyo.Var(
+            self.model.WIND_HC, within=pyo.Binary, initialize=1.0
+        )
 
         def obj_wind_loss_rule(model):
-            return sum(model.psG[w] for w in model.WIND_HC) - sum(model.pLfrom[l] + model.pLto[l] for l in model.L) - sum(model.pThv[t] + model.pTlv[t] for t in model.TRANSF)
+            return (
+                sum(model.psG[w] for w in model.WIND_HC)
+                - sum(model.pLfrom[l] + model.pLto[l] for l in model.L)
+                - sum(model.pThv[t] + model.pTlv[t] for t in model.TRANSF)
+            )
 
-        self.model.obj = pyo.Objective(rule=obj_wind_loss_rule, sense=pyo.maximize)
+        self.model.obj = pyo.Objective(
+            rule=obj_wind_loss_rule, sense=pyo.maximize
+        )
 
         def SW_max(model, w):
-            return model.psG[w] ** 2 + model.qsG[w] ** 2 <= model.SWmax[w] ** 2 * model.y[w]
+            return (
+                model.psG[w] ** 2 + model.qsG[w] ** 2
+                <= model.SWmax[w] ** 2 * model.y[w]
+            )
 
         def SW_min(model, w):
-            return model.psG[w] ** 2 + model.qsG[w] ** 2 >= model.SWmin[w] ** 2 * model.y[w]
+            return (
+                model.psG[w] ** 2 + model.qsG[w] ** 2
+                >= model.SWmin[w] ** 2 * model.y[w]
+            )
 
-        self.model.SW_max_constraint = pyo.Constraint(self.model.WIND_HC, rule=SW_max)
-        self.model.SW_min_constraint = pyo.Constraint(self.model.WIND_HC, rule=SW_min)
+        self.model.SW_max_constraint = pyo.Constraint(
+            self.model.WIND_HC, rule=SW_max
+        )
+        self.model.SW_min_constraint = pyo.Constraint(
+            self.model.WIND_HC, rule=SW_min
+        )
 
         # --- generator power ---
         for w in self.model.WIND_HC:
@@ -109,8 +146,12 @@ class HC_ACOPF(ACOPF):
         def QW_max(model, w):
             return model.qsG[w] <= 0.48 * model.psG[w]
 
-        self.model.QW_min_constraint =  pyo.Constraint(self.model.WIND_HC, rule=QW_min)
-        self.model.QW_max_constraint =  pyo.Constraint(self.model.WIND_HC, rule=QW_max)
+        self.model.QW_min_constraint = pyo.Constraint(
+            self.model.WIND_HC, rule=QW_min
+        )
+        self.model.QW_max_constraint = pyo.Constraint(
+            self.model.WIND_HC, rule=QW_max
+        )
 
         hc_sGbs_lookup = {g: b for (g, b) in self.model.sGbs}
 
@@ -118,23 +159,36 @@ class HC_ACOPF(ACOPF):
             if w not in hc_sGbs_lookup:
                 return pyo.Constraint.Skip
             b = hc_sGbs_lookup[w]
-            return model.qsG[w] >= (self.m_qu_min * model.v[b] + self.qu_min) * model.psG[w]
+            return (
+                model.qsG[w]
+                >= (self.m_qu_min * model.v[b] + self.qu_min) * model.psG[w]
+            )
 
-        self.model.QU_min_hc_constraint = pyo.Constraint(self.model.WIND_HC, rule=QU_min_hc)
+        self.model.QU_min_hc_constraint = pyo.Constraint(
+            self.model.WIND_HC, rule=QU_min_hc
+        )
 
         def QU_max_hc(model, w):
             if w not in hc_sGbs_lookup:
                 return pyo.Constraint.Skip
             b = hc_sGbs_lookup[w]
-            return model.qsG[w] <= (self.m_qu_max * model.v[b] + self.qu_max) * model.psG[w]
+            return (
+                model.qsG[w]
+                <= (self.m_qu_max * model.v[b] + self.qu_max) * model.psG[w]
+            )
 
-        self.model.QU_max_hc_constraint = pyo.Constraint(self.model.WIND_HC, rule=QU_max_hc)
+        self.model.QU_max_hc_constraint = pyo.Constraint(
+            self.model.WIND_HC, rule=QU_max_hc
+        )
 
-        if 'windpot_p_mw' in self.net.bus:
+        if "windpot_p_mw" in self.net.bus:
+
             def PW_max(model, w):
                 return model.psG[w] <= model.pWmax[w]
 
-            self.model.PW_max_constraint =  pyo.Constraint(self.model.WIND_HC, rule=PW_max)
+            self.model.PW_max_constraint = pyo.Constraint(
+                self.model.WIND_HC, rule=PW_max
+            )
 
     def add_loss_obj(self):
         """Replace default objective with a weighted wind-vs-loss objective.
@@ -144,11 +198,16 @@ class HC_ACOPF(ACOPF):
         The mutable parameter eps (default 1.0) can be updated for sensitivity
         analysis without rebuilding the model: model.eps.set_value(0.5).
         """
-        self.model.eps = pyo.Param(domain=pyo.Reals, initialize=1., mutable=True)
+        self.model.eps = pyo.Param(
+            domain=pyo.Reals, initialize=1.0, mutable=True
+        )
 
         def objective_pwind_loss(model):
-            return model.eps * sum(model.psG[w] for w in model.WIND_HC) + (1 - model.eps) * (
-                - sum(model.pLfrom[l] + model.pLto[l] for l in model.L))
+            return model.eps * sum(model.psG[w] for w in model.WIND_HC) + (
+                1 - model.eps
+            ) * (-sum(model.pLfrom[l] + model.pLto[l] for l in model.L))
 
         self.model.obj.deactivate()
-        self.model.OBJ_with_loss = pyo.Objective(rule=objective_pwind_loss, sense=pyo.maximize)
+        self.model.OBJ_with_loss = pyo.Objective(
+            rule=objective_pwind_loss, sense=pyo.maximize
+        )
