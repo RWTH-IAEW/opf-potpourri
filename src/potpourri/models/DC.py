@@ -1,3 +1,5 @@
+"""DC power flow mixin: adds linearised DC equations (voltage angles only) to Basemodel."""
+
 import pyomo.environ as pyo
 from src.potpourri.models.basemodel import Basemodel
 
@@ -22,15 +24,12 @@ class DC(Basemodel):
         trafo_end = trafo_start + len(self.net.trafo)
 
         self.trafo_data = self.trafo_data.assign(**{"BLT_data": BL[trafo_start:trafo_end]})
-        # self.line_data = pd.DataFrame(BL[:trafo_start], columns=["BL_data"])
         self.line_data['BL_data'] = BL[:trafo_start]
 
         ZN = self.net.bus.vn_kv ** 2 / self.baseMVA
         y_s = - 1 / (self.net.line.x_ohm_per_km * self.net.line.length_km)      # according to matpower manual dc modeling
 
         self.BL_data = y_s * ZN[self.net.line.from_bus].values
-
-        # self.BLT_data = pd.Series(-1 / self.trafo_parameters["x"] / self.trafo_parameters["ratio"][0], self.trafo_set)
 
         self.create_model()
 

@@ -1,3 +1,5 @@
+"""OPF mixin: adds operational limit constraints and line thermal limits to a power flow model."""
+
 import copy
 
 import pyomo.environ as pyo
@@ -116,11 +118,6 @@ class OPF(Basemodel):
         SLmaxT_data = max_load_T * sn_mva * df_T * self.net.trafo.parallel / self.baseMVA
         self.trafo_data['SLmaxT_data'] = SLmaxT_data.values
 
-        # self.c0_data = pd.Series([1] * len(self.gen_all_set), self.gen_all_set)
-        # self.c1_data = pd.Series([2] * len(self.gen_all_set), self.gen_all_set)
-        # self.c2_data = pd.Series([3] * len(self.gen_all_set), self.gen_all_set)
-
-        # self.get_generator_real_power_data()
         self.static_generation_real_power_limits()
         self.generation_real_power_limits()
         self.get_demand_real_power_data()
@@ -157,15 +154,6 @@ class OPF(Basemodel):
         self.model.SLmaxT =  pyo.Param(self.model.TRANSF, within=pyo.NonNegativeReals,
                                   initialize=self.trafo_data.SLmaxT_data[self.model.TRANSF],
                                   mutable=True)  # real power transformer limit
-
-        # cost data
-        # self.model.c2 =  pyo.Param(self.model.G, within=pyo.NonNegativeReals,
-        #                       initialize=self.c2_data)  # generator cost coefficient c2 (*pG^2)
-        # self.model.c1 =  pyo.Param(self.model.G, within=pyo.NonNegativeReals,
-        #                       initialize=self.c1_data)  # generator cost coefficient c1 (*pG)
-        # self.model.c0 =  pyo.Param(self.model.G, within=pyo.NonNegativeReals,
-        #                       initialize=self.c0_data)  # generator cost coefficient c0
-        # self.model.VOLL =  pyo.Param(self.model.D, within=pyo.Reals, initialize=10000)  # value of lost load
 
         # --- static generator power limits ---
         def static_generation_real_power_bounds(model, g):

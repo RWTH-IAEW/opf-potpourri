@@ -1,3 +1,5 @@
+"""POTPOURRI: multi-period Optimal Power Flow tool built on Pyomo and pandapower."""
+
 __all__ = [""]
 __version__ = "0.1.0"
 

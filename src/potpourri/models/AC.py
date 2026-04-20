@@ -1,3 +1,5 @@
+"""AC power flow mixin: adds full AC equations (voltage magnitudes, reactive power) to Basemodel."""
+
 import pyomo.environ as pyo
 from src.potpourri.models.basemodel import Basemodel
 
@@ -228,10 +230,6 @@ class AC(Basemodel):
         self.model.KVL_real_toTransf = pyo.Constraint(self.model.TRANSF, rule=KVL_real_toendTransf)
         self.model.KVL_reactive_fromTransf = pyo.Constraint(self.model.TRANSF, rule=KVL_reactive_fromendTransf)
         self.model.KVL_reactive_toTransf = pyo.Constraint(self.model.TRANSF, rule=KVL_reactive_toendTransf)
-
-        # --- reactive generator power limits ---
-        # for g in self.model.sG:
-        #    self.model.qsG[g].fix(self.model.QsG[g])  # reactive power of static generators fixed
 
         # --- reactive demand limits ---
         for d in self.model.D:

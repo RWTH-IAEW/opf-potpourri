@@ -1,9 +1,14 @@
+"""Multi-period DC OPF combining linearised DC power flow with operational limit constraints."""
+
 from pyomo.environ import *
 from src.potpourri.models_multi_period.DC_multi_period import DC_multi_period
 from src.potpourri.models_multi_period.OPF_multi_period import OPF_multi_period
-#TODO make multiperiod
+
+# TODO make multiperiod
+
 
 class DCOPF_multi_period(DC_multi_period, OPF_multi_period):
+    """Multi-period DC OPF model: linearised power flow with generator and thermal limit constraints."""
 
     def __init__(self, net, toT, fromT=None, pf=1):
         super().__init__(net, toT, fromT, pf)
@@ -12,6 +17,7 @@ class DCOPF_multi_period(DC_multi_period, OPF_multi_period):
 
 
     def create_model(self):
+        """Build the multi-period DCOPF model and attach line/transformer thermal limit constraints."""
         super().create_model()
         self.model.name = "DCOPF"
 

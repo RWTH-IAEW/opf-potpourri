@@ -1,25 +1,6 @@
-"""
-Basemodel for Power System Optimization
-
-This script defines the `Basemodel` class, which uses Pyomo for modeling optimization problems
-on power system networks represented in `pandapower`.
-
-Dependencies:
-    - copy: For creating deep copies of objects to ensure immutability.
-    - os: For managing environment variables and file paths.
-    - math: For mathematical constants and functions (e.g., `pi`).
-
-    - numpy: For efficient numerical computations and array manipulation.
-    - pandas: For managing tabular data structures like DataFrames.
-    - pandapower: For power system modeling and simulation.
-    - pyomo.environ: For building and solving optimization models.
-
-    - potpourri.models.pyo_to_net: For mapping Pyomo solutions back to `pandapower` networks.
-
-"""
+"""Single-period Basemodel: maps a pandapower network to a Pyomo ConcreteModel and solves it."""
 
 import copy
-import os
 from math import pi
 
 import numpy as np
@@ -33,27 +14,19 @@ from src.potpourri.models.pyo_to_net import pyo_sol_to_net_res
 
 
 class Basemodel:
+    """Pyomo-based optimization model for single-period power system analysis.
+
+    Extracts buses, lines, transformers, loads, and generators from a pandapower
+    network into Pyomo sets and parameters. Subclasses add power-flow equations
+    and OPF constraints on top.
+
+    Attributes:
+        net: Deep-copied pandapower network (pp.runpp already executed).
+        model: Pyomo ConcreteModel populated by create_model().
+        results: Solver result object populated by solve().
     """
-        A Pyomo-based optimization model for power system analysis.
 
-        This class creates and solves optimization models based on a given `pandapower` network.
-        It supports the creation of sets, parameters, and variables, as well as solving and postprocessing.
-
-        Attributes:
-            net (pandapowerNet): The input power system network.
-            model (ConcreteModel): The Pyomo model created for optimization.
-            results: Stores the results of the optimization process.
-        """
     def __init__(self, net):
-        """
-            Initializes the Basemodel with a deepcopy of the given network.
-
-            Args:
-                net (pandapowerNet): The input pandapower network to be used in the optimization.
-
-            Raises:
-                ValueError: If the input network is invalid.
-        """
         if not isinstance(net, pp.pandapowerNet):
             raise ValueError("Input network must be a pandapower network.")
 
@@ -121,10 +94,7 @@ class Basemodel:
             zip(trafo_ind, [2] * len(trafo_ind))), np.concatenate([hv_bus_trafo[trafo_ind], lv_bus_trafo[trafo_ind]])))
 
     def create_model(self):
-        """
-            Creates a Pyomo model based on the input network. The model includes sets, parameters, and variables.
-
-        """
+        """Create the Pyomo ConcreteModel with sets, parameters, and fixed variables."""
         self.model = pyo.ConcreteModel()
 
         # --- pyo.SetS ---
@@ -253,10 +223,6 @@ class Basemodel:
             except ValueError as err:
                 logger.error("mindtpy solver error: {}", err)
 
-            # if self.results.solver.termination_condition == TerminationCondition.feasible:
-            #     print('Model is feasible but not optimal. Trying to solve a second time.')
-            #     self.results = optimizer.solve(self.model, mip_solver=mip_solver, nlp_solver='ipopt',
-            #                                    tee=print_solver_output, iteration_limit=max_iter, time_limit=time_limit)
         elif solver == 'neos':
             logger.info("Submitting model to NEOS server (opt={})", neos_opt)
             solver_manager = pyo.SolverManagerFactory('neos')
@@ -283,16 +249,7 @@ class Basemodel:
             logger.error("Could not check termination condition: {}", err)
 
     def change_vals(self, key, value):
-        """
-        Changes the value of a component in the model.
-
-        Args:
-            key:
-            value:
-
-        Returns:
-
-        """
+        """Set all indices of a named Pyomo component to value."""
         component = self.model.component(key)
         if not component:
             logger.warning("Model '{}' has no component '{}'", self.model.name, key)
@@ -304,16 +261,7 @@ class Basemodel:
             logger.error("change_vals failed for component '{}': {}", key, err)
 
     def fix_vars(self, key, value=None):
-        """
-        Fixes the value of a component in the model.
-
-        Args:
-            key:
-            value:
-
-        Returns:
-
-        """
+        """Fix all indices of a named Pyomo variable; optionally set to value first."""
         component = self.model.component(key)
         if not component:
             logger.warning("Model '{}' has no component '{}'", self.model.name, key)
@@ -329,16 +277,7 @@ class Basemodel:
             logger.error("fix_vars failed for component '{}': {}", key, err)
 
     def unfix_vars(self, key, value=None):
-        """
-        Unfixes the value of a component in the model.
-
-        Args:
-            key:
-            value:
-
-        Returns:
-
-        """
+        """Unfix all indices of a named Pyomo variable; optionally reset to value."""
         component = self.model.component(key)
         if not component:
             logger.warning("Model '{}' has no component '{}'", self.model.name, key)

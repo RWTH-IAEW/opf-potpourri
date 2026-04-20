@@ -1,17 +1,27 @@
+"""Post-processing: reads Pyomo solution variables and writes results to net.res_* DataFrames."""
+
 import numpy as np
 import pandapower as pp
 import pandas as pd
 
 
 def _is_ac(model):
+    """Return True if model has voltage-magnitude variable v (i.e. it is an AC model)."""
     return hasattr(model, 'v')
 
 
 def _is_hc(model):
+    """Return True if model has binary placement variable y (i.e. it is an HC model)."""
     return hasattr(model, 'y')
 
 
 def pyo_sol_to_net_res(net, model):
+    """Write Pyomo solution to net.res_* DataFrames.
+
+    Args:
+        net: pandapower network whose res_* tables will be populated.
+        model: solved Pyomo ConcreteModel.
+    """
     if _is_hc(model):
         for w in model.WIND_HC:
             net.sgen.p_mw[w] = model.psG[w].value * model.baseMVA.value * model.y[w].value

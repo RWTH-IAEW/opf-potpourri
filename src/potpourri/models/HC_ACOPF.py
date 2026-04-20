@@ -1,3 +1,5 @@
+"""Hosting Capacity AC OPF model for sizing wind generation in distribution grids."""
+
 import copy
 
 import numpy as np
@@ -81,11 +83,6 @@ class HC_ACOPF(ACOPF):
 
         self.model.y = pyo.Var(self.model.WIND_HC, within=pyo.Binary, initialize=1.)
 
-        # def objective(model):
-        #     return sum(model.psG[w] for w in model.WIND_HC)
-        # self.model.obj_hc = Objective(rule=objective, sense=maximize)
-        # self.model.obj_hc.deactivate()
-
         def obj_wind_loss_rule(model):
             return sum(model.psG[w] for w in model.WIND_HC) - sum(model.pLfrom[l] + model.pLto[l] for l in model.L) - sum(model.pThv[t] + model.pTlv[t] for t in model.TRANSF)
 
@@ -98,12 +95,7 @@ class HC_ACOPF(ACOPF):
             return model.psG[w] ** 2 + model.qsG[w] ** 2 >= model.SWmin[w] ** 2 * model.y[w]
 
         self.model.SW_max_constraint = pyo.Constraint(self.model.WIND_HC, rule=SW_max)
-        self.model.SW_min_constraint =  pyo.Constraint(self.model.WIND_HC, rule=SW_min)
-
-        # def power_factor(model, w):
-        #     return -sin(acos(0.95)), (model.qG[w] / (sqrt(model.pG[w]**2 + model.qG[w]**2) + 1e-3)), sin(acos(0.95))
-        #
-        # self.model.power_factor_constraint =  pyo.Constraint(self.model.WIND_HC, rule=power_factor)
+        self.model.SW_min_constraint = pyo.Constraint(self.model.WIND_HC, rule=SW_min)
 
         # --- generator power ---
         for w in self.model.WIND_HC:

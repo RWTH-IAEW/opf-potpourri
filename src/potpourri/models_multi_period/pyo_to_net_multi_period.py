@@ -1,9 +1,18 @@
+"""Post-processing for multi-period models: reads Pyomo solution at time t into net.res_* DataFrames."""
+
 import numpy as np
 import pandapower as pp
 import pandas as pd
 
 
 def pyo_sol_to_net_res(net, model, t):
+    """Write Pyomo solution for time step t to net.res_* DataFrames.
+
+    Args:
+        net: pandapower network whose res_* tables will be populated.
+        model: solved Pyomo ConcreteModel.
+        t: time step index to extract from multi-period variables.
+    """
     if 'HC' in model.name:
         for w in model.WIND_HC:
             net.sgen.p_mw[w] = model.psG[w].value * model.baseMVA.value * model.y[w].value
@@ -14,13 +23,10 @@ def pyo_sol_to_net_res(net, model, t):
     _bus_voltage_results_to_net(net, model, t)
     _line_results_to_net(net, model, t)
     _generation_results_to_net(net, model, t)
-    # _ext_grid_results_to_net(net, model, t)
     _sgen_results_to_net(net, model, t)
     _load_results_to_net(net, model, t)
-    # _gen_results_to_net(net, model, t)
     _trafo_results_to_net(net, model, t)
     _shunt_results_to_net(net, model, t)
-    # _bus_results_to_net(net, model, t)
     bus_pq = _get_bus_power_results(net)
     net.res_bus.p_mw = bus_pq[:, 0]
     if 'AC' in model.name:

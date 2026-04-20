@@ -1,14 +1,19 @@
+"""DC Optimal Power Flow model combining linearised DC power flow and OPF limits."""
+
 import pyomo.environ as pyo
 from src.potpourri.models.DC import DC
 from src.potpourri.models.OPF import OPF
 
 
 class DCOPF(DC, OPF):
+    """DC OPF model: linearised power flow with generator and thermal limit constraints."""
+
     def __init__(self, net):
         super().__init__(net)
         self.create_model()
 
     def create_model(self):
+        """Build the DCOPF Pyomo model (sets model name to 'DCOPF')."""
         super().create_model()
         self.model.name = "DCOPF"
 

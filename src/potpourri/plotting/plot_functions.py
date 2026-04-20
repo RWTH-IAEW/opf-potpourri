@@ -1,9 +1,12 @@
+"""Plotting utilities for pandapower networks and OPF results (wind HC, PQ/QU grid codes, generation bars)."""
+
 import pandapower as pp
 import numpy as np
 import matplotlib.pyplot as plt
 
-def set_plt_config():
 
+def set_plt_config():
+    """Configure matplotlib rcParams with RWTH Aachen corporate-design colours and fonts."""
     config = {}
     config['textbreite'] = 16
     config['textbreite'] = config['textbreite'] / 2.54  # Umrechnung inches
@@ -61,6 +64,7 @@ def set_plt_config():
 
 
 def plot_wind_potential(net):
+    """Plot a network map with marker size scaled to windpot_p_mw bus attribute."""
     # create marker trace with marker size scaled according to wind generation
     wind_pot_trace = pp.plotting.create_weighted_marker_trace(net, "bus",
                                                               column_to_plot="windpot_p_mw", marker_scaling=2,
@@ -69,10 +73,7 @@ def plot_wind_potential(net):
 
 
 def plot_wind_hc_results(nets, offset=None):
-    # marker_trace = pp.plotting.create_weighted_marker_trace(net, "sgen", elm_ids=net.sgen.index[net.sgen.wind_hc],
-    #                                                         column_to_plot="p_mw", marker_scaling=2, color="green")
-    # pp.plotting.simple_plotly(net, bus_size=0.25, additional_traces=[marker_trace])
-
+    """Plot HC wind generation on the network map for each net in nets."""
     # get maximum wind generation from all wind generator from all nets
     max_wind_gen = max([net.sgen[net.sgen.wind_hc].p_mw.max() for net in nets])
     figs = []
@@ -118,6 +119,7 @@ def plot_wind_hc_results(nets, offset=None):
 
 
 def _create_sgen_load_trace(net):
+    """Return (sgen_trace, load_trace) marker traces for the given network."""
     load_trace = pp.plotting.create_weighted_marker_trace(net, "load", column_to_plot="p_mw", marker_scaling=2,
                                                           color='green')
 
@@ -133,6 +135,7 @@ def _create_sgen_load_trace(net):
 
 
 def plot_wind_hc_sgens_loads(net):
+    """Plot wind HC generators, other sgens, and loads on the network map."""
     sgen_trace, load_trace = _create_sgen_load_trace(net)
 
     sgen_wind = net.sgen[net.sgen.wind_hc]
@@ -146,12 +149,13 @@ def plot_wind_hc_sgens_loads(net):
 
 
 def plot_sgen_load(net):
+    """Plot sgen and load markers on the network map."""
     sgen_trace, load_trace = _create_sgen_load_trace(net)
     pp.plotting.simple_plotly(net, bus_size=3, additional_traces=[sgen_trace, load_trace])
 
 
 def plot_pq_gridcodes():
-
+    """Plot P(Q) grid-code characteristic curves for wind generator variants 1-3."""
     clrs = ['#00549F', '#000000', '#E30066', '#FFED00', '#006165',
             '#0098A1', '#57AB27', '#BDCD00', '#F6A800', '#CC071E',
             '#A11035', '#612158', '#7A6FAC']
@@ -185,6 +189,7 @@ def plot_pq_gridcodes():
 
 
 def plot_pq_res(nets, labels=None):
+    """Scatter plot of P/Q operating points for HC and regular wind generators across nets."""
     clrs = ['#00549F', '#E30066', '#BDCD00', '#000000', '#FFED00', '#006165',
             '#0098A1', '#57AB27', '#F6A800', '#CC071E',
             '#A11035', '#612158', '#7A6FAC']
@@ -213,7 +218,7 @@ def plot_pq_res(nets, labels=None):
         sgens = sgens_to_plot
         try:
             p_mw_wind_hc = net.sgen.p_inst_mw[sgens].fillna(net.sgen.p_mw).values
-        except:
+        except Exception:
             p_mw_wind_hc = net.sgen.p_mw[sgens].values
         line = ax.scatter(net.res_sgen.p_mw[sgens].values / p_mw_wind_hc,
                           net.res_sgen.q_mvar[sgens].values / p_mw_wind_hc,
@@ -222,7 +227,7 @@ def plot_pq_res(nets, labels=None):
         # sgen_wind = net.sgen.index[(net.sgen.type == 'Wind') & ~net.sgen.wind_hc & net.sgen.in_service & (net.sgen.p_mw != 0 or net.sgen.p_inst_mw != 0)]
         try:
             p_mw_wind = net.sgen.p_inst_mw[sgen_wind].values
-        except:
+        except Exception:
             p_mw_wind = net.sgen.p_mw[sgen_wind].values
         ax.scatter(net.res_sgen.p_mw[sgen_wind].values / p_mw_wind,
                    net.res_sgen.q_mvar[sgen_wind].values / p_mw_wind,
@@ -239,7 +244,7 @@ def plot_pq_res(nets, labels=None):
 
 
 def plot_qu_gridcodes():
-
+    """Plot Q(U) grid-code characteristic curves for wind generator variants 1-3."""
     clrs = ['#00549F', '#000000', '#E30066', '#FFED00', '#006165',
             '#0098A1', '#57AB27', '#BDCD00', '#F6A800', '#CC071E',
             '#A11035', '#612158', '#7A6FAC']
@@ -267,6 +272,7 @@ def plot_qu_gridcodes():
 
 
 def plot_qu_res(nets, labels=None):
+    """Scatter plot of Q/V operating points for HC and regular wind generators across nets."""
     # values for variant 1
     m_qu = (0.48 + 0.23) / (96 - 103) * 110
     m_qu_min = (0.33 + 0.41) / (96 - 103) * 110
@@ -296,7 +302,7 @@ def plot_qu_res(nets, labels=None):
         sgens_to_plot = net.sgen.index[net.sgen.wind_hc & net.sgen.in_service & net.sgen.p_mw]
         try:
             p_mw = net.sgen.p_inst_mw[sgens_to_plot].values
-        except:
+        except Exception:
             p_mw = net.sgen.p_mw[sgens_to_plot].values
         line = ax.scatter(net.res_bus.vm_pu[net.sgen.bus[sgens_to_plot]],
                           net.res_sgen.q_mvar[sgens_to_plot].values / p_mw,
@@ -305,7 +311,7 @@ def plot_qu_res(nets, labels=None):
         sgen_wind = net.sgen.index[(net.sgen.type == 'Wind') & ~net.sgen.wind_hc & net.sgen.in_service & net.sgen.p_mw]
         try:
             p_mw_wind = net.sgen.p_inst_mw[sgen_wind].values
-        except:
+        except Exception:
             p_mw_wind = net.sgen.p_mw[sgen_wind].values
         ax.scatter(net.res_bus.vm_pu[net.sgen.bus[sgen_wind]],
                    net.res_sgen.q_mvar[sgen_wind].values / p_mw_wind,
@@ -317,7 +323,8 @@ def plot_qu_res(nets, labels=None):
         plt.legend()
 
 
-def plot_all_pG(hcs):
+def plot_all_pG(hcs):  # noqa: F811 — intentional override below
+    """Bar plot of wind generator active power across multiple HC solution objects (dict-based version)."""
     # Initialize an empty dictionary to store the values
     values = {}
     # Exclude list
@@ -355,7 +362,8 @@ def plot_all_pG(hcs):
     plt.show()
 
 
-def plot_all_pG(hcs):
+def plot_all_pG(hcs):  # noqa: F811
+    """Bar plot of wind generator active power across multiple HC solution objects (list-based version)."""
     # Initialize an empty dictionary to store the values
     values = [[] for _ in range(len(hcs[0].model.WIND))]
     ws = list(hcs[0].model.WIND)

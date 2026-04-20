@@ -1,3 +1,5 @@
+"""Full AC OPF model combining AC power flow and OPF operational limits."""
+
 import pandas as pd
 import pyomo.environ as pyo
 from src.potpourri.models.AC import AC
@@ -189,10 +191,6 @@ class ACOPF(AC, OPF):
         y = np.array([[0.48, 0.41, 0.33], [-0.23, -0.33, -0.41]])
         m = (y[1] - y[0]) / (x[0, 1] - x[0, 0])
         b = np.array([y[0] - m * x[i, 0] for i in range(len(x))]).T
-        # self.m_v = m
-        # self.b_min = b[:, 0]
-        # self.b_max = b[:, 1]
-
         m_qp_max = (0.1 - y[0])/(0.1-0.2)
         m_qp_min = (-0.1 - y[1])/(0.1-0.2)
         b_qp_max = 0.1 - m_qp_max * 0.1
@@ -249,7 +247,11 @@ class ACOPF(AC, OPF):
         # all wind generators
         self.model.WIND = self.model.WIND_HC | pyo.Set(within=self.model.sG, initialize=self.static_generation_data.index[(self.static_generation_data['type'] == 'Wind') & self.static_generation_data.in_service])
         # controllable wind generators, not for hc calculation
-        self.model.WINDc = self.model.WIND & self.model.sGc & pyo.Set(initialize=self.static_generation_data.index[self.static_generation_data['var_q'].values != None])
+        self.model.WINDc = self.model.WIND & self.model.sGc & pyo.Set(
+            initialize=self.static_generation_data.index[
+                self.static_generation_data['var_q'].values != None  # noqa: E711
+            ]
+        )
 
         self.model.var_q = pyo.Param(self.model.WINDc, initialize=self.static_generation_data['var_q'][self.model.WINDc])
         self.model.PsG_inst = pyo.Param(self.model.WINDc, initialize=self.static_generation_data['p_inst'][self.model.WINDc])
@@ -271,16 +273,6 @@ class ACOPF(AC, OPF):
         # reactive demand
         self.model.QDmax = pyo.Param(self.model.D, initialize=self.QDmax_data[self.model.D])
         self.model.QDmin = pyo.Param(self.model.D, initialize=self.QDmin_data[self.model.D])
-
-        # --- cost function ---
-        # def objective(model):
-        #     obj = sum(
-        #         model.c2[g] * (model.baseMVA * model.pG[g]) ** 2 + model.c1[g] * model.baseMVA * model.pG[g] +
-        #         model.c0[g] for g in model.G) + \
-        #           sum(model.VOLL[d] * (model.PD[d] - model.pD[d]) * model.baseMVA for d in model.D)
-        #     return obj
-
-        # self.model.OBJ = Objective(rule=objective, sense=minimize)
 
         # --- line power limits ---
         def line_lim_from_def(model, l):

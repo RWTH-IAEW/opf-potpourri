@@ -1,8 +1,14 @@
+"""Multi-period DC power flow mixin: adds linearised DC equations indexed over time steps."""
+
 from pyomo.environ import *
 from src.potpourri.models_multi_period.basemodel_multi_period import Basemodel_multi_period
-#TODO make multiperiod
+
+# TODO make multiperiod
+
 
 class DC_multi_period(Basemodel_multi_period):
+    """Multi-period linearised DC power flow model."""
+
     def __init__(self, net, toT, fromT=None):
         super().__init__(net, toT, fromT)
 
@@ -12,7 +18,6 @@ class DC_multi_period(Basemodel_multi_period):
         trafo_end = trafo_start + len(self.net.trafo)
 
         self.trafo_data = self.trafo_data.assign(**{"BLT_data": BL[trafo_start:trafo_end]})
-        # self.line_data = pd.DataFrame(BL[:trafo_start], columns=["BL_data"])
         self.line_data['BL_data'] = BL[:trafo_start]
 
         ZN = self.net.bus.vn_kv ** 2 / self.baseMVA
@@ -20,11 +25,10 @@ class DC_multi_period(Basemodel_multi_period):
 
         self.BL_data = y_s * ZN[self.net.line.from_bus].values
 
-        # self.BLT_data = pd.Series(-1 / self.trafo_parameters["x"] / self.trafo_parameters["ratio"][0], self.trafo_set)
-
         self.create_model()
 
     def create_model(self):
+        """Build the multi-period DC Pyomo model with susceptance parameters and KCL/KVL constraints."""
         super().create_model()
 
         self.model.name = "DC"
@@ -39,7 +43,7 @@ class DC_multi_period(Basemodel_multi_period):
         self.model.deltaL = Var(self.model.L, self.model.T, domain=Reals)  # angle difference across lines
         self.model.deltaLT = Var(self.model.TRANSF, self.model.T, domain=Reals)  # angle difference across transformers
 
-        if self.T == None:
+        if self.T is None:
             @self.model.Constraint(self.model.B)
             def KCL_def(model, b):
                 kcl = (sum(self.model.psG[g] for g in self.model.sG if (g, b) in self.model.sGbs) +
