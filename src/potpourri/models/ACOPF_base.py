@@ -57,14 +57,20 @@ class ACOPF(AC, OPF):
         )  # MVAr — divided by baseMVA once below
         if "max_q_mvar" in self.net.sgen:
             self.static_generation_data["max_q"] = (
-                self.net.sgen.max_q_mvar.fillna(lim_q).values / self.baseMVA
+                self.net.sgen.max_q_mvar.astype(float)
+                .fillna(lim_q.astype(float))
+                .values
+                / self.baseMVA
             )
         else:
             self.static_generation_data["max_q"] = lim_q.values / self.baseMVA
 
         if "min_q_mvar" in self.net.sgen:
             self.static_generation_data["min_q"] = (
-                self.net.sgen.min_q_mvar.fillna(-lim_q).values / self.baseMVA
+                self.net.sgen.min_q_mvar.astype(float)
+                .fillna(-lim_q.astype(float))
+                .values
+                / self.baseMVA
             )
         else:
             self.static_generation_data["min_q"] = -lim_q.values / self.baseMVA
@@ -83,12 +89,18 @@ class ACOPF(AC, OPF):
         for element, (f, t) in self.net._gen_order.items():
             if "max_q_mvar" in self.net[element]:
                 max_q[f:t] = (
-                    self.net[element].max_q_mvar.fillna(1e9).values
+                    self.net[element]
+                    .max_q_mvar.astype(float)
+                    .fillna(1e9)
+                    .values
                     / self.baseMVA
                 )
             if "min_q_mvar" in self.net[element]:
                 min_q[f:t] = (
-                    self.net[element].min_q_mvar.fillna(-1e9).values
+                    self.net[element]
+                    .min_q_mvar.astype(float)
+                    .fillna(-1e9)
+                    .values
                     / self.baseMVA
                 )
 
@@ -207,10 +219,14 @@ class ACOPF(AC, OPF):
 
         # demand limits for loads
         self.QDmax_data = (
-            self.net.load.max_q_mvar.fillna(self.net.load.q_mvar)
+            self.net.load.max_q_mvar.astype(float).fillna(
+                self.net.load.q_mvar.astype(float)
+            )
             / self.baseMVA
         )
-        self.QDmin_data = self.net.load.min_q_mvar.fillna(0) / self.baseMVA
+        self.QDmin_data = (
+            self.net.load.min_q_mvar.astype(float).fillna(0.0) / self.baseMVA
+        )
 
     def static_generation_wind_var_q(self):
         """Compute Q-P and Q-U characteristic limits for wind generators.

@@ -3,6 +3,7 @@ power flow model."""
 
 import copy
 
+import pandas as pd
 import pyomo.environ as pyo
 from potpourri.models.basemodel import Basemodel
 import numpy as np
@@ -35,12 +36,15 @@ class OPF(Basemodel):
         for element, (f, t) in self.net._gen_order.items():
             if "max_p_mw" in self.net[element]:
                 max_p[f:t] = (
-                    self.net[element].max_p_mw.fillna(1e9).values
+                    self.net[element].max_p_mw.astype(float).fillna(1e9).values
                     / self.baseMVA
                 )
             if "min_p_mw" in self.net[element]:
                 min_p[f:t] = (
-                    self.net[element].min_p_mw.fillna(-1e9).values
+                    self.net[element]
+                    .min_p_mw.astype(float)
+                    .fillna(-1e9)
+                    .values
                     / self.baseMVA
                 )
 
@@ -75,7 +79,9 @@ class OPF(Basemodel):
 
         if "max_p_mw" in self.net.sgen:
             self.static_generation_data["max_p"] = (
-                self.net.sgen.max_p_mw.fillna(self.net.sgen.p_mw).values
+                self.net.sgen.max_p_mw.astype(float)
+                .fillna(self.net.sgen.p_mw.astype(float))
+                .values
                 / self.baseMVA
             )
         else:
@@ -84,7 +90,8 @@ class OPF(Basemodel):
             )
         if "min_p_mw" in self.net.sgen:
             self.static_generation_data["min_p"] = (
-                self.net.sgen.min_p_mw.fillna(0).values / self.baseMVA
+                self.net.sgen.min_p_mw.astype(float).fillna(0.0).values
+                / self.baseMVA
             )
         else:
             self.static_generation_data["min_p"] = np.zeros(
@@ -115,9 +122,14 @@ class OPF(Basemodel):
 
         # demand limits for loads
         self.PDmax_data = (
-            self.net.load.max_p_mw.fillna(self.net.load.p_mw) / self.baseMVA
+            self.net.load.max_p_mw.astype(float).fillna(
+                self.net.load.p_mw.astype(float)
+            )
+            / self.baseMVA
         )
-        self.PDmin_data = self.net.load.min_p_mw.fillna(0) / self.baseMVA
+        self.PDmin_data = (
+            self.net.load.min_p_mw.astype(float).fillna(0.0) / self.baseMVA
+        )
 
     def __calc_SLmax(self, max_loading_percent=100):
         vr = self.net.bus.loc[
@@ -337,7 +349,10 @@ class OPF(Basemodel):
                 tap_pos = self.net.trafo.tap_pos
             tap_neutral = self.net.trafo.tap_neutral
             tap_diff = tap_pos - tap_neutral
-            tap_phase_shifter = self.net.trafo.tap_phase_shifter
+            tap_phase_shifter = self.net.trafo.get(
+                "tap_phase_shifter",
+                pd.Series(False, index=self.net.trafo.index),
+            )
             tap_side = self.net.trafo.tap_side
             tap_step_percent = self.net.trafo.tap_step_percent
             tap_step_degree = self.net.trafo.tap_step_degree

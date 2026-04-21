@@ -218,13 +218,23 @@ def _sgen_results_to_net(net, model):
             net.res_sgen.loc[w, "y_wind"] = y[w]
 
     net.res_sgen.set_index(net.sgen.index, inplace=True)
-    net.res_sgen["p_mw"] = net.res_sgen["p_mw"].fillna(
-        net.sgen["p_mw"] * net.sgen["scaling"] * net.sgen["in_service"]
+    sgen_p_fallback = (
+        net.sgen["p_mw"].astype(float)
+        * net.sgen["scaling"].astype(float)
+        * net.sgen["in_service"].astype(float)
+    )
+    net.res_sgen["p_mw"] = (
+        net.res_sgen["p_mw"].astype(float).fillna(sgen_p_fallback)
     )
 
     if _is_ac(model):
-        net.res_sgen["q_mvar"] = net.res_sgen["q_mvar"].fillna(
-            net.sgen["q_mvar"] * net.sgen["scaling"] * net.sgen["in_service"]
+        sgen_q_fallback = (
+            net.sgen["q_mvar"].astype(float)
+            * net.sgen["scaling"].astype(float)
+            * net.sgen["in_service"].astype(float)
+        )
+        net.res_sgen["q_mvar"] = (
+            net.res_sgen["q_mvar"].astype(float).fillna(sgen_q_fallback)
         )
 
 

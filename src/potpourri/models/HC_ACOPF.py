@@ -42,7 +42,8 @@ class HC_ACOPF(ACOPF):
                 ~net.bus.index.isin(net.ext_grid.bus)
             ].index
             pp.create_sgens(net, buses_excl_extGrids, p_mw=0, wind_hc=True)
-        net.sgen.wind_hc.fillna(False, inplace=True)
+        wh = net.sgen["wind_hc"]
+        net.sgen["wind_hc"] = wh.where(wh.notna(), False).astype(bool)
 
         super().__init__(net)
 
