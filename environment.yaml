@@ -4,6 +4,7 @@ channels:
   - https://repo.anaconda.com/pkgs/main
   - https://repo.anaconda.com/pkgs/r
 dependencies:
+  - python>=3.9,<3.13
   - glpk=5.0
   - ipopt=3.14.19
   - ipython=9.12.0
