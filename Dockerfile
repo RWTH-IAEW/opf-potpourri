@@ -35,9 +35,9 @@ RUN apt-get update && apt-get install -y \
     libmetis-dev
 
 RUN cd /opt && \
-    wget https://github.com/coin-or/Ipopt/archive/refs/tags/releases/3.14.16.tar.gz && \
-    tar xzf 3.14.16.tar.gz && \
-    mv Ipopt-releases-3.14.16 Ipopt && \
+    wget https://github.com/coin-or/Ipopt/archive/refs/tags/releases/3.14.19.tar.gz && \
+    tar xzf 3.14.19.tar.gz && \
+    mv Ipopt-releases-3.14.19 Ipopt && \
     cd Ipopt && \
     ./configure --prefix=/usr/local && \
     make && \
