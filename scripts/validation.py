@@ -1,3 +1,24 @@
+"""Validation of the POTPOURRI AC power flow model against pandapower.
+
+Workflow
+--------
+For each simbench benchmark network in ``NETS``:
+
+1. Load the network via simbench.
+2. Build an ``AC`` model (POTPOURRI) and solve it via the NEOS cloud solver.
+3. Run a reference power flow with pandapower (``pp.runpp``).
+4. Compare ``res_bus.vm_pu``, ``res_bus.va_degree``, ``res_line.pl_mw``, and
+   ``res_line.ql_mvar`` between both solvers using mean absolute error, max
+   absolute error, RMSE, and standard deviation.
+5. Print a detailed comparison table plus compact pivot tables.
+
+Environment
+-----------
+Set the ``NEOS_EMAIL`` environment variable to an e-mail address that is
+registered at https://neos-server.org before running this script.  If the
+variable is not set the fallback address below is used.
+"""
+
 import os
 import warnings
 
@@ -8,9 +29,8 @@ from tqdm import tqdm
 
 from potpourri.models.AC import AC
 
-# Set a valid email address registered with NEOS (https://neos-server.org)
 os.environ["NEOS_EMAIL"] = os.environ.get(
-    "NEOS_EMAIL", "your-email@example.com"
+    "NEOS_EMAIL", "steffen.kortmann@fit.fraunhofer.de"
 )
 warnings.filterwarnings("ignore")
 
@@ -33,7 +53,16 @@ NETS = [
 def calculate_error_metrics(
     reference: pd.Series, candidate: pd.Series
 ) -> dict:
-    """Calculate comparison metrics between two result series."""
+    """Compute element-wise error statistics between two result series.
+
+    Args:
+        reference: Ground-truth values (e.g. pandapower result).
+        candidate: Values to evaluate (e.g. POTPOURRI AC result).
+
+    Returns:
+        A dict with keys ``mean_abs``, ``max_abs``, ``rmse``, ``std_abs``,
+        each holding a scalar float error metric.
+    """
     delta = candidate - reference
     abs_delta = delta.abs()
 
@@ -46,7 +75,23 @@ def calculate_error_metrics(
 
 
 def compare_results(pp_net, ac_net, delta_keys: dict) -> list[dict]:
-    """Compare selected result tables and columns of two solved networks."""
+    """Compare selected result tables and columns of two solved networks.
+
+    For every (table, column) pair in *delta_keys*, the function calculates
+    error metrics of *ac_net* relative to *pp_net* and records the bus/line
+    index where the largest deviation occurs.
+
+    Args:
+        pp_net: pandapower network after ``pp.runpp``, used as reference.
+        ac_net: pandapower network after POTPOURRI ``AC.solve``.
+        delta_keys: Mapping ``{result_table: [column, ...]}`` describing which
+            result fields to compare.
+
+    Returns:
+        A list of dicts, one per (table, column) pair, each containing:
+        ``element``, ``variable``, ``mean_abs``, ``max_abs``, ``rmse``,
+        ``std_abs``, ``worst_index``.
+    """
     records = []
 
     for res_element, keys in delta_keys.items():
@@ -83,6 +128,7 @@ if __name__ == "__main__":
     for net_name in tqdm(NETS, desc="Comparing networks"):
         net = sb.get_simbench_net(net_name)
 
+        # Solve with POTPOURRI AC model via NEOS cloud solver.
         ac = AC(net)
         results = ac.solve(solver="neos")
         converged = (
@@ -90,6 +136,7 @@ if __name__ == "__main__":
             and results.solver.termination_condition.value == "optimal"
         )
 
+        # Reference: pandapower Newton-Raphson power flow (voltage-independent loads).
         pp.runpp(net, voltage_depend_loads=False)
 
         vm_tol = 1e-3
@@ -148,7 +195,7 @@ if __name__ == "__main__":
     )
     print(ranking)
 
-    # Optional exports
+    # Optional CSV / LaTeX exports
     # results_df.to_csv("detailed_comparison.csv", index=False)
     # pivot_mean.to_csv("comparison_mean_abs.csv")
     # pivot_max.to_csv("comparison_max_abs.csv")

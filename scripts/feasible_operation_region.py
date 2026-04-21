@@ -1,94 +1,98 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+"""Computation and plotting of the Feasible Operation Region (FOR).
 
-"""
-Calculation of the feasible operation region
+The Feasible Operation Region is the set of all active / reactive power
+(P, Q) combinations that the external grid connection points can realise
+while satisfying all network constraints (voltage limits, line loading
+limits, generator capability curves).
 
-example of usage:
+This module provides several sampling strategies for approximating the FOR
+boundary:
 
+* ``run_feasible_operation_region`` – angle-based sampling (36 directions).
+* ``for_angle_based_sampling`` – refined angle-based sampling split into four
+  quadrants.
+* ``for_setpoint_based`` – eight cardinal direction setpoint optimisations.
+* ``for_setpoint_based_with_directions`` – adaptive refinement that starts
+  from eight directions and inserts additional samples between points that
+  are too far apart on the boundary.
+* ``node_for_setpoint_based_with_directions`` – same as above but for a
+  single static generator node instead of the external grid.
 
-Institut für Elektrische Anlagen und Netze, Digitalisierung und Energiewirtschaft (IAEW)
+Plotting
+--------
+``get_pq_to_plot`` flattens the nested boundary lists into plottable arrays.
+``plot_hull`` visualises individual grid connection points plus their convex
+or concave hull (requires *shapely* and *geopandas*).
+
+Usage example
+-------------
+::
+
+    net = sb.get_simbench_net("1-HV-mixed--0-no_sw")
+    acopf = ACOPF(net)
+    acopf.add_OPF()
+    p, q, u, nets = for_setpoint_based_with_directions(acopf, stepsize=40)
+
+Institut für Elektrische Anlagen und Netze, Digitalisierung und
+Energiewirtschaft (IAEW)
 (c) 2023, Steffen Kortmann
 """
 
-# ==========Import==========
 from __future__ import division
 
 import copy
 import math
-from pyomo.environ import *
-import pickle
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandapower as pp
+import simbench as sb
+from pyomo.environ import (
+    Constraint,
+    Objective,
+    Param,
+    check_optimal_termination,
+    maximize,
+    minimize,
+    value,
+)
 
 # from shapely import concave_hull, MultiPoint, convex_hull
 # import geopandas as gpd
-import simbench as sb
-import numpy as np
-import pandapower as pp
-import matplotlib.pyplot as plt
 
-from src.potpourri.models.HC_ACOPF import HC_ACOPF
-from src.potpourri.models.ACOPF_base import ACOPF
+from potpourri.models.ACOPF_base import ACOPF
+from potpourri.models.HC_ACOPF import HC_ACOPF
 
 
-# ==========================
-def run_feasible_operation_region(self):
-    print("Run feasible operation region")
-    import numpy as np
+def run_feasible_operation_region(opf):
+    """Sample the FOR boundary by sweeping 36 power-factor angles.
 
-    theta_values = np.linspace(0, 2 * np.pi, 36)  # One degree resolution
-    boundary_P_values = [[], [], []]
-    boundary_Q_values = [[], [], []]
-    # Set objective to maximize absolute power for the given angle
-    self.model.obj = Objective(
+    For each angle θ ∈ [0, 2π) a power-factor constraint
+    Q = tan(θ)·P is imposed on every external-grid bus and the
+    squared apparent power is maximised.  The resulting (P, Q) pairs
+    trace the FOR boundary.
+
+    Args:
+        opf: A solved ``ACOPF`` (or compatible) instance whose Pyomo model
+            contains ``eG``, ``pG``, and ``qG`` components.
+
+    Returns:
+        A tuple ``(boundary_P_values, boundary_Q_values)`` where each
+        element is a list of lists indexed by external-grid index.
+    """
+    theta_values = np.linspace(0, 2 * np.pi, 36)
+    n_ext_grids = len(list(opf.model.eG))
+    boundary_P_values = [[] for _ in range(n_ext_grids)]
+    boundary_Q_values = [[] for _ in range(n_ext_grids)]
+
+    opf.model.obj = Objective(
         expr=sum(
-            self.model.pG[b0] ** 2 + self.model.qG[b0] ** 2
-            for b0 in self.model.eG
+            opf.model.pG[b0] ** 2 + opf.model.qG[b0] ** 2
+            for b0 in opf.model.eG
         ),
         sense=maximize,
     )
 
-    # Constraint for the given power factor angle
-    self.model.tan_theta = Param(mutable=True, initialize=0.0)
-
-    def constrain_pf(model, b0):
-        return model.qG[b0] == model.tan_theta * model.pG[b0]
-
-    self.model.power_factor_constraint = Constraint(
-        self.model.eG, rule=constrain_pf
-    )
-
-    for theta in theta_values:
-        # Constraint for the given power factor angle
-        tan_theta = np.tan(theta)
-        self.model.tan_theta = tan_theta
-
-        # Solve
-        self.solve()
-
-        for i in self.model.eG:
-            print(value(self.model.pG[i]))
-
-        for b0 in self.model.eG:
-            boundary_P_values[b0].append(value(self.model.pG[b0]))
-            boundary_Q_values[b0].append(value(self.model.qG[b0]))
-
-    return boundary_P_values, boundary_Q_values
-
-
-def for_angle_based_sampling(opf, n=36):
-    theta_values = np.linspace(0, 2 * np.pi, n)  # One degree resolution
-    if n % 4 == 0:
-        theta_splits = np.split(theta_values, 4)
-    else:
-        print("n has to be a multiple of 4")
-    a = [-1, 1, 1, -1]
-    b = [-1, -1, 1, 1]
-
-    boundary_P_values = [[], [], []]
-    boundary_Q_values = [[], [], []]
-    boundary_U_values = [[], [], []]
-
-    # Constraint for the given power factor angle
     opf.model.tan_theta = Param(mutable=True, initialize=0.0)
 
     def constrain_pf(model, b0):
@@ -98,7 +102,60 @@ def for_angle_based_sampling(opf, n=36):
         opf.model.eG, rule=constrain_pf
     )
 
-    # Set objective to maximize absolute power for the given angle
+    for theta in theta_values:
+        opf.model.tan_theta = np.tan(theta)
+        opf.solve()
+
+        for g in opf.model.eG:
+            print(value(opf.model.pG[g]))
+
+        for b0 in opf.model.eG:
+            boundary_P_values[b0].append(value(opf.model.pG[b0]))
+            boundary_Q_values[b0].append(value(opf.model.qG[b0]))
+
+    return boundary_P_values, boundary_Q_values
+
+
+def for_angle_based_sampling(opf, n=36):
+    """Sample the FOR boundary using angle-based optimisation in four quadrants.
+
+    Splits *n* evenly spaced angles into four quadrant groups.  Each quadrant
+    uses a sign combination (a, b) so that the linear objective
+    ``a·P + b·|tan(θ)|·Q`` points into the correct half-plane, avoiding
+    degenerate solutions near the axes.
+
+    Args:
+        opf: A solved ``ACOPF`` instance.
+        n: Number of angle samples.  Must be a multiple of 4.
+
+    Returns:
+        A tuple ``(boundary_P_values, boundary_Q_values, boundary_U_values)``
+        where each element is a list of lists indexed by external-grid index.
+    """
+    theta_values = np.linspace(0, 2 * np.pi, n)
+    if n % 4 == 0:
+        theta_splits = np.split(theta_values, 4)
+    else:
+        print("n has to be a multiple of 4")
+        return [], [], []
+
+    a = [-1, 1, 1, -1]
+    b = [-1, -1, 1, 1]
+
+    n_ext_grids = len(list(opf.model.eG))
+    boundary_P_values = [[] for _ in range(n_ext_grids)]
+    boundary_Q_values = [[] for _ in range(n_ext_grids)]
+    boundary_U_values = [[] for _ in range(n_ext_grids)]
+
+    opf.model.tan_theta = Param(mutable=True, initialize=0.0)
+
+    def constrain_pf(model, b0):
+        return model.qG[b0] == model.tan_theta * model.pG[b0]
+
+    opf.model.power_factor_constraint = Constraint(
+        opf.model.eG, rule=constrain_pf
+    )
+
     opf.model.a = Param(initialize=-1, mutable=True)
     opf.model.b = Param(initialize=-1, mutable=True)
     opf.model.obj = Objective(
@@ -110,20 +167,16 @@ def for_angle_based_sampling(opf, n=36):
         sense=minimize,
     )
 
-    for i, theta_i in enumerate(theta_splits):
-        opf.model.a = a[i]
-        opf.model.b = b[i]
+    for quad_idx, theta_i in enumerate(theta_splits):
+        opf.model.a = a[quad_idx]
+        opf.model.b = b[quad_idx]
 
         for theta in theta_i:
-            # Constraint for the given power factor angle
-            tan_theta = np.tan(theta)
-            opf.model.tan_theta = tan_theta
-
-            # Solve
+            opf.model.tan_theta = np.tan(theta)
             opf.solve()
 
-            for i in opf.model.eG:
-                print(value(opf.model.pG[i]))
+            for g in opf.model.eG:
+                print(value(opf.model.pG[g]))
 
             for b0 in opf.model.eG:
                 boundary_P_values[b0].append(value(opf.model.pG[b0]))
@@ -134,6 +187,20 @@ def for_angle_based_sampling(opf, n=36):
 
 
 def for_setpoint_based(opf, n=36):
+    """Approximate the FOR using eight cardinal setpoint directions.
+
+    Minimises ``-alpha·P - beta·Q`` for each of the eight (alpha, beta)
+    combinations that point into the eight cardinal directions of the (P, Q)
+    plane.
+
+    Args:
+        opf: A solved ``ACOPF`` instance.
+        n: Unused parameter kept for API compatibility.
+
+    Returns:
+        A tuple ``(boundary_P_values, boundary_Q_values)`` where each
+        element is a list of lists indexed by external-grid index.
+    """
     alpha_beta = [
         (1, 0),
         (1, 1),
@@ -155,8 +222,9 @@ def for_setpoint_based(opf, n=36):
 
     opf.model.obj = Objective(expr=setpoint_based, sense=minimize)
 
-    boundary_P_values = [[], [], []]
-    boundary_Q_values = [[], [], []]
+    n_ext_grids = len(list(opf.model.eG))
+    boundary_P_values = [[] for _ in range(n_ext_grids)]
+    boundary_Q_values = [[] for _ in range(n_ext_grids)]
 
     for alpha, beta in alpha_beta:
         opf.model.alpha = alpha
@@ -164,17 +232,42 @@ def for_setpoint_based(opf, n=36):
         opf.solve()
         print(value(opf.model.obj))
 
-        for i in opf.model.eG:
-            print(value(opf.model.pG[i]))
+        for g in opf.model.eG:
+            print(value(opf.model.pG[g]))
 
         for b0 in opf.model.eG:
-            boundary_P_values[b0].append(value(opf.model.peG[b0]))
-            boundary_Q_values[b0].append(value(opf.model.qeG[b0]))
+            boundary_P_values[b0].append(value(opf.model.pG[b0]))
+            boundary_Q_values[b0].append(value(opf.model.qG[b0]))
 
     return boundary_P_values, boundary_Q_values
 
 
 def for_setpoint_based_with_directions(opf, stepsize=100, solver="ipopt"):
+    """Compute an adaptive FOR boundary with automatic gap refinement.
+
+    Algorithm
+    ---------
+    1. Solve the OPF for eight cardinal (alpha, beta) directions to obtain
+       coarse boundary samples.
+    2. Close the polygon by appending the first point at the end.
+    3. Compute the normalised arc-length step ``d`` between consecutive
+       points.  Insert additional samples wherever ``d >= stepsize / delta_max``.
+    4. For gaps where ΔP dominates, sweep P linearly between the bounding
+       points while optimising Q freely.
+    5. For gaps where ΔQ dominates, sweep Q linearly while optimising P freely.
+
+    Args:
+        opf: An ``ACOPF`` instance with OPF constraints already added.
+        stepsize: Target normalised step size.  Smaller values → denser
+            sampling.
+        solver: Pyomo solver name passed to ``opf.solve``.
+
+    Returns:
+        A tuple ``(boundary_P_values, boundary_Q_values, boundary_V_values,
+        nets)`` where boundary lists are indexed as
+        ``[ext_grid_index][refinement_pass]`` and *nets* contains deep-copied
+        network states at each coarse corner point.
+    """
     alpha_beta = [
         (1, 0),
         (1, 1),
@@ -211,6 +304,7 @@ def for_setpoint_based_with_directions(opf, stepsize=100, solver="ipopt"):
     q = [[] for _ in range_ext_grids]
     v = [[] for _ in range_ext_grids]
 
+    # ---- coarse pass: eight cardinal directions ---- #
     for alpha, beta in alpha_beta:
         opf.model.alpha = alpha
         opf.model.beta = beta
@@ -226,20 +320,18 @@ def for_setpoint_based_with_directions(opf, stepsize=100, solver="ipopt"):
         boundary_Q_values[g].append(q[g])
         boundary_V_values[g].append(v[g])
 
+        # Close the polygon for gap detection.
         boundary_P_values[g][-1].append(boundary_P_values[g][-1][0])
         boundary_Q_values[g][-1].append(boundary_Q_values[g][-1][0])
         boundary_V_values[g][-1].append(boundary_V_values[g][-1][0])
 
     p_max = np.array([max(boundary_P_values[i][0]) for i in range_ext_grids])
     p_min = np.array([min(boundary_P_values[i][0]) for i in range_ext_grids])
-
     q_max = np.array([max(boundary_Q_values[i][0]) for i in range_ext_grids])
     q_min = np.array([min(boundary_Q_values[i][0]) for i in range_ext_grids])
 
     delta_p = abs(p_max - p_min)
     delta_q = abs(q_max - q_min)
-
-    # ----
     delta_max = np.max((delta_p, delta_q))
     d_max = stepsize / delta_max
 
@@ -251,36 +343,32 @@ def for_setpoint_based_with_directions(opf, stepsize=100, solver="ipopt"):
     ]
     ind_next = [np.argwhere(ds[g] >= d_max) for g in range_ext_grids]
     ind_next = np.unique(np.concatenate(ind_next))
-    # p_next = []
-    # q_next = []
-    # for g in range(len(boundary_P_values)):
-    #     p_next.append([(boundary_P_values[g][-1][i] + boundary_P_values[g][-1][i + 1]) / 2 for i in ind_next])
-    #     q_next.append([(boundary_Q_values[g][-1][i] + boundary_Q_values[g][-1][i + 1]) / 2 for i in ind_next])
 
     tol = 0.1
 
     def _add_setpoint_constraints(model):
+        """Add mutable P and Q setpoint band constraints to the model."""
         model.p_sp = Param(model.eG, mutable=True)
 
         def p_eg_upper(model, g):
-            return (model.pG[g]) <= (model.p_sp[g]) + tol
+            return model.pG[g] <= model.p_sp[g] + tol
 
         model.p_eg_max = Constraint(model.eG, rule=p_eg_upper)
 
         def p_eg_lower(model, g):
-            return (model.pG[g]) >= (model.p_sp[g]) - tol
+            return model.pG[g] >= model.p_sp[g] - tol
 
         model.p_eg_min = Constraint(model.eG, rule=p_eg_lower)
 
         model.q_sp = Param(model.eG, mutable=True)
 
         def q_eg_upper(model, g):
-            return (model.qG[g]) <= (model.q_sp[g]) + tol
+            return model.qG[g] <= model.q_sp[g] + tol
 
         model.q_eg_max = Constraint(model.eG, rule=q_eg_upper)
 
         def q_eg_lower(model, g):
-            return (model.qG[g]) >= (model.q_sp[g]) - tol
+            return model.qG[g] >= model.q_sp[g] - tol
 
         model.q_eg_min = Constraint(model.eG, rule=q_eg_lower)
 
@@ -289,16 +377,17 @@ def for_setpoint_based_with_directions(opf, stepsize=100, solver="ipopt"):
     opf.model.q_eg_min.deactivate()
     opf.model.q_eg_max.deactivate()
 
+    # ---- refinement pass: P-dominated gaps ---- #
+    p = [[] for _ in range_ext_grids]
+    q = [[] for _ in range_ext_grids]
+    v = [[] for _ in range_ext_grids]
+
     ind_alpha_0 = np.argwhere(
         abs(p_diff[0][ind_next]) >= abs(q_diff[0][ind_next])
     )
 
-    p = [[], [], []]
-    q = [[], [], []]
-    v = [[], [], []]
-
-    for i in ind_alpha_0:
-        ind = ind_next[i[0]]
+    for row in ind_alpha_0:
+        ind = ind_next[row[0]]
         alpha = alpha_beta[ind][0]
         beta = alpha_beta[ind][1]
 
@@ -330,9 +419,9 @@ def for_setpoint_based_with_directions(opf, stepsize=100, solver="ipopt"):
 
         opf.model.alpha = 0
 
-        for i in range(len(p_sp[0])):
+        for step in range(len(p_sp[0])):
             for g in opf.model.eG:
-                opf.model.p_sp[g] = p_sp[g, i]
+                opf.model.p_sp[g] = p_sp[g, step]
             opf.solve(solver=solver)
 
             if check_optimal_termination(opf.results):
@@ -341,8 +430,6 @@ def for_setpoint_based_with_directions(opf, stepsize=100, solver="ipopt"):
                     q[g].append(value(opf.model.qG[g]))
                 for b in opf.model.b0:
                     v[b].append(value(opf.model.v[b]))
-            else:
-                pass
 
     for i in range_ext_grids:
         boundary_P_values[i].append(p[i])
@@ -352,11 +439,16 @@ def for_setpoint_based_with_directions(opf, stepsize=100, solver="ipopt"):
     opf.model.p_eg_max.deactivate()
     opf.model.p_eg_min.deactivate()
 
+    # ---- refinement pass: Q-dominated gaps ---- #
+    p = [[] for _ in range_ext_grids]
+    q = [[] for _ in range_ext_grids]
+    v = [[] for _ in range_ext_grids]
+
     ind_beta_0 = np.argwhere(
         abs(p_diff[0][ind_next]) <= abs(q_diff[0][ind_next])
     )
-    for i in ind_beta_0:
-        ind = ind_next[i[0]]
+    for row in ind_beta_0:
+        ind = ind_next[row[0]]
         beta = alpha_beta[ind][1]
         alpha = alpha_beta[ind][0]
 
@@ -389,22 +481,20 @@ def for_setpoint_based_with_directions(opf, stepsize=100, solver="ipopt"):
 
         opf.model.beta = 0
 
-        for i in range(len(q_sp[0])):
+        for step in range(len(q_sp[0])):
             for g in opf.model.eG:
-                opf.model.q_sp[g] = q_sp[g, i]
+                opf.model.q_sp[g] = q_sp[g, step]
             opf.solve(solver=solver)
-            for i in opf.model.eG:
-                print(value(opf.model.pG[i]))
+            for g in opf.model.eG:
+                print(value(opf.model.pG[g]))
             if check_optimal_termination(opf.results):
                 for g in opf.model.eG:
                     p[g].append(value(opf.model.pG[g]))
                     q[g].append(value(opf.model.qG[g]))
                 for b in opf.model.b0:
                     v[b].append(value(opf.model.v[b]))
-            else:
-                pass
 
-    for i in range(len(p)):
+    for i in range_ext_grids:
         boundary_P_values[i].append(p[i])
         boundary_Q_values[i].append(q[i])
         boundary_V_values[i].append(v[i])
@@ -413,6 +503,24 @@ def for_setpoint_based_with_directions(opf, stepsize=100, solver="ipopt"):
 
 
 def node_for_setpoint_based_with_directions(opf, w, stepsize=100):
+    """Compute the FOR for a single static generator node *w*.
+
+    Mirrors ``for_setpoint_based_with_directions`` but sweeps the capability
+    region of one static generator (indexed *w* in ``opf.model.sG``) rather
+    than the aggregated external-grid injection.
+
+    Args:
+        opf: An ``ACOPF`` instance with OPF constraints already added.
+            Must already have ``p_eg_min``/``p_eg_max`` and
+            ``q_eg_min``/``q_eg_max`` constraints (added externally before
+            calling this function).
+        w: Integer index of the static generator in ``opf.model.sG``.
+        stepsize: Target normalised step size for gap refinement.
+
+    Returns:
+        A tuple ``(boundary_P_values, boundary_Q_values, boundary_V_values,
+        nets)`` for the single generator node.
+    """
     alpha_beta = [
         (1, 0),
         (1, 1),
@@ -446,6 +554,7 @@ def node_for_setpoint_based_with_directions(opf, w, stepsize=100):
     q = [[] for _ in range_ext_grids]
     v = [[] for _ in range_ext_grids]
 
+    # ---- coarse pass ---- #
     for alpha, beta in alpha_beta:
         opf.model.alpha = alpha
         opf.model.beta = beta
@@ -462,18 +571,14 @@ def node_for_setpoint_based_with_directions(opf, w, stepsize=100):
 
         boundary_P_values[g][-1].append(boundary_P_values[g][-1][0])
         boundary_Q_values[g][-1].append(boundary_Q_values[g][-1][0])
-        # boundary_V_values[g][-1].append(boundary_V_values[g][-1][0])
 
     p_max = np.array([max(boundary_P_values[i][0]) for i in range_ext_grids])
     p_min = np.array([min(boundary_P_values[i][0]) for i in range_ext_grids])
-
     q_max = np.array([max(boundary_Q_values[i][0]) for i in range_ext_grids])
     q_min = np.array([min(boundary_Q_values[i][0]) for i in range_ext_grids])
 
     delta_p = abs(p_max - p_min)
     delta_q = abs(q_max - q_min)
-
-    # ----
     delta_max = np.max((delta_p, delta_q))
     d_max = stepsize / delta_max
 
@@ -485,52 +590,21 @@ def node_for_setpoint_based_with_directions(opf, w, stepsize=100):
     ]
     ind_next = [np.argwhere(ds[g] >= d_max) for g in range_ext_grids]
     ind_next = np.unique(np.concatenate(ind_next))
-    # p_next = []
-    # q_next = []
-    # for g in range(len(boundary_P_values)):
-    #     p_next.append([(boundary_P_values[g][-1][i] + boundary_P_values[g][-1][i + 1]) / 2 for i in ind_next])
-    #     q_next.append([(boundary_Q_values[g][-1][i] + boundary_Q_values[g][-1][i + 1]) / 2 for i in ind_next])
-
-    # def _add_setpoint_constraints(model):
-    #     model.p_sp = Param([w], mutable=True)
-    #
-    #     def p_eg_upper(model, g):
-    #         return (model.psG[g]) <= (model.p_sp[g]) + tol
-    #
-    #     model.p_eg_max = Constraint([w], rule=p_eg_upper)
-    #
-    #     def p_eg_lower(model, g):
-    #         return (model.psG[g]) >= (model.p_sp[g]) - tol
-    #
-    #     model.p_eg_min = Constraint([w], rule=p_eg_lower)
-    #
-    #     model.q_sp = Param([w], mutable=True)
-    #
-    #     def q_eg_upper(model, g):
-    #         return (model.qsG[g]) <= (model.q_sp[g]) + tol
-    #
-    #     model.q_eg_max = Constraint([w], rule=q_eg_upper)
-    #
-    #     def q_eg_lower(model, g):
-    #         return (model.qsG[g]) >= (model.q_sp[g]) - tol
-    #
-    #     model.q_eg_min = Constraint([w], rule=q_eg_lower)
-    #
-    # _add_setpoint_constraints(opf.model)
 
     opf.model.q_eg_min.deactivate()
     opf.model.q_eg_max.deactivate()
+
+    # ---- refinement: P-dominated gaps ---- #
+    p = [[], [], []]
+    q = [[], [], []]
+    v = [[], [], []]
 
     ind_alpha_0 = np.argwhere(
         abs(p_diff[0][ind_next]) >= abs(q_diff[0][ind_next])
     )
 
-    p = [[], [], []]
-    q = [[], [], []]
-    v = [[], [], []]
-
-    for i in ind_alpha_0:
-        ind = ind_next[i[0]]
+    for row in ind_alpha_0:
+        ind = ind_next[row[0]]
         alpha = alpha_beta[ind][0]
         beta = alpha_beta[ind][1]
 
@@ -562,19 +636,15 @@ def node_for_setpoint_based_with_directions(opf, w, stepsize=100):
 
         opf.model.alpha = 0
 
-        for i in range(len(p_sp[0])):
+        for step in range(len(p_sp[0])):
             for g in range_ext_grids:
-                opf.model.p_sp[w] = p_sp[g, i]
+                opf.model.p_sp[w] = p_sp[g, step]
             opf.solve()
 
             if check_optimal_termination(opf.results):
                 for g in range_ext_grids:
                     p[g].append(value(opf.model.psG[w]))
                     q[g].append(value(opf.model.qsG[w]))
-                # for b in opf.model.b0:
-                #     v[b].append(value(opf.model.v[b]))
-            else:
-                pass
 
     for i in range_ext_grids:
         boundary_P_values[i].append(p[i])
@@ -584,11 +654,12 @@ def node_for_setpoint_based_with_directions(opf, w, stepsize=100):
     opf.model.p_eg_max.deactivate()
     opf.model.p_eg_min.deactivate()
 
+    # ---- refinement: Q-dominated gaps ---- #
     ind_beta_0 = np.argwhere(
         abs(p_diff[0][ind_next]) <= abs(q_diff[0][ind_next])
     )
-    for i in ind_beta_0:
-        ind = ind_next[i[0]]
+    for row in ind_beta_0:
+        ind = ind_next[row[0]]
         beta = alpha_beta[ind][1]
         alpha = alpha_beta[ind][0]
 
@@ -621,19 +692,15 @@ def node_for_setpoint_based_with_directions(opf, w, stepsize=100):
 
         opf.model.beta = 0
 
-        for i in range(len(q_sp[0])):
+        for step in range(len(q_sp[0])):
             for g in range_ext_grids:
-                opf.model.q_sp[w] = q_sp[g, i]
+                opf.model.q_sp[w] = q_sp[g, step]
             opf.solve()
 
             if check_optimal_termination(opf.results):
                 for g in range_ext_grids:
                     p[g].append(value(opf.model.psG[w]))
                     q[g].append(value(opf.model.qsG[w]))
-                # for b in opf.model.b0:
-                #     v[b].append(value(opf.model.v[b]))
-            else:
-                pass
 
     for i in range_ext_grids:
         boundary_P_values[i].append(p[i])
@@ -644,18 +711,53 @@ def node_for_setpoint_based_with_directions(opf, w, stepsize=100):
 
 
 def get_pq_to_plot(p, q):
+    """Flatten FOR boundary lists into plottable (P, Q) arrays.
+
+    Accepts both the flat ``[v1, v2, ...]`` structure returned by
+    ``for_setpoint_based`` and the nested ``[[v1, ...], [v2, ...]]``
+    structure returned by ``for_setpoint_based_with_directions``.
+
+    Args:
+        p: List indexed by ext_grid, each element either a flat list of
+            P-values or a list of lists (one per refinement pass).
+        q: Corresponding structure for Q values.
+
+    Returns:
+        A tuple ``(pq, pq_tot)`` where *pq* is a list of Nx2 arrays (one per
+        external grid) and *pq_tot* is the element-wise sum of all grids.
+    """
     pq = []
     for i in range(len(p)):
-        p_i = [p_mw for p_list in p[i] for p_mw in p_list]
-        q_i = [q_mw for q_list in q[i] for q_mw in q_list]
+        # Flat list when elements are scalars; nested list otherwise.
+        if p[i] and isinstance(p[i][0], (int, float, np.floating)):
+            p_i = list(p[i])
+            q_i = list(q[i])
+        else:
+            p_i = [v for p_list in p[i] for v in p_list]
+            q_i = [v for q_list in q[i] for v in q_list]
         pq.append(np.array((p_i, q_i)).T)
 
     pq_tot = sum(pq_i for pq_i in pq)
-
     return pq, pq_tot
 
 
 def plot_hull(p, q, ratio=0.1):
+    """Plot the FOR boundary points and their convex / concave hulls.
+
+    Requires *shapely* and *geopandas* (commented-out imports at the top of
+    this module).  Falls back to convex hull if a concave hull cannot be
+    computed.
+
+    Args:
+        p: Nested boundary P list as returned by the sampling functions.
+        q: Corresponding nested boundary Q list.
+        ratio: Concave-hull ratio passed to ``shapely.concave_hull``.  A
+            value of 0 gives a convex hull; 1 gives the tightest fit.
+
+    Returns:
+        A tuple ``(figs, axs)`` – lists of Matplotlib Figure and Axes objects,
+        one entry per external grid plus one combined figure.
+    """
     pq = []
     for i in range(len(p)):
         p_i = [p_mw for p_list in p[i] for p_mw in p_list]
@@ -679,27 +781,13 @@ def plot_hull(p, q, ratio=0.1):
     ]
 
     fig, ax = plt.subplots()
-
-    clr = clrs[5]
-    # ax.plot(pq_tot[:, 0], pq_tot[:, 1], '.', label='Total', color=clr)
-    # try:
-    #     hull = concave_hull(MultiPoint(pq_tot), ratio)
-    # except Exception as e:
-    #     print('Creating convex hull instead of concave hull: ' + str(e))
-    #     hull = convex_hull(MultiPoint(pq_tot))
-    # polygon = gpd.GeoSeries(hull)
-    # polygon.plot(ax=ax, alpha=0.2, color=clr)
-    # polygon.boundary.plot(ax=ax, edgecolor=clr, linewidth=2)
-
-    # alpha_shape = alphashape.alphashape(pq_tot, 0.001)
-    # ax.add_patch(PolygonPatch(alpha_shape, alpha=1, fill=False, edgecolor=clr, linewidth=2, color=clr))
-    # ax.add_patch(PolygonPatch(alpha_shape, alpha=0.2, edgecolor=clr, linewidth=2, color=clr))
     figs = [fig]
     axs = [ax]
+
     for i, points in enumerate(pq):
         fig_i, ax_i = plt.subplots()
-
         clr = clrs[i + 6]
+
         ax.plot(
             points[:, 0],
             points[:, 1],
@@ -709,7 +797,6 @@ def plot_hull(p, q, ratio=0.1):
         )
         ax.legend()
 
-        # plot convex hull for slack alone
         ax_i.plot(
             points[:, 0],
             points[:, 1],
@@ -719,12 +806,12 @@ def plot_hull(p, q, ratio=0.1):
         )
 
         try:
-            hull = concave_hull(MultiPoint(points), ratio)
+            hull = concave_hull(MultiPoint(points), ratio)  # noqa: F821
         except Exception as e:
             print("Creating convex hull instead of concave hull: " + str(e))
-            hull = convex_hull(MultiPoint(points))
+            hull = convex_hull(MultiPoint(points))  # noqa: F821
 
-        polygon = gpd.GeoSeries(hull)
+        polygon = gpd.GeoSeries(hull)  # noqa: F821
         polygon.plot(ax=ax, alpha=0.2, color=clr)
         polygon.boundary.plot(ax=ax, edgecolor=clr, linewidth=2)
 
@@ -734,77 +821,59 @@ def plot_hull(p, q, ratio=0.1):
         ax_i.set_ylabel("Q [MVar]")
         figs.append(fig_i)
         axs.append(ax_i)
-        # hull = ConvexHull(pq[i])
-        # for simplex in hull.simplices:
-        #     plt.plot(points[simplex, 0], points[simplex, 1], color=clr)
-        # plt.legend()
-
-        # alpha_shape = alphashape.alphashape(pq[i], 0.001)
-        # ax.add_patch(PolygonPatch(alpha_shape, alpha=1, fill=False, edgecolor=clr, linewidth=2, color=clr))
-        # ax.add_patch(PolygonPatch(alpha_shape, alpha=0.2, edgecolor=clr, linewidth=2, color=clr))
 
         ax.set_xlabel("P [MW]")
         ax.set_ylabel("Q [MVar]")
 
-    config = set_plt_config()
-    fig.set_size_inches(
-        (config["textbreite"] * 0.8, 0.6 * config["textbreite"])
-    )
-    ax.set_aspect("equal")
-    # plt.legend(bbox_to_anchor=(1.03, 1.0), loc='upper left')
-    # plt.tight_layout()
-
     for axes in axs:
         axes.grid()
         axes.set_aspect("equal")
-        # axes.set_ylim(-240, 415)
-        # axes.set_xlim(-750, 30)
-
-    # axs[0].set_ylim(-700, 1200)
-    # axs[0].set_xlim(-2140, 80)
-
-    # dir = 'C:\\Users\\f.lohse\PycharmProjects\potpourri\potpourri\\results\\for\\sb_hv_grid_with_potential_3MW_230m\\'
-    # for i, figure in enumerate(figs):
-    #     figure.set_size_inches((config['textbreite'] * 0.6, 0.4 * config['textbreite']))
-    #     figure.savefig(dir + 'for_'+ str(i) +'.pdf', format='pdf', bbox_inches='tight')
 
     return figs, axs
 
 
 if __name__ == "__main__":
-    # net = pp.networks.create_cigre_network_mv()
+    # ------------------------------------------------------------------ #
+    # Network setup                                                        #
+    # ------------------------------------------------------------------ #
+    # Note: the __main__ block uses the HV-mixed simbench network which has
+    # three external-grid connection points and includes Wind generators.
+    # The HC_ACOPF hosting-capacity step requires custom columns
+    # ``net.sgen["wind_hc"]`` and ``net.sgen["var_q"]`` that must be added
+    # via ``net_augmentation/prepare_net.py`` before running.
+
     net = sb.get_simbench_net("1-HV-mixed--0-no_sw")
 
     case = "lW"
     factors = net.loadcases.loc[case]
     net.load.p_mw *= factors["pload"]
     net.load.q_mvar *= factors["qload"]
-    net.sgen.scaling[net.sgen.type == "Wind"] = factors["Wind_p"]
-    net.sgen.scaling[net.sgen.type == "PV"] = factors["PV_p"]
-    net.sgen.scaling[
-        (net.sgen.type != "Wind") & (net.sgen.type != "Solar")
+    net.sgen.loc[net.sgen.type == "Wind", "scaling"] = factors["Wind_p"]
+    net.sgen.loc[net.sgen.type == "PV", "scaling"] = factors["PV_p"]
+    net.sgen.loc[
+        (net.sgen.type != "Wind") & (net.sgen.type != "Solar"), "scaling"
     ] = factors["RES_p"]
     net.ext_grid.vm_pu = factors["Slack_vm"]
 
+    # ---- Step 1: Hosting-Capacity OPF to determine wind placement ---- #
     hc = HC_ACOPF(net)
     hc.solve()
     hc.add_OPF(SWmin=10)
     hc.add_tap_changer_linear()
-    hc.solve(solver="mindtpy")
+    hc.solve(solver="neos", neos_opt="bonmin")
 
-    with open("misc/LM_Sans_10/lmsans10-regular.otf", "rb") as f:
-        net_wind = pickle.load(f)
-    net_wind.ext_grid.vm_pu = factors["Slack_vm"]
+    net_hc = hc.net.copy()
 
-    input_hc_net_dir = (
-        "../potpourri/data/windpot/sb_hv_grid_with_potential_3MW_230m.pkl"
-    )
-    #'input_hc_net_dir = sb.get_simbench_net("1-HV-mixed--0-no_sw") #test input
-    with open(input_hc_net_dir, "rb") as f:
-        net_hc = pickle.load(f)
+    # ---- Step 2: Add HC wind generators to a fresh copy of the net ---- #
+    # ``res_sgen.y_wind`` contains the binary HC decision variable written
+    # back by pyo_to_net.  Requires prepare_net.py to have added the
+    # ``wind_hc`` column first.
+    input_hc_net_dir = sb.get_simbench_net("1-HV-mixed--0-no_sw")
+    input_hc_net_dir.ext_grid.vm_pu = factors["Slack_vm"]
     wind_hc_index = net_hc.sgen.index[net_hc.res_sgen.y_wind == 1]
+
     pp.create_sgens(
-        net_wind,
+        net_hc,
         net_hc.sgen.bus[wind_hc_index],
         p_mw=net_hc.sgen.p_mw[wind_hc_index],
         var_q=0,
@@ -812,20 +881,15 @@ if __name__ == "__main__":
         wind_hc=True,
     )
 
+    # ---- Step 3: FOR computation on the wind-augmented network ---- #
     net_wind = copy.deepcopy(net)
-    # create wind generators in original net
-    # wind_hc_index = hc.net.sgen.index[hc.net.res_sgen.y_wind == 1]
-    # pp.create_sgens(net_wind, hc.net.sgen.bus[wind_hc_index], p_mw=hc.net.sgen.p_mw[wind_hc_index], var_q=0,
-    #                 type='Wind', wind_hc=True)
-
     net_wind.sgen["wind_hc"].fillna(False, inplace=True)
 
-    # -- ext grids for
     net_wind.sgen["controllable"] = True
-    net_wind.sgen["controllable"][net_wind.sgen.type == "Wind"] = True
+    net_wind.sgen.loc[net_wind.sgen.type == "Wind", "controllable"] = True
     net_wind.sgen["p_inst_mw"] = net_wind.sgen["p_mw"]
-    net_wind.sgen["var_q"][net_wind.sgen.type == "Wind"] = 1
-    net_wind.sgen["var_q"][net_wind.sgen.wind_hc] = 0
+    net_wind.sgen.loc[net_wind.sgen.type == "Wind", "var_q"] = 1
+    net_wind.sgen.loc[net_wind.sgen.wind_hc, "var_q"] = 0
     net_wind.load["controllable"] = True
 
     acopf = ACOPF(net_wind)
@@ -833,117 +897,3 @@ if __name__ == "__main__":
     acopf.add_tap_changer_linear()
 
     p, q, u, nets = for_setpoint_based_with_directions(acopf, stepsize=40)
-
-    #
-    # # -- node for
-    # net_wind.sgen['controllable'] = False
-    # net_wind.sgen['controllable'][(net_wind.sgen.type == 'Wind') & ~net_wind.sgen.wind_hc] = True
-    # net_wind.sgen['p_inst_mw'] = net_wind.sgen['p_mw']
-    # net_wind.sgen['var_q'][(net_wind.sgen.type == 'Wind') & ~net_wind.sgen.wind_hc] = 1
-    #
-    # hc_node = HC_ACOPF(net_wind)
-    # hc_node.add_OPF()
-    #
-    # hc_node.fix_vars('y', 0)
-    # hc_node.model.obj.deactivate()
-    #
-    # p_nodes = []
-    # q_nodes = []
-    # u_nodes = []
-    # nets_nodes = []
-    #
-    # def _add_setpoint_constraints(model):
-    #     model.p_sp = Param(model.WIND_HC, mutable=True)
-    #
-    #     tol = 0.1
-    #     def p_eg_upper(model, g):
-    #         return (model.psG[g]) <= (model.p_sp[g]) + tol
-    #
-    #     model.p_eg_max = Constraint(model.WIND_HC, rule=p_eg_upper)
-    #
-    #     def p_eg_lower(model, g):
-    #         return (model.psG[g]) >= (model.p_sp[g]) - tol
-    #
-    #     model.p_eg_min = Constraint(model.WIND_HC, rule=p_eg_lower)
-    #
-    #     model.q_sp = Param(model.WIND_HC, mutable=True)
-    #
-    #     def q_eg_upper(model, g):
-    #         return (model.qsG[g]) <= (model.q_sp[g]) + tol
-    #
-    #     model.q_eg_max = Constraint(model.WIND_HC, rule=q_eg_upper)
-    #
-    #     def q_eg_lower(model, g):
-    #         return (model.qsG[g]) >= (model.q_sp[g]) - tol
-    #
-    #     model.q_eg_min = Constraint(model.WIND_HC, rule=q_eg_lower)
-    #
-    #
-    #
-    # _add_setpoint_constraints(hc_node.model)
-    #
-    # for w in hc_node.model.WIND_HC:
-    #     hc_node.model.p_eg_max.deactivate()
-    #     hc_node.model.p_eg_min.deactivate()
-    #     hc_node.model.q_eg_max.deactivate()
-    #     hc_node.model.q_eg_min.deactivate()
-    #     hc_node.model.y[w].fix(1)
-    #
-    #     p, q, u, nets = node_for_setpoint_based_with_directions(hc_node, w, stepsize=60)
-    #     plot_hull(p, q)
-    #
-    #     p_nodes.append(p)
-    #     q_nodes.append(q)
-    #     u_nodes.append(u)
-    #     nets_nodes.append(nets)
-    #
-    #     hc_node.model.y[w].fix(0)
-    #     hc_node.model.psG[w] = 0
-    #     hc_node.model.qsG[w] = 0
-    #
-
-    # p, q = for_setpoint_based(hc_for, n=9)
-#    p, q = run_feasible_operation_region(hc_for)
-
-# p_tot_slack = value(sum(hc.model.pG[g] for g in hc.model.eG))
-# q_tot_slack = value(sum(hc.model.qG[g] for g in hc.model.eG))
-#
-# p_cases = []
-# q_cases = []
-# u_cases = []
-# nets_cases = []
-# for i in ['hL', 'hW', 'hPV', 'lW', 'lPV']:
-#
-#     factors = net.loadcases.loc[i]
-#
-#     net_case = copy.deepcopy(net_wind)
-#
-#     net_case.load.p_mw *= factors['pload']
-#     net_case.load.q_mvar *= factors['qload']
-#     net_case.sgen.p_mw[net_case.sgen.type == 'Wind'] *= factors['Wind_p']
-#     net_case.sgen.p_mw[net_case.sgen.wind_hc] *= factors['Wind_p']
-#     net_case.sgen.p_mw[net_case.sgen.type == 'PV'] *= factors['PV_p']
-#     net_case.sgen.p_mw[(net_case.sgen.type != 'Wind') & (net_case.sgen.type != 'Solar') & (net_case.sgen.wind_hc == False)] *= factors['RES_p']
-#
-#     acopf = ACOPF(net_case)
-#     acopf.add_OPF()
-#
-#     p, q, u, nets = for_setpoint_based_iterative(acopf, stepsize=120)
-#     p_cases.append(p)
-#     q_cases.append(q)
-#     u_cases.append(u)
-#     nets_cases.append(nets)
-#
-# for i in range(len(p_cases)):
-#     plot_hull(p_cases[i], q_cases[i])
-#     plot_qu_res(nets_cases[i])
-#     plot_pq_res(nets_cases[i])
-
-# p, q, u = for_angle_based_sampling(hc_for, n=360)
-#  model = feasible_operation_region(net)
-# fig, ax = plt.subplots()
-# for g in hc_for.model.eG:
-#     ax.plot(p[g], q[g], '.-', label = 'Slack #' + str(g))
-# ax.legend()
-# ax.set_xlabel('P [MW]')
-# ax.set_ylabel('Q [MVAr]')
