@@ -1,6 +1,6 @@
 # Solving Models
 
-Every POTPOURRI model (single-period and multi-period) exposes a `solve()` method that wraps Pyomo's `SolverFactory` and handles result mapping back to the pandapower network.
+Every `potpourri` model (single-period and multi-period) exposes a `solve()` method that wraps Pyomo's `SolverFactory` and handles result mapping back to the pandapower network.
 
 ## Basic usage
 

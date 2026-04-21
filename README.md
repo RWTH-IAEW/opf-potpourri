@@ -1,4 +1,4 @@
-# POTPOURRI
+# potpourri
 
 Multi-**P**eriod **O**p**t**imal **Po**wer Flow for Distrib**u**tion G**r**ids with Sto**r**age Appl**i**cation
 
@@ -6,7 +6,7 @@ Multi-**P**eriod **O**p**t**imal **Po**wer Flow for Distrib**u**tion G**r**ids w
 
 ## Overview
 
-POTPOURRI is a Python library for AC/DC Optimal Power Flow (OPF) in distribution grids, with support for multi-period planning and flexible resources (batteries, EVs, heat pumps, PV, wind). It wraps [Pyomo](https://pyomo.readthedocs.io/) for optimization modelling over [pandapower](https://pandapower.readthedocs.io/) network objects.
+`potpourri` is a Python library for AC/DC Optimal Power Flow (OPF) in distribution grids, with support for multi-period planning and flexible resources (batteries, EVs, heat pumps, PV, wind). It wraps [Pyomo](https://pyomo.readthedocs.io/) for optimization modelling over [pandapower](https://pandapower.readthedocs.io/) network objects.
 
 ---
 
@@ -172,7 +172,7 @@ flake8 .    # lint
 pytest      # run tests
 ```
 
-Validation scripts are in `scripts/`; `scripts/test_classbased.py` compares Pyomo solutions against pandapower power flow results.
+Validation and analysis scripts are in `scripts/`. See the [Scripts documentation](docs/scripts/validation.md) for details.
 
 ---
 

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-POTPOURRI is a Python tool for **multi-period Optimal Power Flow (OPF)** in distribution grids. It wraps [Pyomo](https://pyomo.readthedocs.io/) for optimization modeling over [pandapower](https://pandapower.readthedocs.io/) network objects, supporting AC/DC formulations and flexible resources (batteries, EVs, heat pumps, PV, wind).
+`potpourri` is a Python tool for **multi-period Optimal Power Flow (OPF)** in distribution grids. It wraps [Pyomo](https://pyomo.readthedocs.io/) for optimization modeling over [pandapower](https://pandapower.readthedocs.io/) network objects, supporting AC/DC formulations and flexible resources (batteries, EVs, heat pumps, PV, wind).
 
 ## Setup
 

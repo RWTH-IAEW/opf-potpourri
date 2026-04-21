@@ -1,4 +1,4 @@
-site_name: POTPOURRI
+site_name: potpourri
 site_description: Multi-Period Optimal Power Flow for Distribution Grids with Storage Application
 site_author: Steffen Kortmann, Farah Nasr
 
@@ -14,6 +14,10 @@ nav:
       - Flexible Devices: user-guide/devices.md
       - Solvers: user-guide/solvers.md
       - Logging: user-guide/logging.md
+  - Scripts:
+      - AC Validation: scripts/validation.md
+      - Load-Case OPF: scripts/loadcases.md
+      - Feasible Operation Region: scripts/feasible-operation-region.md
   - API Reference:
       - Single-Period Models: api/models.md
       - Multi-Period Models: api/multi-period.md

@@ -1,6 +1,6 @@
 # Logging
 
-POTPOURRI uses [loguru](https://loguru.readthedocs.io/) for structured logging. Following the library best-practice, **all output is suppressed by default** so that the library never pollutes your application's log stream.
+`potpourri` uses [loguru](https://loguru.readthedocs.io/) for structured logging. Following the library best-practice, **all output is suppressed by default** so that the library never pollutes your application's log stream.
 
 ## Enabling logging
 
@@ -9,7 +9,7 @@ from loguru import logger
 logger.enable("potpourri")
 ```
 
-Call this once at the start of your script. All subsequent POTPOURRI calls will emit log records to loguru's default sink (stderr with colours).
+Call this once at the start of your script. All subsequent `potpourri` calls will emit log records to loguru's default sink (stderr with colours).
 
 ## Log levels
 
