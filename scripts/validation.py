@@ -128,9 +128,10 @@ if __name__ == "__main__":
     for net_name in tqdm(NETS, desc="Comparing networks"):
         net = sb.get_simbench_net(net_name)
 
-        # Solve with POTPOURRI AC model via NEOS cloud solver.
+        # Solve with POTPOURRI AC model via NEOS cloud solver or ipopt.
         ac = AC(net)
-        results = ac.solve(solver="neos")
+        # results = ac.solve(solver="neos")
+        results = ac.solve(solver="ipopt")
         converged = (
             results is not None
             and results.solver.termination_condition.value == "optimal"

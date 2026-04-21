@@ -26,6 +26,9 @@ htmlcov/
 # MkDocs site output
 site/
 
+# Script output
+results/
+
 # Environment files
 .env
 .env.*

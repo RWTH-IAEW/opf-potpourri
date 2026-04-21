@@ -113,7 +113,8 @@ if __name__ == "__main__":
     for g in hc.model.sG:
         print(f"    sgen {g}: {pyo.value(hc.model.QsG[g]):.4f}")
 
-    hc.solve(solver="neos", print_solver_output=True)
+    # hc.solve(solver="neos", print_solver_output=True)
+    hc.solve(solver="ipopt", print_solver_output=True)
 
     print("Pyomo optimised set-points (psG var, qsG var):")
     print("  SGEN P [pu]:")
@@ -158,7 +159,8 @@ if __name__ == "__main__":
         # imposing generator capacity or line loading limits.
         hc = ACOPF(net_case)
         hc.add_voltage_deviation_objective()
-        hc.solve(solver="neos")
+        # hc.solve(solver="neos")
+        hc.solve(solver="ipopt")
 
         hcs.append(copy.deepcopy(hc))
         obj.append(pyo.value(hc.model.obj_v_deviation))

@@ -38,8 +38,8 @@ Energiewirtschaft (IAEW)
 (c) 2023, Steffen Kortmann
 """
 
-from __future__ import division
-
+import os
+import warnings
 import copy
 import math
 
@@ -62,6 +62,11 @@ from pyomo.environ import (
 
 from potpourri.models.ACOPF_base import ACOPF
 from potpourri.models.HC_ACOPF import HC_ACOPF
+
+os.environ["NEOS_EMAIL"] = os.environ.get(
+    "NEOS_EMAIL", "steffen.kortmann@fit.fraunhofer.de"
+)
+warnings.filterwarnings("ignore")
 
 
 def run_feasible_operation_region(opf):
@@ -741,6 +746,74 @@ def get_pq_to_plot(p, q):
     return pq, pq_tot
 
 
+def plot_for(p, q, baseMVA, save_path=None):
+    """Plot FOR boundary samples and filled polygon for every external grid.
+
+    Converts per-unit boundary lists to MW / MVAr, sorts all samples by
+    angle from their centroid to form a closed polygon, and plots one
+    colour per external-grid connection point.
+
+    Args:
+        p: Nested boundary P list (per-unit) from a sampling function.
+        q: Corresponding nested boundary Q list (per-unit).
+        baseMVA: System base MVA used for the p.u. conversion.
+        save_path: File path (string) to save the figure; parent directory
+            is created automatically.  If *None* the figure is not saved.
+
+    Returns:
+        tuple: ``(fig, ax)`` – Matplotlib Figure and Axes objects.
+    """
+    pq, _ = get_pq_to_plot(p, q)
+
+    colors = [
+        "#00549F",
+        "#E30066",
+        "#57AB27",
+        "#F6A800",
+        "#0098A1",
+        "#612158",
+        "#CC071E",
+    ]
+
+    fig, ax = plt.subplots(figsize=(7, 6))
+
+    for i, pts in enumerate(pq):
+        pts_mw = pts * baseMVA
+        clr = colors[i % len(colors)]
+
+        centroid = pts_mw.mean(axis=0)
+        angles = np.arctan2(
+            pts_mw[:, 1] - centroid[1], pts_mw[:, 0] - centroid[0]
+        )
+        order = np.argsort(angles)
+        poly = np.vstack([pts_mw[order], pts_mw[order[0]]])
+
+        ax.fill(poly[:, 0], poly[:, 1], alpha=0.15, color=clr)
+        ax.plot(poly[:, 0], poly[:, 1], "-", color=clr, linewidth=1.5)
+        ax.scatter(
+            pts_mw[:, 0],
+            pts_mw[:, 1],
+            s=20,
+            color=clr,
+            zorder=3,
+            label=f"Ext. grid {i}",
+        )
+
+    ax.set_xlabel("P [MW]")
+    ax.set_ylabel("Q [MVAr]")
+    ax.set_title("Feasible Operation Region")
+    ax.legend()
+    ax.grid(True, linestyle="--", alpha=0.5)
+    ax.set_aspect("equal")
+    fig.tight_layout()
+
+    if save_path is not None:
+        os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+
+    return fig, ax
+
+
 def plot_hull(p, q, ratio=0.1):
     """Plot the FOR boundary points and their convex / concave hulls.
 
@@ -860,7 +933,8 @@ if __name__ == "__main__":
     hc.solve()
     hc.add_OPF(SWmin=10)
     hc.add_tap_changer_linear()
-    hc.solve(solver="neos", neos_opt="bonmin")
+    # hc.solve(solver="neos", neos_opt="bonmin")
+    hc.solve(solver="mindtpy", print_solver_output=True)
 
     net_hc = hc.net.copy()
 
@@ -883,7 +957,8 @@ if __name__ == "__main__":
 
     # ---- Step 3: FOR computation on the wind-augmented network ---- #
     net_wind = copy.deepcopy(net)
-    net_wind.sgen["wind_hc"].fillna(False, inplace=True)
+    wh = net_wind.sgen["wind_hc"]
+    net_wind.sgen["wind_hc"] = wh.where(wh.notna(), False).astype(bool)
 
     net_wind.sgen["controllable"] = True
     net_wind.sgen.loc[net_wind.sgen.type == "Wind", "controllable"] = True
@@ -897,3 +972,10 @@ if __name__ == "__main__":
     acopf.add_tap_changer_linear()
 
     p, q, u, nets = for_setpoint_based_with_directions(acopf, stepsize=40)
+
+    # ---- Step 4: Plot and save the FOR ---- #
+    os.makedirs("results", exist_ok=True)
+    save_path = "results/for_hv_mixed_lw.png"
+    plot_for(p, q, baseMVA=acopf.baseMVA, save_path=save_path)
+    plt.close("all")
+    print(f"FOR plot saved to {save_path}")
