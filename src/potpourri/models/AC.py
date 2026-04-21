@@ -192,8 +192,8 @@ class AC(Basemodel):
         def KCL_real_def(model, b):
             kcl = sum(
                 model.psG[g] for g in model.sG if (g, b) in model.sGbs
-            ) + sum(
-                model.pG[g] for g in model.G if (g, b) in model.Gbs
+            ) + sum(model.pG[g] for g in model.G if (g, b) in model.Gbs) - sum(
+                model.pSTOR[s] for s in model.STOR if model.STOR_bus[s] == b
             ) == sum(
                 model.pD[d] for d in model.D if (b, d) in model.Dbs
             ) + sum(
@@ -216,8 +216,8 @@ class AC(Basemodel):
         def KCL_reactive_def(model, b):
             kcl = sum(
                 model.qsG[g] for g in model.sG if (g, b) in model.sGbs
-            ) + sum(
-                model.qG[g] for g in model.G if (g, b) in model.Gbs
+            ) + sum(model.qG[g] for g in model.G if (g, b) in model.Gbs) + sum(
+                model.qSTOR[s] for s in model.STOR if model.STOR_bus[s] == b
             ) == sum(
                 model.qD[d] for d in model.D if (b, d) in model.Dbs
             ) + sum(
