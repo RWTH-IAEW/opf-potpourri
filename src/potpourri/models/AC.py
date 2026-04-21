@@ -1,5 +1,5 @@
 import pyomo.environ as pyo
-from src.potpourri.models.basemodel import Basemodel
+from potpourri.models.basemodel import Basemodel
 
 
 class AC(Basemodel):
@@ -84,35 +84,45 @@ class AC(Basemodel):
         self.model.qThv = pyo.Var(self.model.TRANSF, domain=pyo.Reals)  # reactive power injected at b onto transformer
         self.model.qTlv = pyo.Var(self.model.TRANSF, domain=pyo.Reals)  # reactive power injected at b' onto transformer
 
-        self.model.v = pyo.Var(self.model.B, domain=pyo.NonNegativeReals, initialize=1.0)  # voltage magnitude at bus b, rad
+        self.model.v = pyo.Var(self.model.B, domain=pyo.NonNegativeReals, initialize=1.0) # voltage magnitude at bus b, rad
 
         self.model.qG = pyo.Var(self.model.G, domain=pyo.Reals)
 
         # --- Kirchoff's current law at each bus b ---
         def KCL_real_def(model, b):
-            kcl = sum(model.psG[g] for g in model.sG if (g, b) in model.sGbs) + \
-                  sum(model.pG[g] for g in model.G if (g, b) in model.Gbs) == \
-                  sum(model.pD[d] for d in model.D if (b, d) in model.Dbs) + \
-                  sum(model.pLfrom[l] for l in model.L if model.A[l, 1] == b) + \
-                  sum(model.pLto[l] for l in model.L if model.A[l, 2] == b) + \
-                  sum(model.pThv[l] for l in model.TRANSF if model.AT[l, 1] == b) + \
-                  sum(model.pTlv[l] for l in model.TRANSF if model.AT[l, 2] == b) + \
-                  sum(model.GB[s] * model.v[b] ** 2 for s in model.SHUNT if
-                      (b, s) in model.SHUNTbs and model.GB[s] != 0)
+            kcl = (
+                    sum(model.psG[g] for g in model.sG if (g, b) in model.sGbs)
+                    + sum(model.pG[g] for g in model.G if (g, b) in model.Gbs)
+                    - sum(model.pSTOR[s] for s in model.STOR if model.STOR_bus[s] == b)
+                    ==
+                    sum(model.pD[d] for d in model.D if (b, d) in model.Dbs)
+                    + sum(model.pLfrom[l] for l in model.L if model.A[l, 1] == b)
+                    + sum(model.pLto[l] for l in model.L if model.A[l, 2] == b)
+                    + sum(model.pThv[l] for l in model.TRANSF if model.AT[l, 1] == b)
+                    + sum(model.pTlv[l] for l in model.TRANSF if model.AT[l, 2] == b)
+                    + sum(model.GB[s] * model.v[b] ** 2
+                          for s in model.SHUNT
+                          if (b, s) in model.SHUNTbs and model.GB[s] != 0)
+            )
+
             if isinstance(kcl, bool):
                 return pyo.Constraint.Skip
             return kcl
 
         def KCL_reactive_def(model, b):
-            kcl = sum(model.qsG[g] for g in model.sG if (g, b) in model.sGbs) + \
-                  sum(model.qG[g] for g in model.G if (g, b) in model.Gbs) == \
-                  sum(model.qD[d] for d in model.D if (b, d) in model.Dbs) + \
-                  sum(model.qLfrom[l] for l in model.L if model.A[l, 1] == b) + \
-                  sum(model.qLto[l] for l in model.L if model.A[l, 2] == b) + \
-                  sum(model.qThv[l] for l in model.TRANSF if model.AT[l, 1] == b) + \
-                  sum(model.qTlv[l] for l in model.TRANSF if model.AT[l, 2] == b) - \
-                  sum(model.BB[s] * model.v[b] ** 2 for s in model.SHUNT if
-                      (b, s) in model.SHUNTbs and model.BB[s] != 0)
+            kcl = (
+                    sum(model.qsG[g] for g in model.sG if (g, b) in model.sGbs)
+                    + sum(model.qG[g] for g in model.G if (g, b) in model.Gbs)
+                    + sum(model.qSTOR[s] for s in model.STOR if model.STOR_bus[s] == b)
+                    ==
+                    sum(model.qD[d] for d in model.D if (b, d) in model.Dbs)
+                    + sum(model.qLfrom[l] for l in model.L if model.A[l, 1] == b)
+                    + sum(model.qLto[l] for l in model.L if model.A[l, 2] == b)
+                    + sum(model.qThv[l] for l in model.TRANSF if model.AT[l, 1] == b)
+                    + sum(model.qTlv[l] for l in model.TRANSF if model.AT[l, 2] == b)
+                    - sum(model.BB[s] * model.v[b] ** 2 for s in model.SHUNT
+                          if (b, s) in model.SHUNTbs and model.BB[s] != 0)
+            )
             if isinstance(kcl, bool):
                 return pyo.Constraint.Skip
             return kcl

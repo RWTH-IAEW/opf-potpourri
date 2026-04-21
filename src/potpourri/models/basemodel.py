@@ -26,10 +26,11 @@ import numpy as np
 import pandas as pd
 import pandapower as pp
 import pyomo.environ as pyo
+import warnings
 
+from potpourri.models.pyo_to_net import pyo_sol_to_net_res
 
-from src.potpourri.models.pyo_to_net import pyo_sol_to_net_res
-
+warnings.filterwarnings('ignore')
 
 class Basemodel:
     """
@@ -58,18 +59,23 @@ class Basemodel:
 
         self.net = copy.deepcopy(net)
         pp.runpp(self.net)
+        #pp.toolbox.create_continuous_bus_index(self.net)
 
         # --- pyo.Sets ---
-        bus_set = self.net._ppc['bus'][:, [0, 1, 7, 8]]
+        bus_set = self.net._ppc['bus'][:len(self.net.bus), [0, 1, 7, 8]]
+        
         bus_set[:, -1] *= pi / 180
         self.bus_data = pd.DataFrame(bus_set[:, 1:], index=bus_set[:, 0].astype(int), columns=['type', 'v_m', 'v_a_rad'])
+        #self.bus_data = (self.bus_data.loc[self.net.bus.index]).set_index(self.net.bus.index)
 
         self.bus_lookup = self.net._pd2ppc_lookups["bus"]
         self.demand_set = self.net.load.index[self.net.load.in_service]
         self.shunt_set = self.net.shunt.index[self.net.shunt.in_service]
+        self.storage_set = self.net.storage.index[self.net.storage.in_service]
 
         self.bus_demand_set = list(zip(self.bus_lookup[self.net.load.bus[self.demand_set].values], self.demand_set))
         self.bus_shunt_set = list(zip(self.bus_lookup[self.net.shunt.bus[self.shunt_set].values], self.shunt_set))
+        self.bus_storage_set = list(zip(self.bus_lookup[self.net.storage.bus[self.storage_set].values], self.storage_set))
 
         # --- pyo.Param Data ---
         self.baseMVA = self.net.sn_mva
@@ -95,9 +101,23 @@ class Basemodel:
             {'p': psg.values, 'in_service': self.net.sgen.in_service.values, 'bus': sgen_bus})
         self.static_generation_data['gen_bus'] = list(enumerate(self.static_generation_data['bus']))
 
+        self.p_ref = (net.sgen.p_mw * net.sgen.scaling) / self.baseMVA
+        self.total = ((net.sgen.p_mw * net.sgen.scaling).sum() + net.storage.p_mw.sum()) / self.baseMVA
+        self.q_ref = net.sgen.q_mvar * net.sgen.scaling / self.baseMVA
+
         # --- line ---
         hv_bus = self.net._ppc['branch'][:, 0].real
         lv_bus = self.net._ppc['branch'][:, 1].real
+
+        ########
+        lookup = np.asarray(self.bus_lookup)  # ensure ndarray
+        from_bus = self.net.line.from_bus.to_numpy()
+        hv_bus[:len(self.net.line)] = lookup[from_bus]
+
+        to_bus = self.net.line.to_bus.to_numpy()
+        lv_bus[:len(self.net.line)] = lookup[to_bus]
+        ########
+
         trafo_start = len(self.net.line.index)
         trafo_end = trafo_start + len(self.net.trafo.index)
 
@@ -107,7 +127,7 @@ class Basemodel:
         line_ind = self.line_data.index[self.line_data.in_service]
         self.bus_line_dict = dict(zip(list(zip(line_ind, [1] * len(line_ind))) + list(
             zip(line_ind, [2] * len(line_ind))), np.concatenate([hv_bus_line[line_ind], lv_bus_line[line_ind]])))
-
+    
         # --- transformer ---
         shift = self.net._ppc['branch'][trafo_start:trafo_end, 9].real * pi / 180
         tap = self.net._ppc['branch'][trafo_start:trafo_end, 8].real
@@ -115,6 +135,7 @@ class Basemodel:
 
         hv_bus_trafo = hv_bus[trafo_start:trafo_end]
         lv_bus_trafo = lv_bus[trafo_start:trafo_end]
+
         trafo_ind = self.trafo_data.index[self.trafo_data.in_service]
         self.bus_trafo_dict = dict(zip(list(zip(trafo_ind, [1] * len(trafo_ind))) + list(
             zip(trafo_ind, [2] * len(trafo_ind))), np.concatenate([hv_bus_trafo[trafo_ind], lv_bus_trafo[trafo_ind]])))
@@ -125,6 +146,9 @@ class Basemodel:
 
         """
         self.model = pyo.ConcreteModel()
+
+        if not self.storage_set.empty:
+            self.add_storage()
 
         # --- pyo.SetS ---
         self.model.B = pyo.Set(initialize=self.bus_data.index)  # buses
@@ -184,7 +208,7 @@ class Basemodel:
 
         # --- Variables ---
         self.model.delta = pyo.Var(self.model.B, domain=pyo.Reals, initialize=0.0,
-                               bounds=(-pi, pi))  # voltage phase angle at bus b, rad
+                               bounds=(-pi, pi)) # voltage phase angle at bus b, rad
         self.model.pD = pyo.Var(self.model.D, domain=pyo.Reals)  # real power demand delivered
         self.model.psG = pyo.Var(self.model.sG, domain=pyo.NonNegativeReals)  # real static generator power
         self.model.pG = pyo.Var(self.model.G, domain=pyo.Reals,
@@ -337,3 +361,120 @@ class Basemodel:
                     component[index] = value
         except AttributeError as err:
             print(err)
+
+    def add_storage(self):
+        if "soc_percent" not in self.net.storage.columns:
+            self.net.storage["soc_percent"] = 50.0
+        else:
+            self.net.storage["soc_percent"] = self.net.storage["soc_percent"].fillna(50.0)
+        self.storage_data = copy.deepcopy(self.net.storage.loc[self.net.storage.in_service])
+        stor_idx = self.storage_data.index.tolist()
+
+        # --- Sets ---
+        self.model.STOR = pyo.Set(initialize=stor_idx)
+
+        # storage-bus mapping
+        stor_bus_ppc = self.bus_lookup[self.storage_data.bus.values]
+        self.storage_data["bus_ppc"] = stor_bus_ppc
+
+        self.model.STOR_bus = pyo.Param(
+            self.model.STOR,
+            initialize=self.storage_data["bus_ppc"].to_dict(),
+            within=pyo.Any
+        )
+        # --- Parameters (convert MW/MWh to per-unit where needed) ---
+        self.model.STOR_Pmax = pyo.Param(
+            self.model.STOR,
+            initialize=((self.storage_data.sn_mva * self.storage_data.scaling) / self.baseMVA).to_dict()
+        )
+
+        self.model.STOR_P0 = pyo.Param(
+            self.model.STOR,
+            initialize=((self.storage_data.p_mw * self.storage_data.scaling) / self.baseMVA).to_dict()
+        )
+        self.model.STOR_Emax = pyo.Param(self.model.STOR, initialize=(self.storage_data.max_e_mwh / self.baseMVA).to_dict())
+
+        self.model.STOR_eff = pyo.Param(self.model.STOR, initialize=(self.storage_data.efficiency_percent).to_dict())
+
+        # Initial SOC
+        self.model.STOR_SOC0 = pyo.Param(self.model.STOR, initialize=(self.storage_data.soc_percent).to_dict())
+
+        self.model.STOR_dt = pyo.Param(within=pyo.NonNegativeReals, initialize=0.25)
+
+        # SOC bounds (fraction of Emax)
+        self.model.STOR_SOCmin = pyo.Param(self.model.STOR, initialize={s: 0 for s in stor_idx})
+
+        self.model.STOR_SOCmax = pyo.Param(self.model.STOR, initialize={s: 1 for s in stor_idx})
+
+        # --- Variables ---
+        self.model.STOR_Pchg = pyo.Var(self.model.STOR, domain=pyo.NonNegativeReals)
+
+        self.model.STOR_Pdis = pyo.Var(self.model.STOR, domain=pyo.NonNegativeReals)
+
+        self.model.STOR_SOC = pyo.Var(self.model.STOR, domain=pyo.NonNegativeReals)
+
+        for s in self.model.STOR:
+            self.model.STOR_Pchg[s].unfix()
+            self.model.STOR_Pdis[s].unfix()
+            self.model.STOR_SOC[s].unfix()
+            #if "controllable" in self.storage_data.columns and not bool(self.storage_data.at[s, "controllable"]):
+            #    self.model.STOR_Pchg[s].fix()
+            #    self.model.STOR_Pdis[s].fix()
+            #    self.model.STOR_SOC[s].fix()
+        # --- Constraints ---
+
+        # Power limits
+        def stor_chg_limit_rule(model, s):
+            return model.STOR_Pchg[s] <= model.STOR_Pmax[s]
+
+        def stor_dis_limit_rule(model, s):
+            return model.STOR_Pdis[s] <= model.STOR_Pmax[s]
+
+        self.model.stor_chg_limit = pyo.Constraint(self.model.STOR, rule=stor_chg_limit_rule)
+        self.model.stor_dis_limit = pyo.Constraint(self.model.STOR, rule=stor_dis_limit_rule)
+
+        # SOC update (single-period energy balance)
+        def stor_soc_update_rule(model, s):
+            return model.STOR_SOC[s] == (
+                    model.STOR_SOC0[s]
+                    + model.STOR_dt * (
+                            model.STOR_eff[s] * model.STOR_Pchg[s]
+                            - model.STOR_Pdis[s] / model.STOR_eff[s]
+                    ) / model.STOR_Emax[s]
+            )
+
+        self.model.stor_soc_update = pyo.Constraint(self.model.STOR, rule=stor_soc_update_rule)
+
+        # SOC bounds
+        def stor_soc_bounds_rule(model, s):
+            return (
+                model.STOR_SOCmin[s],
+                model.STOR_SOC[s],
+                model.STOR_SOCmax[s]
+            )
+
+        self.model.stor_soc_bounds = pyo.Constraint(self.model.STOR, rule=stor_soc_bounds_rule)
+
+        # Prevent simultaneous charge and discharge (convex relaxation)
+        def stor_no_simul_rule(model, s):
+            return model.STOR_Pchg[s] + model.STOR_Pdis[s] <= model.STOR_Pmax[s]
+
+        self.model.stor_no_simul = pyo.Constraint(self.model.STOR, rule=stor_no_simul_rule)
+
+        # Net storage injection
+        def stor_injection_rule(model, s):
+            return model.STOR_Pchg[s] - model.STOR_Pdis[s]
+
+        self.model.pSTOR = pyo.Expression(self.model.STOR, rule=stor_injection_rule)
+
+        self.model.qSTOR = pyo.Var(self.model.STOR, domain=pyo.Reals)
+
+        # Inverter capability (apparent power limit):
+        def stor_inverter_cap_rule(model, s):
+            return model.pSTOR[s] ** 2 + model.qSTOR[s] ** 2 <= model.STOR_Pmax[s] ** 2
+
+        self.model.stor_inverter_cap = pyo.Constraint(self.model.STOR, rule=stor_inverter_cap_rule)
+
+        #self.model.test_force_storage = pyo.Constraint(
+        #    self.model.STOR, rule=lambda m, s: m.STOR_Pdis[s] >= 0.1
+        #)

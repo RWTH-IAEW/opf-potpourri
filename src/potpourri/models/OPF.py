@@ -1,7 +1,7 @@
 import copy
 
 import pyomo.environ as pyo
-from src.potpourri.models.basemodel import Basemodel
+from potpourri.models.basemodel import Basemodel
 import numpy as np
 
 

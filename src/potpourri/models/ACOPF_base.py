@@ -1,7 +1,7 @@
 import pandas as pd
 import pyomo.environ as pyo
-from src.potpourri.models.AC import AC
-from src.potpourri.models.OPF import OPF
+from potpourri.models.AC import AC
+from potpourri.models.OPF import OPF
 import numpy as np
 import logging
 
@@ -30,31 +30,32 @@ class ACOPF(AC, OPF):
         if 'max_q_mvar' in self.net.sgen:
             self.static_generation_data['max_q'] = self.net.sgen.max_q_mvar.fillna(lim_q).values / self.baseMVA
         else:
-            self.static_generation_data['max_q'] = lim_q / self.baseMVA
+            self.static_generation_data['max_q'] = lim_q
 
         if 'min_q_mvar' in self.net.sgen:
             self.static_generation_data['min_q'] = self.net.sgen.min_q_mvar.fillna(-lim_q).values / self.baseMVA
         else:
-            self.static_generation_data['min_q'] = -lim_q / self.baseMVA
+            self.static_generation_data['min_q'] = -lim_q
 
         self.static_generation_wind_var_q()
         self.static_generation_data['type'] = self.net.sgen.type.values
 
     def generation_reactive_power_limits(self):
-        # max_q = np.full(len(self.generation_data), 1e9) / self.baseMVA
-        # min_q = np.full(len(self.generation_data), -1e9) / self.baseMVA
-        #
-        # for element, (f, t) in self.net._gen_order.items():
-        #     if 'max_q_mvar' in self.net[element]:
-        #         max_q[f:t] = self.net[element].max_q_mvar.fillna(1e9) / self.baseMVA
-        #     if 'min_q_mvar' in self.net[element]:
-        #         min_q[f:t] = self.net[element].min_q_mvar.fillna(-1e9) / self.baseMVA
-        #
-        # self.generation_data['max_q'] = max_q
-        # self.generation_data['min_q'] = min_q
+        # default: wide, but in PU
+        max_q = np.full(len(self.generation_data), 1e9) / self.baseMVA
+        min_q = np.full(len(self.generation_data), -1e9) / self.baseMVA
 
-        self.generation_data['max_q'] = self.net.sgen['max_q_mvar']
-        self.generation_data['min_q'] = self.net.sgen['min_q_mvar']
+        # fill from ext_grid/gen tables using pandapower ordering
+        for element, (f, t) in self.net._gen_order.items():
+            if element not in self.net:
+                continue
+            if 'max_q_mvar' in self.net[element]:
+                max_q[f:t] = self.net[element].max_q_mvar.fillna(1e9).values / self.baseMVA
+            if 'min_q_mvar' in self.net[element]:
+                min_q[f:t] = self.net[element].min_q_mvar.fillna(-1e9).values / self.baseMVA
+
+        self.generation_data['max_q'] = max_q
+        self.generation_data['min_q'] = min_q
 
     def get_v_limits(self):
         if 'max_vm_pu' in self.net.bus:
@@ -247,7 +248,12 @@ class ACOPF(AC, OPF):
             return model.QsGmin[g], model.qsG[g], model.QsGmax[g]
 
         self.model.QsG_pyo = pyo.Constraint(self.model.sGc, rule=static_generation_reactive_power_bounds)
+        non_ctrl = [g for g in self.model.sG if g not in set(self.model.sGc)]
+        self.model.sGnc = pyo.Set(within=self.model.sG, initialize=non_ctrl)
 
+        for g in self.model.sGnc:
+            # Fix to the given Q setpoint
+            self.model.qsG[g].fix(self.model.QsG[g])
         # --- reactive generator power limits ---
         def reactive_power_bounds(model, g):
             model.qG[g].unfix()
@@ -269,6 +275,14 @@ class ACOPF(AC, OPF):
             return model.Vmin[b], model.v[b], model.Vmax[b]
 
         self.model.v_pyo = pyo.Constraint(self.model.B, rule=v_bounds)
+
+        fixed_buses = list(self.net.bus.index[self.net.bus.vn_kv == 110.0])
+        self.model.Bfix = pyo.Set(initialize=fixed_buses)
+
+        def fixed_v_rule(model, b):
+            return model.v[b] == float(self.bus_data.loc[b, "v_m"])
+
+        self.model.v_fixed = pyo.Constraint(self.model.Bfix, rule=fixed_v_rule)
 
         # --- wind generation q requirements variant 3---
         def QW_pos(model, w):
@@ -302,6 +316,92 @@ class ACOPF(AC, OPF):
                    sum((model.v[b] - model.v_b0[b]) ** 2 for b in model.b0)
 
         self.model.obj_v_deviation = pyo.Objective(rule=voltage_deviation_objective, sense=pyo.minimize)
+
+    def add_active_change_objective(self):
+
+        for g in self.model.gG:
+            self.model.pG[g].fix(self.model.PG[g])  # back to original dispatch
+        for g in self.model.eG:
+            self.model.pG[g].unfix()
+
+        for g in self.model.eG:
+            self.model.pG[g].unfix()
+
+            pg0 = pyo.value(self.model.PG[g])
+
+        sgen_type = self.net.sgen["type"] if "type" in self.net.sgen else None
+
+        self.net.sgen["p_avail_mw"] = self.net.sgen.p_mw * self.net.sgen.scaling
+
+        # convenience
+        avail_pu = (self.net.sgen["p_avail_mw"] / self.baseMVA).to_dict()
+
+        # define RES set: wind/solar
+        def is_res(g):
+            if sgen_type is None:
+                return False
+            t = str(self.net.sgen.at[g, "type"]).lower()
+            return ("wind" in t) or ("solar" in t) or ("pv" in t)
+
+        RES = [g for g in self.model.sG if is_res(g)]
+
+        # dispatchable sgenerators = controllable and not RES
+        DISPATCH = [g for g in self.model.sG
+                    if ("controllable" in self.net.sgen.columns and bool(self.net.sgen.at[g, "controllable"]))
+                    and g not in RES]
+
+        # non-controllable (fixed) and not RES
+        FIXED = [g for g in self.model.sG if g not in RES and g not in DISPATCH]
+
+        # res can only go down?
+        for g in RES:
+            self.model.psG[g].unfix()
+            self.model.psG[g].setlb(0.0)
+            self.model.psG[g].setub(avail_pu[g])
+
+        for g in DISPATCH:
+            self.model.psG[g].unfix()
+            if "min_p_mw" in self.net.sgen.columns:
+                self.model.psG[g].setlb(float(self.net.sgen.at[g, "min_p_mw"]) *self.net.sgen.at[g, "scaling"] / self.baseMVA)
+            if "max_p_mw" in self.net.sgen.columns:
+                self.model.psG[g].setub(float(self.net.sgen.at[g, "max_p_mw"])*self.net.sgen.at[g, "scaling"]  / self.baseMVA)
+
+        for g in FIXED:
+            self.model.psG[g].fix()
+
+        # loads fixed for redispatch
+        for d in self.model.D:
+            self.model.pD[d].fix()
+
+        self.model.inj_mismatch_pos = pyo.Var(domain=pyo.NonNegativeReals)
+        self.model.inj_mismatch_neg = pyo.Var(domain=pyo.NonNegativeReals)
+
+
+        def active_change_objective(model):
+            #eps_stor = 1e-4  # start here; if it still happens, increase to 1e-3
+            #stor_term = eps_stor * sum(model.STOR_Pchg[s] + model.STOR_Pdis[s] for s in model.STOR)
+            disp_term = sum((model.psG[g] - model.PsG[g]) ** 2 for g in DISPATCH)
+            eps_qg = 1e-6
+            #qg_pen = eps_qg * sum(model.qG[g] ** 2 for g in model.G)
+            qsg_pen = eps_qg * sum(model.qsG[g] ** 2 for g in model.sG)
+            eps_qstor = 1e-6
+            qstor_pen = eps_qstor * sum(model.qSTOR[s] ** 2 for s in model.STOR)
+            penalty = 1e4
+            soft_term = penalty * (model.inj_mismatch_pos + model.inj_mismatch_neg)
+            eps_stor = 1e-4 
+            stor_term = eps_stor * sum(model.STOR_Pchg[s] + model.STOR_Pdis[s] for s in model.STOR)
+
+            return disp_term + soft_term + qstor_pen +  stor_term + qsg_pen
+
+        self.model.obj_loading = pyo.Objective(rule=active_change_objective, sense=pyo.minimize)
+
+        def total_injection_mismatch_rule(model):
+            total_ref = sum(model.PsG[g] for g in model.sG) - sum(model.STOR_P0[s] for s in model.STOR)
+            total_now = sum(model.psG[g] for g in model.sG) -sum(model.pSTOR[s] for s in model.STOR)
+            # total_now - total_ref = pos - neg
+            return (total_now - total_ref) == model.inj_mismatch_pos - model.inj_mismatch_neg
+
+        self.model.total_injection_soft = pyo.Constraint(rule=total_injection_mismatch_rule)
 
     def add_reactive_power_flow_objective(self):
 
