@@ -320,6 +320,7 @@ class Basemodel:
         time_limit=600,
         init_strategy="rNLP",
         neos_opt="ipopt",
+        nlp_solver_args=None,
     ):
         """
         Solves the optimization model using the specified solver.
@@ -337,6 +338,9 @@ class Basemodel:
             time_limit (int): Time limit for the solver in seconds.
             init_strategy (str): Initialization strategy for 'mindtpy'.
             neos_opt (str): Solver to use with NEOS.
+            nlp_solver_args (dict, optional): Extra keyword arguments forwarded
+                to the NLP sub-solver when using 'mindtpy' (e.g.
+                ``{"max_iter": 10000}`` to raise IPOPT's iteration cap).
 
         Raises:
             ValueError: If solver settings are invalid or the solver fails.
@@ -365,6 +369,7 @@ class Basemodel:
                     self.model,
                     mip_solver=mip_solver,
                     nlp_solver="ipopt",
+                    nlp_solver_args=nlp_solver_args or {},
                     tee=print_solver_output,
                     iteration_limit=max_iter,
                     time_limit=time_limit,

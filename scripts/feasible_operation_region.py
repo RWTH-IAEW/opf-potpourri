@@ -45,7 +45,6 @@ import math
 
 import matplotlib.pyplot as plt
 import numpy as np
-import pandapower as pp
 import simbench as sb
 from pyomo.environ import (
     Constraint,
@@ -61,7 +60,6 @@ from pyomo.environ import (
 # import geopandas as gpd
 
 from potpourri.models.ACOPF_base import ACOPF
-from potpourri.models.HC_ACOPF import HC_ACOPF
 
 os.environ["NEOS_EMAIL"] = os.environ.get(
     "NEOS_EMAIL", "steffen.kortmann@fit.fraunhofer.de"
@@ -909,73 +907,34 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------ #
     # Network setup                                                        #
     # ------------------------------------------------------------------ #
-    # Note: the __main__ block uses the HV-mixed simbench network which has
-    # three external-grid connection points and includes Wind generators.
-    # The HC_ACOPF hosting-capacity step requires custom columns
-    # ``net.sgen["wind_hc"]`` and ``net.sgen["var_q"]`` that must be added
-    # via ``net_augmentation/prepare_net.py`` before running.
+    # 1-LV-rural1--0-sw: 15 buses, 1 ext grid, 4 PV sgens.
+    # PV is set controllable so the OPF can curtail active power and vary
+    # reactive power to reach FOR boundary points.
 
-    net = sb.get_simbench_net("1-HV-mixed--0-no_sw")
+    net = sb.get_simbench_net("1-LV-rural1--0-sw")
 
     case = "lW"
     factors = net.loadcases.loc[case]
     net.load.p_mw *= factors["pload"]
     net.load.q_mvar *= factors["qload"]
-    net.sgen.loc[net.sgen.type == "Wind", "scaling"] = factors["Wind_p"]
     net.sgen.loc[net.sgen.type == "PV", "scaling"] = factors["PV_p"]
-    net.sgen.loc[
-        (net.sgen.type != "Wind") & (net.sgen.type != "Solar"), "scaling"
-    ] = factors["RES_p"]
     net.ext_grid.vm_pu = factors["Slack_vm"]
 
-    # ---- Step 1: Hosting-Capacity OPF to determine wind placement ---- #
-    hc = HC_ACOPF(net)
-    hc.solve()
-    hc.add_OPF(SWmin=10)
-    hc.add_tap_changer_linear()
-    # hc.solve(solver="neos", neos_opt="bonmin")
-    hc.solve(solver="mindtpy", print_solver_output=True)
+    # ---- FOR computation on the LV network with controllable PV ---- #
+    net_for = copy.deepcopy(net)
+    net_for.sgen["controllable"] = True
+    net_for.sgen["p_inst_mw"] = net_for.sgen["p_mw"]
+    net_for.load["controllable"] = True
 
-    net_hc = hc.net.copy()
-
-    # ---- Step 2: Add HC wind generators to a fresh copy of the net ---- #
-    # ``res_sgen.y_wind`` contains the binary HC decision variable written
-    # back by pyo_to_net.  Requires prepare_net.py to have added the
-    # ``wind_hc`` column first.
-    input_hc_net_dir = sb.get_simbench_net("1-HV-mixed--0-no_sw")
-    input_hc_net_dir.ext_grid.vm_pu = factors["Slack_vm"]
-    wind_hc_index = net_hc.sgen.index[net_hc.res_sgen.y_wind == 1]
-
-    pp.create_sgens(
-        net_hc,
-        net_hc.sgen.bus[wind_hc_index],
-        p_mw=net_hc.sgen.p_mw[wind_hc_index],
-        var_q=0,
-        type="Wind",
-        wind_hc=True,
-    )
-
-    # ---- Step 3: FOR computation on the wind-augmented network ---- #
-    net_wind = copy.deepcopy(net)
-    wh = net_wind.sgen["wind_hc"]
-    net_wind.sgen["wind_hc"] = wh.where(wh.notna(), False).astype(bool)
-
-    net_wind.sgen["controllable"] = True
-    net_wind.sgen.loc[net_wind.sgen.type == "Wind", "controllable"] = True
-    net_wind.sgen["p_inst_mw"] = net_wind.sgen["p_mw"]
-    net_wind.sgen.loc[net_wind.sgen.type == "Wind", "var_q"] = 1
-    net_wind.sgen.loc[net_wind.sgen.wind_hc, "var_q"] = 0
-    net_wind.load["controllable"] = True
-
-    acopf = ACOPF(net_wind)
+    acopf = ACOPF(net_for)
     acopf.add_OPF()
     acopf.add_tap_changer_linear()
 
     p, q, u, nets = for_setpoint_based_with_directions(acopf, stepsize=40)
 
-    # ---- Step 4: Plot and save the FOR ---- #
+    # ---- Plot and save the FOR ---- #
     os.makedirs("results", exist_ok=True)
-    save_path = "results/for_hv_mixed_lw.png"
+    save_path = "results/for_lv_rural1_lw.png"
     plot_for(p, q, baseMVA=acopf.baseMVA, save_path=save_path)
     plt.close("all")
     print(f"FOR plot saved to {save_path}")
