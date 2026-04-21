@@ -13,7 +13,9 @@ class Sgens_multi_period(Flexibility_multi_period):
     def __init__(self, net, T=None, scenario=None):
         super().__init__(net, T, scenario)
 
-        # TODO: check whether q values are provided in simbench networks
+        # SimBench provides q_mvar profiles for sgens; if absent,
+        # Basemodel_multi_period.calc_reactive_sgen_power() derives them
+        # from the active-power profile and the power-factor argument.
         sgen_bus = self.bus_lookup[self.net.sgen.bus.values]
         self.static_generation_data = {
             "p": self.net.profiles[("sgen", "p_mw")],
@@ -188,7 +190,6 @@ class Sgens_multi_period(Flexibility_multi_period):
         self.static_generation_data["type"] = self.net.sgen.type.values
 
     def get_all_Constraints_acopf(self, model):
-
         # QsG_Constraint
         @model.Constraint(model.sGc, model.T)
         def static_generation_reactive_power_bounds(model, g, t):

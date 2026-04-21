@@ -62,10 +62,8 @@ class Generator_multi_period(Flexibility_multi_period):
     def get_all_acopf(self, model):
         self.get_acopf_parameters(model)
         self.get_all_Constraints_acopf(model)
-        pass
 
     def get_sets(self, model):
-
         # external grids and generators
         model.G = pyo.Set(
             initialize=self.generation_data.index[
@@ -108,8 +106,9 @@ class Generator_multi_period(Flexibility_multi_period):
             model.G, model.T, self.generation_data["min_p"], False
         )
 
-        # generation real power limits multi period,
-        # TODO not necessarily time dependent
+        # PGmax/PGmin are time-indexed via make_to_dict for consistency with
+        # other multi-period parameters, even though the limits are constant
+        # over time for most generators.
         model.PGmax = pyo.Param(
             self.Pgmax_tuple, initialize=self.Pgmax_data_dict
         )
@@ -202,7 +201,6 @@ class Generator_multi_period(Flexibility_multi_period):
         self.generation_data["max_q"] = max_q
         self.generation_data["min_q"] = min_q
 
-    # TODO make non time dependent
     def get_all_Constraints_opf(self, model):
         """Add real-power bound constraints for all generators over all
         time steps."""

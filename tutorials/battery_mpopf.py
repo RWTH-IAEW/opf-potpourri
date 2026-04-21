@@ -1,15 +1,16 @@
 # %% md
 # # Multi-Period OPF with Battery Storage
 #
-# Battery storage can shift energy in time: charge when generation is high or
-# demand is low, discharge when the reverse is true. This tutorial adds
-# `Battery_multi_period` to a 24-hour AC OPF and shows how the batteries affect
-# voltage profiles and line loading over the day.
+# Battery storage shifts energy in time: charge when generation is high or
+# demand is low, discharge when the reverse is true.  This tutorial adds
+# `Battery_multi_period` to a 24-hour AC OPF and shows how the batteries
+# affect voltage profiles and line loading over the day.
 #
 # We will:
 # 1. Solve a 24-hour AC OPF without batteries as a baseline
 # 2. Add battery storage and re-solve
-# 3. Compare voltage deviation and peak line loading between both cases
+# 3. Compare voltage deviation between both cases
+# 4. Demonstrate the new flexible constructor parameters
 
 # %% md
 # ## 1. Imports
@@ -55,27 +56,20 @@ net.ext_grid["min_q_mvar"] = -500.0
 opf_base = ACOPF_multi_period(net, toT=toT, fromT=fromT)
 opf_base.add_OPF()
 opf_base.add_voltage_deviation_objective()
-opf_base.solve(solver="gurobi_direct", print_solver_output=False)
+opf_base.solve(solver="ipopt", print_solver_output=False)
 
-# Collect voltage deviation and max line loading across all time steps
-v_dev_base = []
-loading_base = []
-baseMVA = opf_base.model.baseMVA
-
-for t in opf_base.model.T:
-    v_dev_base.append(
-        sum(
-            (pe.value(opf_base.model.v[b, t]) - 1.0) ** 2
-            for b in opf_base.model.B
-        )
+v_dev_base = [
+    sum(
+        (pe.value(opf_base.model.v[b, t]) - 1.0) ** 2 for b in opf_base.model.B
     )
-
+    for t in opf_base.model.T
+]
 print(f"Baseline  |  total Σ(v-1)²: {sum(v_dev_base):.4f}")
 
 # %% md
-# ## 4. With battery storage
+# ## 4. With battery storage — scenario-based placement
 #
-# `Battery_multi_period` places batteries randomly at a percentage of buses
+# `Battery_multi_period` places batteries randomly at a fraction of buses
 # controlled by the `scenario` argument:
 #
 # | scenario | penetration |
@@ -85,8 +79,7 @@ print(f"Baseline  |  total Σ(v-1)²: {sum(v_dev_base):.4f}")
 # | 2        | 9.9 %       |
 # | 3        | 10.6 %      |
 #
-# We use scenario=1 (≈ 8% of buses) and pass `T` as the number of time steps
-# so the battery object can build its internal time range.
+# We use `scenario=1` (≈ 8 % of buses).
 
 # %%
 opf_bat = ACOPF_multi_period(net, toT=toT, fromT=fromT)
@@ -102,17 +95,57 @@ v_dev_bat = [
     sum((pe.value(opf_bat.model.v[b, t]) - 1.0) ** 2 for b in opf_bat.model.B)
     for t in opf_bat.model.T
 ]
-
 print(f"With batteries  |  total Σ(v-1)²: {sum(v_dev_bat):.4f}")
 improvement = (sum(v_dev_base) - sum(v_dev_bat)) / sum(v_dev_base) * 100
-print(f"Voltage deviation reduction: {improvement:.1f}%")
+print(f"Voltage deviation reduction: {improvement:.1f} %")
 
 # %% md
-# ## 5. Battery SOC profiles
+# ## 5. Explicit constructor parameters
 #
-# Inspect the state-of-charge trajectory for each battery over the day.
+# Instead of a scenario, every parameter can be set directly.  This is
+# useful when sizing batteries for a specific grid or study:
+#
+# | parameter          | meaning                                         |
+# |--------------------|-------------------------------------------------|
+# | `penetration`      | % of non-slack buses to equip                   |
+# | `power_pu`         | symmetric charge/discharge limit (p.u.)         |
+# | `capacity_pu_h`    | energy capacity (p.u. power × hours)            |
+# | `efficiency`       | one-way charge/discharge efficiency (0–1)       |
+# | `soc_min`          | minimum state of charge                         |
+# | `initial_soc_fraction` | SOC at t=0 as fraction of `soc_max`         |
+#
+# Convert from physical units: `power_pu = power_MW / net.sn_mva`
 
 # %%
+baseMVA = net.sn_mva
+
+opf_custom = ACOPF_multi_period(net, toT=toT, fromT=fromT)
+battery_custom = Battery_multi_period(
+    opf_custom.net,
+    T=toT - fromT,
+    penetration=20.0,  # 20 % of non-slack buses
+    power_pu=0.012 / baseMVA,  # 12 kW charge/discharge limit
+    capacity_pu_h=0.030 / baseMVA,  # 30 kWh capacity
+    efficiency=0.95,
+    soc_min=0.1,
+    initial_soc_fraction=0.4,
+)
+battery_custom.get_all(opf_custom.model)
+print(
+    f"Custom battery: {len(battery_custom.random_indexes)} batteries placed, "
+    f"power={battery_custom.bat_power:.4f} p.u., "
+    f"cap={battery_custom.bat_cap:.4f} p.u.·h, "
+    f"η={battery_custom.bat_efficiency}"
+)
+
+# %% md
+# ## 6. Battery SOC profiles
+#
+# Inspect the state-of-charge trajectory for the scenario=1 case.
+
+# %%
+baseMVA = opf_bat.model.baseMVA
+
 print("\nBattery SOC profiles (every 4 time steps = 1 hour):")
 print(f"{'time':>6}", end="")
 for b in opf_bat.model.BAT:
@@ -128,9 +161,9 @@ for t in list(opf_bat.model.T)[::4]:  # every hour
     print()
 
 # %% md
-# ## 6. Battery power dispatch
+# ## 7. Battery power dispatch
 #
-# Positive BAT_P = charging (consuming grid power), negative = discharging.
+# Positive `BAT_P` = charging (consuming grid power), negative = discharging.
 
 # %%
 print("\nBattery power (MW) — first battery (bat 0), every hour:")
@@ -149,8 +182,8 @@ for t in list(opf_bat.model.T)[::4]:
 # %% md
 # ## Conclusion
 #
-# Adding battery storage allowed the multi-period OPF to shift charging to
-# periods of low demand or high PV generation, reducing the total voltage
-# deviation across the day. The SOC profile confirms the expected charge-
-# during-day / discharge-in-evening behaviour typical of residential PV+battery
-# systems.
+# The refactored `Battery_multi_period` accepts explicit parameters for every
+# physical property of the battery (power limit, capacity, efficiency, SOC
+# bounds, initial SOC), in addition to the scenario-based shorthand.  The
+# `penetration=` keyword bypasses the fixed scenario lookup entirely, enabling
+# sensitivity studies over battery sizing and deployment density.

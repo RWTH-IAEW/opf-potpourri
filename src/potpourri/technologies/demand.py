@@ -125,7 +125,6 @@ class Demand_multi_period(Flexibility_multi_period):
             return model.QDmin[(d, t)], model.qD[(d, t)], model.QDmax[(d, t)]
 
     def get_demand_real_power_data(self, model, max_p_mw=None, min_p_mw=None):
-
         if "controllable" not in self.net.load:
             self.demand_controllable_set = (
                 None  # create empty Set if no controllable load exist

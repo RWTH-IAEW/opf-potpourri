@@ -8,25 +8,87 @@ from loguru import logger
 from potpourri.technologies.sgens import Sgens_multi_period
 
 
-# TODO: check if properly made multiperiod
+# ---------------------------------------------------------------------------
+# VDE-AR-N 4105 / BDEW grid-code Q-curve constants (medium-voltage, 110 kV)
+#
+# Voltage operating points [p.u. on 110 kV base]:
+#   V1 = 96/110,  V2 = 103/110,  V3 = 120/110,  V4 = 127/110
+#
+# Q/P limits at V1 and V3 for three operating variants:
+#   variant 0: Q/P_max = 0.48 @ V1,  Q/P_max = 0.33 @ V2,
+#             Q/P_min = -0.41 @ V1
+#   variant 1: Q/P_max = 0.41 @ V1,  etc.
+#   variant 2: Q/P_max = 0.33 @ V1,  etc.
+# ---------------------------------------------------------------------------
+
+# Normalised voltage points [p.u.]: [[V1, V2], [V3, V4]]
+_VQU_V_POINTS = np.array([[96, 103], [120, 127]]) / 110.0
+
+# Q/P table: rows = voltage level (low, high), cols = variant (0, 1, 2)
+_VQU_Q_MAX = np.array([[0.48, 0.41, 0.33], [-0.23, -0.33, -0.41]])
+
+# Q/P boundaries at the P-axis breakpoints (0.1 Pn and 0.2 Pn)
+_QP_P_BREAK_HIGH = 0.1  # upper P/Pn at which Q/P characteristic changes
+_QP_P_BREAK_LOW = 0.2  # lower P/Pn at which Q/P characteristic changes (abs)
+
+# Default Q/P ratio bounds for the simplified HC grid-code check
+_QP_HC_MAX = 0.48  # maximum Q/P (capacitive) – variant 0 at low voltage
+_QP_HC_MIN = -0.41  # minimum Q/P (inductive) – variant 0 at low voltage
+
+
 class Windpower_multi_period(Sgens_multi_period):
     """Multi-period wind generator device module, extending sgen with
-    Q-control and HC support."""
+    Q-control and hosting-capacity (HC) support.
 
-    def __init__(self, net, T=None, scenario=None):
+    The Q-control constraints implement the VDE-AR-N 4105 / BDEW grid-code
+    voltage-reactive power characteristic for medium-voltage wind generators.
+
+    Args:
+        net: pandapower network.  If ``net.bus`` contains a ``windpot_p_mw``
+            column, it is used as the active-power upper bound for HC
+            generators.
+        T: Number of time steps.
+        scenario: Unused for wind (no penetration scenario); reserved for
+            interface compatibility.
+        sw_max_mva: Default apparent-power upper limit per HC wind generator
+            (MVA).  Can be overridden per network via
+            ``_calc_wind_opf_parameters``.
+        sw_min_mva: Minimum apparent power for an *active* HC wind generator
+            (MVA).  A generator with ``y=1`` must carry at least this much
+            apparent power.
+        qp_max: Maximum Q/P ratio (capacitive, positive) for the simplified
+            HC grid-code Q-P constraint.  Default: 0.48 (VDE-AR-N 4105,
+            variant 0).
+        qp_min: Minimum Q/P ratio (inductive, negative) for the simplified
+            HC grid-code Q-P constraint.  Default: -0.41 (VDE-AR-N 4105,
+            variant 0).
+    """
+
+    def __init__(
+        self,
+        net,
+        T=None,
+        scenario=None,
+        *,
+        sw_max_mva: float = 10_000.0,
+        sw_min_mva: float = 0.0,
+        qp_max: float = _QP_HC_MAX,
+        qp_min: float = _QP_HC_MIN,
+    ):
         super().__init__(net, T, scenario)
-        # taken from HC_ACOPF, formerly used in _calc_opf_parameters
+        self._sw_max_mva = sw_max_mva
+        self._sw_min_mva = sw_min_mva
+        self.qp_max = qp_max
+        self.qp_min = qp_min
+
         if "windpot_p_mw" in net.bus:
             self.static_generation_data["windpot"] = net.bus.windpot_p_mw[
                 net.sgen.bus.values
             ].values
-            # taken from ACOPF_base, formerly used in
-            # get static_generation_reactive_power_limits()
             self.static_generation_data["type"] = net.sgen.type.values
 
     def get_all(self, model):
-        """No-op placeholder; wind generators are initialised via
-        get_all_opf."""
+        """No-op: wind generators are initialised via get_all_opf."""
 
     def get_all_opf(self, model):
         """Attach OPF sets and parameters for controllable wind generators."""
@@ -34,9 +96,7 @@ class Windpower_multi_period(Sgens_multi_period):
         self.get_opf_parameters(model)
 
     def get_opf_sets(self, model):
-        """Define WIND_HC, WIND, and WINDc sets for HC and Q-control
-        formulations."""
-        # generators for hc calculation
+        """Define WIND_HC, WIND, and WINDc sets."""
         model.WIND_HC = pyo.Set(
             within=model.sG,
             initialize=self.static_generation_data.index[
@@ -44,7 +104,6 @@ class Windpower_multi_period(Sgens_multi_period):
                 & self.static_generation_data.in_service
             ],
         )
-        # all wind generators
         model.WIND = model.WIND_HC | pyo.Set(
             within=model.sG,
             initialize=self.static_generation_data.index[
@@ -52,7 +111,6 @@ class Windpower_multi_period(Sgens_multi_period):
                 & self.static_generation_data.in_service
             ],
         )
-        # controllable wind generators, not for hc calculation
         model.WINDc = (
             model.WIND
             & model.sGc
@@ -64,9 +122,27 @@ class Windpower_multi_period(Sgens_multi_period):
         )
         return True
 
-    def _calc_wind_opf_parameters(self, model, SWmax=10000, SWmin=0):
-        """Compute SWmax/SWmin limits and Q(U) slope parameters for HC wind
-        generators."""
+    def _calc_wind_opf_parameters(
+        self,
+        model,
+        sw_max_mva: float | None = None,
+        sw_min_mva: float | None = None,
+    ):
+        """Compute SWmax/SWmin apparent-power limits and Q(U) slope
+        parameters for HC wind generators.
+
+        Args:
+            model: Pyomo model (requires ``model.WIND_HC`` and ``model.T``).
+            sw_max_mva: Override the instance-level ``sw_max_mva`` for this
+                call.  Defaults to the value passed at construction.
+            sw_min_mva: Override the instance-level ``sw_min_mva`` for this
+                call.  Defaults to the value passed at construction.
+        """
+        if sw_max_mva is None:
+            sw_max_mva = self._sw_max_mva
+        if sw_min_mva is None:
+            sw_min_mva = self._sw_min_mva
+
         if "windpot_p_mw" in self.net.bus:
             self.static_generation_data["windpot"] = self.net.bus.windpot_p_mw[
                 self.net.sgen.bus.values
@@ -75,19 +151,27 @@ class Windpower_multi_period(Sgens_multi_period):
         wind_hc_set = np.arange(len(self.net.sgen))[
             self.net.sgen.wind_hc & self.net.sgen.in_service
         ]
-        self.SWmax_data = pd.Series(SWmax / self.baseMVA, wind_hc_set)
+        self.SWmax_data = pd.Series(sw_max_mva / self.baseMVA, wind_hc_set)
         self.SWmax_data_dict, self.SWmax_tuple = self.make_to_dict(
             model.WIND_HC, model.T, self.SWmax_data
         )
-        self.SWmin_data = pd.Series(SWmin / self.baseMVA, wind_hc_set)
+        self.SWmin_data = pd.Series(sw_min_mva / self.baseMVA, wind_hc_set)
         self.SWmin_data_dict, self.SWmin_tuple = self.make_to_dict(
             model.WIND_HC, model.T, self.SWmin_data
         )
 
-        self.m_qu_max = (0.48 + 0.23) / (96 - 103) * 110  # Variante 1
-        self.qu_max = -self.m_qu_max * 120 / 110 + 0.48
-        self.m_qu_min = (0.33 + 0.41) / (96 - 103) * 110  # Variante 3
-        self.qu_min = -self.m_qu_min * 96 / 110 + 0.33
+        # Q(U) slopes from VDE-AR-N 4105 grid-code characteristic (variant 1)
+        # Slope from low-voltage to high-voltage point; intercepts at V3 and V1
+        self.m_qu_max = (
+            (_QP_HC_MAX + abs(_VQU_Q_MAX[1, 0]))
+            / (_VQU_V_POINTS[0, 0] - _VQU_V_POINTS[1, 0])
+            * 1.0  # already normalised
+        )
+        self.qu_max = -self.m_qu_max * _VQU_V_POINTS[1, 0] + _QP_HC_MAX
+        self.m_qu_min = (abs(_VQU_Q_MAX[0, 2]) + abs(_VQU_Q_MAX[1, 2])) / (
+            _VQU_V_POINTS[0, 0] - _VQU_V_POINTS[1, 0]
+        )
+        self.qu_min = -self.m_qu_min * _VQU_V_POINTS[0, 0] + _VQU_Q_MAX[0, 2]
         return True
 
     def get_hc_acopf_parameters(self, model, net):
@@ -111,7 +195,7 @@ class Windpower_multi_period(Sgens_multi_period):
         return True
 
     def get_hc_acopf_variables(self, model):
-        """Attach binary HC variable y for each wind generator over time."""
+        """Attach binary HC placement variable y for each wind generator."""
         model.y = pyo.Var(
             self.Windpot_tuple, within=pyo.Binary, initialize=1.0
         )
@@ -133,17 +217,24 @@ class Windpower_multi_period(Sgens_multi_period):
         return True
 
     def static_generation_wind_var_q(self, net):
-        """Compute Q(P) and Q(U) characteristic slopes and populate
-        static_generation_data limits."""
-        x = np.array([[96, 103], [120, 127]]) / 110
-        y = np.array([[0.48, 0.41, 0.33], [-0.23, -0.33, -0.41]])
+        """Compute Q(P) and Q(U) characteristic slopes from VDE-AR-N 4105
+        and populate ``static_generation_data`` Q limits.
+
+        The characteristic is parameterised by three operating variants
+        (``var_q`` column in ``net.sgen``).  Each variant selects a different
+        Q/P intercept from the ``_VQU_Q_MAX`` table.
+        """
+        x = _VQU_V_POINTS  # shape (2, 2): [[V1, V2], [V3, V4]]
+        y = _VQU_Q_MAX  # shape (2, 3): rows = voltage level, cols = variant
+
         m = (y[1] - y[0]) / (x[0, 1] - x[0, 0])
         b = np.array([y[0] - m * x[i, 0] for i in range(len(x))]).T
 
-        m_qp_max = (0.1 - y[0]) / (0.1 - 0.2)
-        m_qp_min = (-0.1 - y[1]) / (0.1 - 0.2)
-        b_qp_max = 0.1 - m_qp_max * 0.1
-        b_qp_min = -0.1 - m_qp_min * 0.1
+        p_range = _QP_P_BREAK_HIGH - _QP_P_BREAK_LOW
+        m_qp_max = (_QP_P_BREAK_HIGH - y[0]) / p_range
+        m_qp_min = (-_QP_P_BREAK_HIGH - y[1]) / p_range
+        b_qp_max = _QP_P_BREAK_HIGH - m_qp_max * _QP_P_BREAK_HIGH
+        b_qp_min = -_QP_P_BREAK_HIGH - m_qp_min * _QP_P_BREAK_HIGH
 
         self.q_limit_parameter = pd.DataFrame(
             {
@@ -189,7 +280,7 @@ class Windpower_multi_period(Sgens_multi_period):
                 sgens_var_q
             ]
             self.static_generation_data["min_p"][sgens_var_q] = (
-                p_inst[sgens_var_q] * 0.1
+                p_inst[sgens_var_q] * _QP_P_BREAK_HIGH
             )
 
         else:
@@ -204,7 +295,7 @@ class Windpower_multi_period(Sgens_multi_period):
             self.static_generation_data["wind_hc"] = False
 
     def get_objective(self, model):
-        """Add a wind maximisation objective that subtracts line losses."""
+        """Add a wind-maximisation objective that subtracts line losses."""
 
         def obj_wind_loss_rule(model):
             return (
@@ -281,14 +372,14 @@ class Windpower_multi_period(Sgens_multi_period):
                 >= model.SWmin[w] ** 2 * model.y[w]
             )
 
-        # --- QU Variante 1 ---
+        # Simplified HC Q-P bounds (VDE-AR-N 4105, variant 0)
         @model.Constraint(model.WIND_HC)
         def QW_min(model, w):
-            return model.qsG[w] >= -0.41 * model.psG[w]
+            return model.qsG[w] >= self.qp_min * model.psG[w]
 
         @model.Constraint(model.WIND_HC)
         def QW_max(model, w):
-            return model.qsG[w] <= 0.48 * model.psG[w]
+            return model.qsG[w] <= self.qp_max * model.psG[w]
 
         @model.Constraint(model.WIND_HC)
         def QU_min_hc(model, w):
@@ -317,12 +408,11 @@ class Windpower_multi_period(Sgens_multi_period):
                 return model.psG[w] <= model.pWmax[w]
 
     def unfix_variables(self, model):
-        """Unfix real and reactive power variables for all HC wind
-        generators."""
+        """Unfix real and reactive power for all HC wind generators."""
         for w in model.WIND_HC:
             model.psG[w].unfix()
             model.qsG[w].unfix()
 
     def get_all_acopf(self, model):
-        """No-op placeholder; required by the multi-period mix-in interface."""
-        pass
+        """No additional ACOPF components needed for wind (called via
+        get_all_opf)."""

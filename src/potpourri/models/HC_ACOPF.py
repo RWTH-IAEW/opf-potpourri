@@ -9,6 +9,17 @@ import pyomo.environ as pyo
 from potpourri.models.ACOPF_base import ACOPF
 import pandapower as pp
 
+# ---------------------------------------------------------------------------
+# VDE-AR-N 4105 / BDEW grid-code Q-curve constants (110 kV, variant 0/1)
+# Shared with technologies.windpower; kept here to avoid a circular import.
+# ---------------------------------------------------------------------------
+_QU_V1 = 96.0 / 110.0  # lower voltage point (p.u.)
+_QU_V3 = 120.0 / 110.0  # upper voltage point (p.u.)
+_QU_Q_MAX_V1 = 0.48  # Q/P_n  (capacitive) at V1
+_QU_Q_MIN_V3 = -0.23  # Q/P_n  (inductive) at V3
+_QU_Q_MIN_V1 = 0.33  # Q/P_n boundary for variant 3 at V1
+_QU_Q_MAX_V3 = -0.41  # Q/P_n boundary for variant 3 at V3
+
 
 class HC_ACOPF(ACOPF):
     """Hosting Capacity AC OPF for wind generation integration studies.
@@ -35,16 +46,25 @@ class HC_ACOPF(ACOPF):
 
         super().__init__(net)
 
-    def _calc_opf_parameters(self, SWmax=10000, SWmin=0):
+    def _calc_opf_parameters(
+        self,
+        SWmax: float = 10_000.0,
+        SWmin: float = 0.0,
+        qp_max: float = _QU_Q_MAX_V1,
+        qp_min: float = _QU_Q_MAX_V3,
+    ):
         """Compute HC-OPF limit data from the network.
 
-        Extends ACOPF._calc_opf_parameters() with apparent power bounds
-        SWmax and SWmin for WIND_HC generators, and Q-U characteristic slopes
-        for grid code variant 1.
+        Extends ACOPF._calc_opf_parameters() with apparent-power bounds and
+        Q-curve slopes for HC wind generators (VDE-AR-N 4105 grid code).
 
         Args:
             SWmax: Maximum apparent power per wind generator (MVA).
             SWmin: Minimum apparent power per active wind generator (MVA).
+            qp_max: Maximum Q/P ratio (capacitive) for the simplified HC
+                Q-P constraint.  Default: 0.48 (grid-code variant 0).
+            qp_min: Minimum Q/P ratio (inductive) for the simplified HC
+                Q-P constraint.  Default: -0.41 (grid-code variant 0).
         """
         super()._calc_opf_parameters()
 
@@ -59,10 +79,18 @@ class HC_ACOPF(ACOPF):
         self.SWmax_data = pd.Series(SWmax / self.baseMVA, wind_hc_set)
         self.SWmin_data = pd.Series(SWmin / self.baseMVA, wind_hc_set)
 
-        self.m_qu_max = (0.48 + 0.23) / (96 - 103) * 110  # pyo.Variante 1
-        self.qu_max = -self.m_qu_max * 120 / 110 + 0.48
-        self.m_qu_min = (0.33 + 0.41) / (96 - 103) * 110  # pyo.Variante 3
-        self.qu_min = -self.m_qu_min * 96 / 110 + 0.33
+        self.qp_max = qp_max
+        self.qp_min = qp_min
+
+        # Q(U) slopes derived from VDE-AR-N 4105 grid-code characteristic
+        self.m_qu_max = (_QU_Q_MAX_V1 + abs(_QU_Q_MIN_V3)) / (
+            _QU_V1 - _QU_V3
+        )  # variant 1
+        self.qu_max = -self.m_qu_max * _QU_V3 + _QU_Q_MAX_V1
+        self.m_qu_min = (_QU_Q_MIN_V1 + abs(_QU_Q_MAX_V3)) / (
+            _QU_V1 - _QU_V3
+        )  # variant 3
+        self.qu_min = -self.m_qu_min * _QU_V1 + _QU_Q_MIN_V1
 
     def add_OPF(self, **kwargs):
         """Attach HC-OPF variables and constraints to self.model.
@@ -139,12 +167,12 @@ class HC_ACOPF(ACOPF):
             self.model.psG[w].unfix()
             self.model.qsG[w].unfix()
 
-        # --- QU pyo.Variante 1 ---
+        # HC Q-P bounds (VDE-AR-N 4105; configurable via qp_min / qp_max)
         def QW_min(model, w):
-            return model.qsG[w] >= -0.41 * model.psG[w]
+            return model.qsG[w] >= self.qp_min * model.psG[w]
 
         def QW_max(model, w):
-            return model.qsG[w] <= 0.48 * model.psG[w]
+            return model.qsG[w] <= self.qp_max * model.psG[w]
 
         self.model.QW_min_constraint = pyo.Constraint(
             self.model.WIND_HC, rule=QW_min

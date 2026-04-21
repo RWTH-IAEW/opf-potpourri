@@ -1,5 +1,5 @@
-"""Heat pump mix-in: attaches heat pump storage pyo.Sets, pyo.Parameters,
-variables, and constraints to a multi-period model."""
+"""Heat pump mix-in: attaches heat pump sets, parameters, variables, and
+constraints to a multi-period model."""
 
 import numpy as np
 import pyomo.environ as pyo
@@ -7,23 +7,98 @@ from potpourri.technologies.flexibility import Flexibility_multi_period
 
 
 class Heatpump_multi_period(Flexibility_multi_period):
-    """Multi-period heat pump device module with thermal building model and
-    scenario-based penetration."""
+    """Multi-period heat pump device module with thermal building model.
 
-    def __init__(self, net, T=None, scenario=None):
+    Models the electro-thermal dynamics of a building heated by a heat pump:
+    each heat pump consumes electrical power ``hp_p`` and raises the indoor
+    temperature according to a first-order thermal model.  Heat loss is
+    proportional to the load profile.
+
+    Args:
+        net: pandapower network with simbench profiles.
+        T: Number of time steps (must match the model's time horizon).
+        scenario: Predefined penetration scenario 0–3.  Ignored when
+            *penetration* is supplied explicitly.
+
+            =========  =================
+            scenario   % of non-slack buses
+            =========  =================
+            0          6.3 %
+            1          26.4 %
+            2          44.6 %
+            3          59.9 %
+            =========  =================
+
+        penetration: Percentage of non-slack buses that receive a heat pump
+            (0–100).  Overrides *scenario* when given.
+        power_max_pu: Maximum electrical input power in per-unit on the
+            system base ``net.sn_mva``.
+        cop: Coefficient of performance (heat output / electrical input).
+            Becomes a Pyomo parameter ``HP_CoP`` indexed over the HP set,
+            so it can be updated after model construction.
+        temp_max_c: Upper indoor temperature bound in °C (or K offset).
+        temp_min_c: Lower indoor temperature bound in °C (or K offset).
+        avg_house_size_m3: Average house volume in m³ for the thermal capacity
+            calculation.
+        wall_thickness_m: Wall thickness in m used for heat-loss scaling.
+        qloss_max: Scaling target for heat loss — the maximum heat-loss value
+            (in p.u. power) that is mapped to the peak electrical load.
+
+    The thermal capacity of the building is derived from the supplied house
+    geometry and material constants.  To override the calculated value, set
+    ``self.heat_cap`` after construction but before calling ``get_all``.
+
+    Example::
+
+        hp = Heatpump_multi_period(
+            net, T=96, scenario=1,
+            cop=3.5,
+            temp_max_c=22,
+            temp_min_c=18,
+        )
+        hp.get_all(model)
+    """
+
+    SCENARIO_PENETRATION: dict[int, float] = {
+        0: 6.3,
+        1: 26.4,
+        2: 44.6,
+        3: 59.9,
+    }
+
+    # Physical constants for the default building thermal model
+    _AIR_DENSITY_KG_M3: float = 1.2
+    _AIR_SPECIFIC_HEAT_J_KGK: float = 1005.0
+    _CONCRETE_DENSITY_KG_M3: float = 2400.0
+    _CONCRETE_SPECIFIC_HEAT_KJ_KGK: float = 0.84
+
+    def __init__(
+        self,
+        net,
+        T=None,
+        scenario=None,
+        *,
+        penetration: float | None = None,
+        power_max_pu: float = 0.005,
+        cop: float = 4.0,
+        temp_max_c: float = 20.0,
+        temp_min_c: float = 15.0,
+        avg_house_size_m3: float = 500.0,
+        wall_thickness_m: float = 0.2,
+        qloss_max: float = 0.01,
+    ):
         super().__init__(net, T, scenario)
 
-        if scenario == 0:
-            self.hp_percentage = 6.3
-        elif scenario == 1:
-            self.hp_percentage = 26.4
-        elif scenario == 2:
-            self.hp_percentage = 44.6
-        elif scenario == 3:
-            self.hp_percentage = 59.9
+        if penetration is not None:
+            self.hp_percentage = float(penetration)
+        elif scenario is not None:
+            self.hp_percentage = self.SCENARIO_PENETRATION[scenario]
+        else:
+            raise ValueError(
+                "Provide either scenario (0–3) or an explicit penetration "
+                "percentage via the penetration= argument."
+            )
 
-        # randomly select buses for heat pump placement based on the
-        # percentage of scenario
         num_indexes = round(
             len(self.buses_excl_extGrids) * self.hp_percentage / 100
         )
@@ -31,81 +106,79 @@ class Heatpump_multi_period(Flexibility_multi_period):
             self.buses_excl_extGrids, num_indexes, replace=False
         )
 
-        # --- house calculation ---
-        self.temp_max = 20  # average max temperature in K
-        self.temp_min = 15  # average min temperature in K
-        self.temp_outside = 10  # average outside temperature in K
-        self.avg_house_size = 500  # average house size in m^3
-        self.air_density = 1.2  # air density in kg/m^3
-        self.air_capacity = 1.005  # air capacity in J/(kg*K)
-        self.concrete_density = 2400  # concrete density in kg/m^3
-        self.concrete_capacity = 0.84
-        self.wall_area = self.avg_house_size * (
-            1 / 3
-        )  # wall area in m^2 (house is a cube)
-        self.wall_thickness = 0.2  # wall thickness in m
+        self.temp_max = temp_max_c
+        self.temp_min = temp_min_c
+        self.hp_power_max = power_max_pu
+        self.hp_cop = cop
 
-        # --- mass and heat_cap calculation ---
-        self.air_mass = (
-            self.avg_house_size * self.air_density
-        )  # air mass in kg
-        self.concrete_mass = (
-            4 * self.wall_area * self.wall_thickness * self.concrete_density
+        # --- Thermal building model ---
+        # Wall area ≈ 1/3 of volume (cube approximation)
+        wall_area_m2 = avg_house_size_m3 / 3.0
+        air_mass_kg = avg_house_size_m3 * self._AIR_DENSITY_KG_M3
+        concrete_mass_kg = (
+            4.0
+            * wall_area_m2
+            * wall_thickness_m
+            * self._CONCRETE_DENSITY_KG_M3
         )
-        # heat capacity of the house in MWh/K
+        # Thermal capacity in MWh/K (convert from J/K via / 3_600_000)
         self.heat_cap = (
-            self.air_mass * self.air_capacity
-            + self.concrete_mass * self.concrete_capacity
-        ) / 3600000
+            air_mass_kg * self._AIR_SPECIFIC_HEAT_J_KGK
+            + concrete_mass_kg * self._CONCRETE_SPECIFIC_HEAT_KJ_KGK * 1000.0
+        ) / 3_600_000.0
 
-        # TODO: Translate to temperature pyo.Parameters for heat pump
-
-        # --- heat pump pyo.Parameter values ---
-        self.hp_power_max = 0.005  # in MW_heat
-        self.hp_cop = 4  # coefficient of performance in MW_el/MW_heat
-
-        # --- heat loss calculation ---
-        # max load out of profiles
-        self.max_load = np.max(
-            net.profiles[("load", "p_mw")][0] / self.baseMVA
+        # --- Heat-loss profile proportional to load ---
+        self.Qloss_max = qloss_max
+        self.max_load = float(
+            np.max(net.profiles[("load", "p_mw")][0] / self.baseMVA)
         )
-        self.Qloss_max = 0.01
         self.heat_scaling_fac = self.Qloss_max / self.max_load
         self.heat_load = (
             self.heat_scaling_fac * self.net.profiles[("load", "p_mw")][0]
         )
 
     def get_all(self, model):
-        """Attach heat pump pyo.Sets, pyo.Parameters, variables, and
-        constraints to the model."""
+        """Attach heat pump sets, parameters, variables, and constraints."""
         self.get_sets(model)
         self.get_parameters(model)
         self.get_variables(model)
         self.get_all_constraints(model)
 
     def get_sets(self, model):
-        """Define HP and HP_bus pyo.Sets from randomly placed heat pumps."""
+        """Define HP and HP_bus sets from randomly placed heat pumps."""
         super().get_sets(model)
-        model.HP = pyo.Set(
-            initialize=list(range(len(self.random_indexes)))
-        )  # pyo.Set of heat pumps
-        model.HP_bus = pyo.Set(
-            initialize=list(enumerate(self.random_indexes))
-        )  # pyo.Set of heat pump-bus mapping
+        model.HP = pyo.Set(initialize=list(range(len(self.random_indexes))))
+        model.HP_bus = pyo.Set(initialize=list(enumerate(self.random_indexes)))
         return True
 
     def get_parameters(self, model):
-        """Attach heat pump power limits, temperature bounds, and heat loss
-        profile."""
+        """Attach power limits, temperature bounds, CoP, thermal capacity,
+        and heat-loss profile."""
         model.HP_Pmax = pyo.Param(
             model.HP, within=pyo.Reals, initialize=self.hp_power_max
         )
-        model.HP_Pmin = pyo.Param(model.HP, within=pyo.Reals, initialize=0)
+        model.HP_Pmin = pyo.Param(model.HP, within=pyo.Reals, initialize=0.0)
         model.TempMax = pyo.Param(
             model.HP, within=pyo.Reals, initialize=self.temp_max
         )
         model.TempMin = pyo.Param(
             model.HP, within=pyo.Reals, initialize=self.temp_min
+        )
+        # CoP as a mutable per-unit Pyomo parameter so it can be updated
+        # after model construction (e.g. for seasonal COP sensitivity).
+        model.HP_CoP = pyo.Param(
+            model.HP,
+            within=pyo.NonNegativeReals,
+            initialize=self.hp_cop,
+            mutable=True,
+        )
+        # Thermal capacity of the building (MWh/K) as a Pyomo parameter so
+        # it can be adjusted per heat-pump instance if needed.
+        model.HP_ThermCap = pyo.Param(
+            model.HP,
+            within=pyo.NonNegativeReals,
+            initialize=self.heat_cap,
+            mutable=True,
         )
 
         self.Qloss_data_dict, self.Qloss_tuple = self.make_to_dict(
@@ -124,13 +197,13 @@ class Heatpump_multi_period(Flexibility_multi_period):
         return True
 
     def get_all_constraints(self, model):
-        """Add power limits, temperature bounds, and thermal state update
+        """Add power-bound, temperature-bound, and thermal-update
         constraints."""
 
         def hp_power_rule(model, h, t):
             return model.HP_Pmin[h], model.hp_p[h, t], model.HP_Pmax[h]
 
-        model.temperature_rule = pyo.Constraint(
+        model.hp_power_con = pyo.Constraint(
             model.HP, model.T, rule=hp_power_rule
         )
 
@@ -148,8 +221,8 @@ class Heatpump_multi_period(Flexibility_multi_period):
                 model.temp[h, t]
                 == model.temp[h, t - 1]
                 + model.deltaT
-                * ((model.hp_p[h, t] * self.hp_cop) - model.Qloss[h, t])
-                / self.heat_cap
+                * (model.hp_p[h, t] * model.HP_CoP[h] - model.Qloss[h, t])
+                / model.HP_ThermCap[h]
             )
 
         model.hp_temp_update_con = pyo.Constraint(
@@ -158,10 +231,10 @@ class Heatpump_multi_period(Flexibility_multi_period):
         return True
 
     def get_all_opf(self, model):
-        pass
+        """No additional OPF components needed for heat pumps."""
 
     def get_all_ac(self, model):
-        pass
+        """No additional AC components needed for heat pumps."""
 
     def get_all_acopf(self, model):
-        pass
+        """No additional ACOPF components needed for heat pumps."""

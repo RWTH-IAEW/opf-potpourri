@@ -121,17 +121,18 @@ class Basemodel_multi_period:
         self.profiles = sb.get_absolute_values(
             self.net, profiles_instead_of_study_cases=True
         )
-        # TODO: q static generation data with power factor
-        # ( check for power factor in pp net)
+        # Reactive sgen profiles: present in SimBench data when the network
+        # includes a q_mvar column; otherwise derived below from pf.
 
-        # get the load profiles out of the sb net for pv before they are
-        # deleted
-        # in the future profiles might be coming from another source
+        # Snapshot the renewables profiles before clearing net.profiles,
+        # since PV_multi_period reads them from net.pv_load_profiles later.
         self.net.pv_load_profiles = self.net.profiles["renewables"].iloc[
             self.fromT : self.toT
         ]
 
-        self.net.profiles.clear()  #  TODO: needed here?
+        # Clear and refill net.profiles with the [fromT, toT) slice so that
+        # all technology modules see the correct time window consistently.
+        self.net.profiles.clear()
         # cut off profiles for T, depending on fromT and toT
         if self.fromT is None:
             for profile in self.profiles.keys():
