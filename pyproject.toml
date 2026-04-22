@@ -29,7 +29,6 @@ classifiers = [
     "Topic :: Scientific/Engineering",
     "Topic :: Scientific/Engineering :: Mathematics",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
 ]
 keywords = [
     "power systems",
@@ -68,6 +67,9 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.4",
     "pre-commit>=4.0",
+]
+performance-test = [
+    "perfplot>=0.10.2",
 ]
 
 [project.urls]

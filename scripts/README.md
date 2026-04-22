@@ -42,11 +42,13 @@ python scripts/minimal_ac_power_flow.py
 | `battery_multi_period_opf.py` | Multi-period AC OPF with battery storage; compares voltage deviation with and without batteries; shows SOC trajectories |
 | `hosting_capacity_opf.py` | Hosting capacity analysis with binary wind placement, VDE-AR-N 4105 grid-code Q constraints, and eps/SWmin parameter sweeps |
 
-### Validation
+### Validation and benchmarking
 
 | Script | What it demonstrates |
 |--------|---------------------|
 | `validate_ac_model_against_pandapower.py` | Full AC model validation on 6 SimBench networks; reports MAE, RMSE, and max error for voltage magnitude, angle, and line losses |
+| `compare_solvers.py` | Compares NEOS NLP solver backends (IPOPT, KNITRO, BONMIN, …) across 6 SimBench networks; records solve time and accuracy; saves CSV (requires NEOS email) |
+| `performance_test_solver.py` | Perfplot-based scaling benchmark: solve time vs. network size across NEOS solvers; saves a PNG chart (requires `pip install potpourri[performance-test]` and NEOS email) |
 
 ---
 
@@ -66,5 +68,7 @@ python scripts/minimal_ac_power_flow.py
 | `battery_multi_period_opf.py` | IPOPT |
 | `hosting_capacity_opf.py` | GLPK (MindtPy); Gurobi recommended for larger runs |
 | `validate_ac_model_against_pandapower.py` | IPOPT |
+| `compare_solvers.py` | NEOS (requires `NEOS_EMAIL`) |
+| `performance_test_solver.py` | NEOS + `perfplot` (see `performance-test` optional dep) |
 
 IPOPT and GLPK are installed automatically via `environment.yaml`.

@@ -98,3 +98,15 @@ Enforces VDE-AR-N 4105 grid-code Q constraints.
 Full quantitative validation on six SimBench networks (HV, MV, LV).  Reports
 MAE, RMSE, and maximum absolute error for voltage magnitude, angle, active
 losses, and reactive losses.
+
+### `compare_solvers.py`
+Compares several NEOS NLP solver backends (IPOPT, KNITRO, BONMIN, COUENNE,
+CONOPT, SNOPT) across six SimBench networks.  Records solve time and result
+accuracy for each combination and saves a CSV.  Requires a NEOS email:
+``export NEOS_EMAIL=your@email.com``.
+
+### `performance_test_solver.py`
+Perfplot-based scaling benchmark.  Plots solve time vs. network size (number
+of buses) for each NEOS solver backend.  Requires the optional
+``performance-test`` dependency group (``pip install potpourri[performance-test]``)
+and a NEOS email.
