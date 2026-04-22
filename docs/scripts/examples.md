@@ -39,6 +39,18 @@ Two-step AC OPF on a LV rural network:
 1. Reactive-power minimisation at a fixed active dispatch.
 2. Voltage-deviation minimisation for the SimBench `lW` and `hL` load cases.
 
+### `generator_capability_curve_demo.py`
+Shows how reactive capability limits shape AC-OPF dispatch on a 5-bus
+self-contained feeder (no SimBench needed):
+- PV inverter: rectangular Q bounds from a power-factor rule (cos φ ≥ pf).
+- Wind inverter: tighter rectangular bounds.
+- Battery: circular P² + Q² ≤ S² constraint via the built-in
+  `stor_inverter_cap` Pyomo constraint.
+
+Compares Scenario A (wide limits, pf ≥ 0.70) against Scenario B (grid-code,
+PV pf ≥ 0.90 / wind pf ≥ 0.95).  Reports Q dispatch, bus voltages, ext-grid
+reactive import, and the battery operating point on its capability circle.
+
 ### `objective_tradeoff_demo.py`
 Compares four AC-OPF objectives (voltage deviation, reactive generation, active
 import, network losses) on the same network and scenario.  Shows how the choice

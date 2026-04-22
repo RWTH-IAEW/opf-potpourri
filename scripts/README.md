@@ -28,6 +28,7 @@ python scripts/minimal_ac_power_flow.py
 | Script | What it demonstrates |
 |--------|---------------------|
 | `acopf_loadcase_analysis.py` | Two-step AC OPF: (1) reactive-power minimisation at a fixed dispatch, (2) voltage-deviation minimisation per SimBench load case |
+| `generator_capability_curve_demo.py` | How PV/wind power-factor limits and battery S² inverter circles constrain reactive dispatch; compares voltage profile and ext-grid Q between a wide-limits and a grid-code scenario |
 | `objective_tradeoff_demo.py` | How four different objectives (voltage deviation, reactive generation, active import, network losses) produce different dispatch decisions on the same network |
 | `constraint_activation_demo.py` | How activating each constraint group (voltage bounds, line loading, Q limits) restricts the feasible space and changes the optimal PV dispatch |
 | `time_series_snapshot_opf.py` | Independent AC OPF for 8 representative seasonal/diurnal snapshots; illustrates the snapshot-OPF paradigm |
