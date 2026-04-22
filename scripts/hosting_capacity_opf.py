@@ -36,7 +36,9 @@ from potpourri.models.HC_ACOPF import HC_ACOPF
 
 warnings.filterwarnings("ignore")
 
-SOLVER = "glpk"  # HC uses MindtPy (MINLP); replace with gurobi for real runs
+SOLVER = (
+    "mindtpy"  # HC uses MindtPy (MINLP); replace with gurobi for real runs
+)
 # For a production run use: SOLVER = "gurobi_direct" or mindtpy + ipopt/glpk
 NET_NAME = "1-LV-rural1--0-sw"
 PROFILE_IDX = 1190  # high-load winter evening
