@@ -441,7 +441,9 @@ class Basemodel_multi_period:
 
         """
 
-        if data == 0:
+        # Scalar zero sentinel — must check with isinstance to avoid ambiguous
+        # truth-value error when `data` is a pandas Series.
+        if isinstance(data, (int, float)) and data == 0:
             data_dict = {(o, t): 0 for o in model_obj for t in model_time}
             tuple_list = list([(o, t) for o in model_obj for t in model_time])
             return data_dict, tuple_list

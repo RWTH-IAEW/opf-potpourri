@@ -19,9 +19,10 @@ Solvers (IPOPT, GLPK, CBC, Gurobi) must be installed separately. The Dockerfile 
 ## Development Commands
 
 ```bash
-black .       # format
-flake8 .      # lint
-pytest        # run tests (no formal test suite yet; see scripts/ for examples)
+ruff check .              # lint
+ruff format .             # format
+pytest                    # run all tests
+pytest -m "not integration"   # skip solver-dependent tests
 ```
 
 ## Architecture
@@ -69,4 +70,5 @@ Device modules: `Battery`, `EVs`, `HeatPump`, `PV`, `Windpower`, `Demand`, `Sgen
 - **Deep copy** the pandapower network before passing it to a model to avoid mutation.
 - Pyomo components (Sets, Params, Vars, Constraints) are added to `self.model` inside each class.
 - `pyo_to_net` must be called after `solve()` to populate `net.res_*` DataFrames.
-- Tutorial scripts in `tutorials/` and analysis scripts in `scripts/` are the primary usage examples.
+- Example scripts in `scripts/` are the primary usage examples (see `scripts/README.md`).
+- Jupyter notebook tutorials are in `tutorials/` (kept for interactive exploration).

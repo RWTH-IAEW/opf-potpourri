@@ -1,6 +1,6 @@
 # Load-Case OPF Analysis
 
-**Script:** `scripts/loadcases.py`
+**Script:** `scripts/acopf_loadcase_analysis.py`
 
 Demonstrates two successive AC-OPF analyses on the SimBench LV rural1 network:
 reactive-power minimisation at a single operating point, followed by
@@ -84,22 +84,18 @@ print(net.loadcases)
 
 ## Usage
 
+Requires IPOPT:
+
 ```bash
 conda activate potpourri_env
-export NEOS_EMAIL="your@email.address"
-python scripts/loadcases.py
+python scripts/acopf_loadcase_analysis.py
 ```
-
-To use a local solver, change both `solve()` calls from `solver="neos"` to
-`solver="ipopt"`.
 
 !!! note
     Step 1 may report **infeasible** with IPOPT on snapshot index 1190.
     At this high-PV operating point the tight ext_grid reactive-power limit
     (±0.05 MVAR) conflicts with the network's reactive balance requirements.
-    The problem is feasible on NEOS where the solver explores a wider region
-    from a different initialisation. Step 2 converges reliably with both
-    IPOPT and NEOS.
+    Step 2 converges reliably.
 
 ---
 

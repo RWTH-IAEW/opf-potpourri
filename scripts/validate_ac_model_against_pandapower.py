@@ -1,25 +1,25 @@
-"""Validation of the POTPOURRI AC power flow model against pandapower.
+"""Validation of the potpourri AC power flow model against pandapower.
 
-Workflow
---------
-For each simbench benchmark network in ``NETS``:
+Solves the AC power flow on six SimBench benchmark networks with the
+potpourri Pyomo model (IPOPT) and compares the results against pandapower's
+built-in Newton-Raphson solver.
 
-1. Load the network via simbench.
-2. Build an ``AC`` model (POTPOURRI) and solve it via the NEOS cloud solver.
-3. Run a reference power flow with pandapower (``pp.runpp``).
-4. Compare ``res_bus.vm_pu``, ``res_bus.va_degree``, ``res_line.pl_mw``, and
-   ``res_line.ql_mvar`` between both solvers using mean absolute error, max
-   absolute error, RMSE, and standard deviation.
-5. Print a detailed comparison table plus compact pivot tables.
+Workflow:
+  For each network in ``NETS``:
+    1. Load the network via SimBench.
+    2. Build a potpourri ``AC`` model and solve with IPOPT.
+    3. Run a reference power flow with pandapower (``pp.runpp``).
+    4. Compare ``res_bus.vm_pu``, ``res_bus.va_degree``, ``res_line.pl_mw``,
+       and ``res_line.ql_mvar`` using MAE, max absolute error, RMSE, and std.
+    5. Print a detailed table and compact pivot tables.
 
-Environment
------------
-Set the ``NEOS_EMAIL`` environment variable to an e-mail address that is
-registered at https://neos-server.org before running this script.  If the
-variable is not set the fallback address below is used.
+Expected behaviour:
+  The bare AC model leaves sgen reactive power as a free variable.  The
+  optimizer may therefore find a reactive dispatch that differs from
+  pandapower's PQ assumption.  Small voltage magnitude differences (< 1e-3)
+  are expected; active power losses should match closely.
 """
 
-import os
 import warnings
 
 import pandas as pd
@@ -29,9 +29,6 @@ from tqdm import tqdm
 
 from potpourri.models.AC import AC
 
-os.environ["NEOS_EMAIL"] = os.environ.get(
-    "NEOS_EMAIL", "steffen.kortmann@fit.fraunhofer.de"
-)
 warnings.filterwarnings("ignore")
 
 

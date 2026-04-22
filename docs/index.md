@@ -32,7 +32,7 @@ print(net.res_bus[["vm_pu", "va_degree"]])
 
 - [**Getting Started**](getting-started.md) — installation, solver setup, Docker
 - [**Mathematical Modelling**](mathematical-modelling.md) — full OPF formulations, variables, and constraints
-- [**Scripts**](scripts/validation.md) — validation, load-case OPF, feasible operation region
+- [**Examples**](scripts/examples.md) — runnable scripts covering each feature area
 - [**Single-Period OPF**](user-guide/single-period.md) — AC/DC OPF tutorial
 - [**Multi-Period OPF**](user-guide/multi-period.md) — time-series OPF tutorial
 - [**Flexible Devices**](user-guide/devices.md) — batteries, EVs, heat pumps

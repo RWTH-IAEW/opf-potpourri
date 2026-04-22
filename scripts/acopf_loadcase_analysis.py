@@ -30,14 +30,10 @@ load):
 4. Print the ext-grid active / reactive power dispatch and the active power on
    line 0.
 
-Environment
------------
-Set ``NEOS_EMAIL`` to a registered https://neos-server.org address before
-running, or export it as an environment variable.
+Requires IPOPT (installed via conda-forge or environment.yaml).
 """
 
 import copy
-import os
 import warnings
 
 import numpy as np
@@ -47,9 +43,6 @@ import simbench as sb
 
 from potpourri.models.ACOPF_base import ACOPF
 
-os.environ["NEOS_EMAIL"] = os.environ.get(
-    "NEOS_EMAIL", "steffen.kortmann@fit.fraunhofer.de"
-)
 warnings.filterwarnings("ignore")
 
 

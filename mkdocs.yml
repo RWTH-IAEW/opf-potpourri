@@ -1,6 +1,8 @@
 site_name: potpourri
-site_description: Multi-Period Optimal Power Flow for Distribution Grids with Storage Application
-site_author: Steffen Kortmann, Farah Nasr
+site_description: >-
+  Multi-Period Optimal Power Flow for Distribution Grids —
+  Pyomo models over pandapower networks.
+site_author: Steffen Kortmann, IAEW RWTH Aachen University
 
 theme:
   name: readthedocs
@@ -22,7 +24,8 @@ nav:
       - Flexible Devices: user-guide/devices.md
       - Solvers: user-guide/solvers.md
       - Logging: user-guide/logging.md
-  - Scripts:
+  - Examples:
+      - Overview: scripts/examples.md
       - AC Validation: scripts/validation.md
       - Load-Case OPF: scripts/loadcases.md
       - Feasible Operation Region: scripts/feasible-operation-region.md

@@ -1,12 +1,10 @@
 # potpourri
 
-Multi-**P**eriod **O**p**t**imal **Po**wer Flow for Distrib**u**tion G**r**ids with Sto**r**age Appl**i**cation
+**Multi-Period Optimal Power Flow for Distribution Grids with Storage Application**
 
 > *Potpourri — piece of music composed from various popular smaller works or melodies*
 
-## Overview
-
-`potpourri` is a Python library for AC/DC Optimal Power Flow (OPF) in distribution grids, with support for multi-period planning and flexible resources (batteries, EVs, heat pumps, PV, wind). It wraps [Pyomo](https://pyomo.readthedocs.io/) for optimization modelling over [pandapower](https://pandapower.readthedocs.io/) network objects.
+`potpourri` is a Python library for AC/DC Optimal Power Flow (OPF) in distribution grids, with support for multi-period planning and flexible resources (batteries, EVs, heat pumps, PV, wind). It wraps [Pyomo](https://pyomo.readthedocs.io/) for optimisation modelling over [pandapower](https://pandapower.readthedocs.io/) network objects.
 
 ---
 
@@ -17,34 +15,15 @@ The project documentation is built with [MkDocs](https://www.mkdocs.org/).
 To serve the documentation locally:
 
 ```bash
-mkdocs serve
-```
-
-This starts a local development server, usually at:
-
-```
-(opf-potpourri) (base) kortmann@kortmann:~/opf-potpourri$ mkdocs serve
-INFO    -  Building documentation...
-INFO    -  Cleaning site directory
-INFO    -  Documentation built in 0.17 seconds
-INFO    -  [11:01:44] Serving on http://127.0.0.1:8000/
-```
-
-If MkDocs is not installed yet, install the documentation dependencies first:
-
-```bash
 pip install -e .[docs]
+mkdocs serve          # usually available at http://127.0.0.1:8000/
 ```
 
-then run:
-
-```bash
-mkdocs serve
-```
+---
 
 ## Installation
 
-Requires Python ≤ 3.12 and Conda.
+Requires Python 3.9–3.12 and Conda (or Mamba).
 
 ```bash
 conda env create -f environment.yaml
@@ -55,14 +34,15 @@ pip install -e .
 To update an existing environment:
 
 ```bash
-conda env update -f environment.yaml
+conda env update -f environment.yaml --prune
 ```
 
-A Dockerfile is also provided for a fully containerised setup including compiled IPOPT 3.14.16, SHOT, and CBC solvers.
+A Dockerfile is provided for a fully containerised setup with IPOPT 3.14.16
+compiled from source, CBC, and SHOT solvers.
 
 ---
 
-## Usage
+## Quick start
 
 ### Single-period AC OPF
 
@@ -74,23 +54,31 @@ net = sb.get_simbench_net("1-LV-rural1--0-sw")
 opf = ACOPF(net)
 opf.add_OPF()
 opf.add_voltage_deviation_objective()
-opf.solve(solver='ipopt', print_solver_output=False)
-# results available in net.res_bus, net.res_line, etc.
+opf.solve(solver="ipopt", print_solver_output=False)
+
+# results available in net.res_bus, net.res_line, net.res_sgen, ...
+print(opf.net.res_bus[["vm_pu", "va_degree"]])
 ```
 
-### Multi-period AC OPF with flexible resources
+### Multi-period AC OPF with battery storage
 
 ```python
+import simbench as sb
 from potpourri.models_multi_period.ACOPF_multi_period import ACOPF_multi_period
-from potpourri.models_multi_period.battery_multi_period import Battery_multi_period
+from potpourri.technologies.battery import Battery_multi_period
 
-opf = ACOPF_multi_period(net, toT=96, fromT=0, num_vehicles=5)
-battery = Battery_multi_period(opf)   # attaches battery constraints
+net = sb.get_simbench_net("1-LV-urban6--0-sw")
+opf = ACOPF_multi_period(net, toT=96, fromT=0)   # 96 × 15 min = 1 day
+
+battery = Battery_multi_period(opf.net, T=96, scenario=1)
+battery.get_all(opf.model)
+
 opf.add_OPF()
-opf.solve(solver='ipopt')
+opf.add_voltage_deviation_objective()
+opf.solve(solver="ipopt")
 ```
 
-See `tutorials/opf.py` and `tutorials/mpopf.py` for full examples.
+See `scripts/` for runnable examples covering each feature area.
 
 ---
 
@@ -112,12 +100,11 @@ HC_ACOPF = ACOPF + binary variables for hosting-capacity analysis
 ### Multi-period models (`src/potpourri/models_multi_period/`)
 
 ```
-Basemodel_multi_period    adds time index T, integrates simbench load/gen profiles
+Basemodel_multi_period    adds time index T, integrates SimBench profiles
   └── ACOPF_multi_period  (AC_multi_period + OPF_multi_period)
 
 Flexibility_multi_period  abstract base for all flexible devices
   ├── Battery_multi_period
-  ├── EV_multi_period / Electric_vehicle_multi_period
   ├── HeatPump_multi_period
   ├── PV_multi_period
   ├── Windpower_multi_period
@@ -126,7 +113,9 @@ Flexibility_multi_period  abstract base for all flexible devices
   └── Generator_multi_period
 ```
 
-Flexible devices are **composed, not inherited** — each is instantiated separately and attaches its own Pyomo Sets/Params/Vars/Constraints to the parent model.
+Flexible devices are **composed, not inherited** — each is instantiated
+separately and attaches its own Pyomo Sets/Params/Vars/Constraints to the
+parent model.
 
 ### Data flow
 
@@ -141,47 +130,55 @@ pandapower net
 
 ---
 
-## External Dependencies
+## External dependencies
 
 | Package | Role |
 |---|---|
-| `pandapower >= 3.1.2` | Network data model, initial power flow |
-| `pyomo >= 6.9.4` | Optimization modelling |
-| `simbench >= 1.6.1` | Benchmark networks and time-series profiles |
-| `numpy`, `pandas`, `numba` | Numerical/data processing |
+| `pandapower >= 2.13` | Network data model, initial power flow |
+| `pyomo >= 6.7` | Optimisation modelling |
+| `simbench >= 1.4` | Benchmark networks and time-series profiles |
+| `numpy`, `pandas` | Numerical / data processing |
 | `matplotlib` | Plotting |
 
 ### Solvers
 
-| Solver | Type | Notes |
+`potpourri` does not bundle any solvers. Install at least one before
+calling `solve()`.
+
+| Solver | Type | Install |
 |---|---|---|
-| IPOPT | NLP (primary) | installed via conda-forge; Docker compiles 3.14.16 from source |
-| GLPK | LP/MILP | conda-forge |
-| CBC | MILP | Docker only |
-| SHOT | MINLP | Docker only |
-| Gurobi | MIP/QP | optional; requires licence (`gurobipy`) |
-| NEOS | Remote | `SolverManagerFactory('neos')` |
+| **IPOPT** | NLP — AC OPF | `conda install -c conda-forge ipopt` |
+| **GLPK** | LP / MIP — DC OPF | `conda install -c conda-forge glpk` |
+| **CBC** | LP / MIP | `conda install -c conda-forge coincbc` |
+| **Gurobi** | LP / MIP / NLP | `pip install gurobipy` (licence required) |
+| **NEOS** | Remote (free) | `opf.solve(solver='neos', neos_opt='ipopt')` |
+
+IPOPT and GLPK are included automatically when you create the environment
+from `environment.yaml`.
 
 ---
 
 ## Development
 
 ```bash
-black .     # format
-flake8 .    # lint
-pytest      # run tests
+pip install -e ".[dev]"   # installs ruff, pytest, pytest-cov, pre-commit
+ruff check .              # lint
+ruff format .             # format
+pytest                    # run tests
+pytest -m "not integration"   # skip solver-dependent tests
 ```
 
-Validation and analysis scripts are in `scripts/`. See the [Scripts documentation](docs/scripts/validation.md) for details.
+Analysis and example scripts are in `scripts/`. See `scripts/README.md`
+for an overview of what each example demonstrates.
 
 ---
 
 ## Authors
 
-- Steffen Kortmann — Institute for High Voltage Equipment and Grids, Digitalisation and Energy Economics (IAEW), RWTH Aachen University
+- Steffen Kortmann — IAEW, RWTH Aachen University
 - Andreas Bong — IAEW, RWTH Aachen University
 - Simon Braun — IAEW, RWTH Aachen University
 - Alexander Och — IAEW, RWTH Aachen University
 - Farah Nasr — IAEW, RWTH Aachen University
 - Philip Kvesic — IAEW, RWTH Aachen University
-
+- Nina Stumberger — IAEW, RWTH Aachen University

@@ -1,6 +1,6 @@
 # AC Power Flow Validation
 
-**Script:** `scripts/validation.py`
+**Script:** `scripts/validate_ac_model_against_pandapower.py`
 
 Validates the `potpourri` AC power flow solver against
 [pandapower](https://pandapower.readthedocs.io/)'s Newton-Raphson power flow
@@ -63,22 +63,18 @@ print pivot tables and error ranking
 
 ## Usage
 
-Set the `NEOS_EMAIL` environment variable to a registered NEOS address,
-then run:
+Requires IPOPT (included in `environment.yaml`):
 
 ```bash
 conda activate potpourri_env
-export NEOS_EMAIL="your@email.address"
-python scripts/validation.py
+python scripts/validate_ac_model_against_pandapower.py
 ```
 
-To use a local IPOPT solver instead of NEOS, change line 87 of the script:
+To use the NEOS cloud solver instead (no local solver required), uncomment
+the corresponding `ac.solve(solver="neos")` line in the script and set:
 
-```python
-# change
-results = ac.solve(solver="neos")
-# to
-results = ac.solve(solver="ipopt")
+```bash
+export NEOS_EMAIL="your@email.address"
 ```
 
 ---
