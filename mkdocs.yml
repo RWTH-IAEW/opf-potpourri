@@ -3,6 +3,9 @@ site_description: >-
   Multi-Period Optimal Power Flow for Distribution Grids —
   Pyomo models over pandapower networks.
 site_author: Steffen Kortmann, IAEW RWTH Aachen University
+site_url: https://opf-potpourri.readthedocs.io/
+repo_url: https://github.com/RWTH-IAEW/opf-potpourri
+repo_name: RWTH-IAEW/opf-potpourri
 
 theme:
   name: readthedocs
