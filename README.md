@@ -6,35 +6,48 @@
 
 [![CI](https://github.com/RWTH-IAEW/opf-potpourri/actions/workflows/ci.yml/badge.svg)](https://github.com/RWTH-IAEW/opf-potpourri/actions/workflows/ci.yml)
 [![Documentation Status](https://readthedocs.org/projects/opf-potpourri/badge/?version=latest)](https://opf-potpourri.readthedocs.io/)
+[![PyPI](https://img.shields.io/pypi/v/opf-potpourri)](https://pypi.org/project/opf-potpourri/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 `potpourri` is a Python library for AC/DC Optimal Power Flow (OPF) in distribution grids, with support for multi-period planning and flexible resources (batteries, EVs, heat pumps, PV, wind). It wraps [Pyomo](https://pyomo.readthedocs.io/) for optimisation modelling over [pandapower](https://pandapower.readthedocs.io/) network objects.
 
-**Repository:** <https://github.com/RWTH-IAEW/opf-potpourri>
-
----
-
-## Documentation
-
-The project documentation is built with [MkDocs](https://www.mkdocs.org/).
-
-To serve the documentation locally:
-
-```bash
-pip install -e .[docs]
-mkdocs serve          # usually available at http://127.0.0.1:8000/
-```
+**Documentation:** <https://opf-potpourri.readthedocs.io/>  
+**Repository:** <https://github.com/RWTH-IAEW/opf-potpourri>  
+**PyPI:** <https://pypi.org/project/opf-potpourri/>
 
 ---
 
 ## Installation
 
-Requires Python 3.9–3.12 and Conda (or Mamba).
+### For users
+
+Install from PyPI with pip or uv. Python 3.9–3.12 is supported.
 
 ```bash
-conda env create -f environment.yaml
+pip install opf-potpourri
+```
+
+or with [uv](https://docs.astral.sh/uv/):
+
+```bash
+uv pip install opf-potpourri
+```
+
+Solvers are **not** bundled. Install at least one separately before calling
+`solve()` — see [Solvers](#solvers) below.
+
+### For developers
+
+Clone the repository and create the Conda environment, which includes IPOPT
+and GLPK:
+
+```bash
+git clone https://github.com/RWTH-IAEW/opf-potpourri.git
+cd opf-potpourri
+
+conda env create -f environment.yaml   # creates potpourri_env, includes solvers
 conda activate potpourri_env
-pip install -e .
+pip install -e ".[dev]"                # editable install + ruff, pytest, pre-commit
 ```
 
 To update an existing environment:
@@ -45,6 +58,24 @@ conda env update -f environment.yaml --prune
 
 A Dockerfile is provided for a fully containerised setup with IPOPT 3.14.16
 compiled from source, CBC, and SHOT solvers.
+
+---
+
+## Documentation
+
+Full documentation is available at <https://opf-potpourri.readthedocs.io/>, including:
+
+- [Getting Started](https://opf-potpourri.readthedocs.io/en/latest/getting-started/)
+- [Mathematical Modelling](https://opf-potpourri.readthedocs.io/en/latest/mathematical-modelling/)
+- [User Guide](https://opf-potpourri.readthedocs.io/en/latest/user-guide/single-period/)
+- [API Reference](https://opf-potpourri.readthedocs.io/en/latest/api/models/)
+
+To build and serve the documentation locally (contributors):
+
+```bash
+pip install -e ".[docs]"
+mkdocs serve          # available at http://127.0.0.1:8000/
+```
 
 ---
 
@@ -85,6 +116,24 @@ opf.solve(solver="ipopt")
 ```
 
 See `scripts/` for runnable examples covering each feature area.
+
+---
+
+## Solvers
+
+`potpourri` does not bundle any solvers. Install at least one before
+calling `solve()`.
+
+| Solver | Type | Install |
+|---|---|---|
+| **IPOPT** | NLP — AC OPF | `conda install -c conda-forge ipopt` |
+| **GLPK** | LP / MIP — DC OPF | `conda install -c conda-forge glpk` |
+| **CBC** | LP / MIP | `conda install -c conda-forge coincbc` |
+| **Gurobi** | LP / MIP / NLP | `pip install gurobipy` (licence required) |
+| **NEOS** | Remote (free) | `opf.solve(solver='neos', neos_opt='ipopt')` |
+
+IPOPT and GLPK are included automatically in the developer Conda environment
+(`environment.yaml`). PyPI users must install solvers separately.
 
 ---
 
@@ -146,32 +195,15 @@ pandapower net
 | `numpy`, `pandas` | Numerical / data processing |
 | `matplotlib` | Plotting |
 
-### Solvers
-
-`potpourri` does not bundle any solvers. Install at least one before
-calling `solve()`.
-
-| Solver | Type | Install |
-|---|---|---|
-| **IPOPT** | NLP — AC OPF | `conda install -c conda-forge ipopt` |
-| **GLPK** | LP / MIP — DC OPF | `conda install -c conda-forge glpk` |
-| **CBC** | LP / MIP | `conda install -c conda-forge coincbc` |
-| **Gurobi** | LP / MIP / NLP | `pip install gurobipy` (licence required) |
-| **NEOS** | Remote (free) | `opf.solve(solver='neos', neos_opt='ipopt')` |
-
-IPOPT and GLPK are included automatically when you create the environment
-from `environment.yaml`.
-
 ---
 
 ## Development
 
 ```bash
-pip install -e ".[dev]"   # installs ruff, pytest, pytest-cov, pre-commit
-ruff check .              # lint
-ruff format .             # format
-pytest                    # run tests
-pytest -m "not integration"   # skip solver-dependent tests
+ruff check .                          # lint
+ruff format .                         # format
+pytest -m "not integration"           # unit tests (no solver required)
+pytest                                # all tests (integration tests need IPOPT)
 ```
 
 Analysis and example scripts are in `scripts/`. See `scripts/README.md`
