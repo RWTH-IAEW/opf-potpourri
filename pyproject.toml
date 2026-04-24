@@ -61,6 +61,7 @@ notebooks = [
 docs = [
     "mkdocs>=1.5",
     "mkdocs-material>=9.0",
+    "mkdocs-bibtex>=4.0",
 ]
 dev = [
     "pytest>=8.0",

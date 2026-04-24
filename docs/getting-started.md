@@ -1,21 +1,53 @@
 # Getting Started
 
-## Requirements
-
-| Requirement | Version | Notes |
-|---|---|---|
-| Python | 3.9 – 3.12 | 3.13+ not yet supported |
-| Conda | any | [Miniconda](https://docs.conda.io/en/latest/miniconda.html) or [Mamba](https://mamba.readthedocs.io/) recommended |
-| Solver | — | IPOPT for AC OPF (see [Solver Setup](#solver-setup)) |
+## Installation
 
 ---
 
-## Installation
+### For users — install from PyPI
 
-### Option A — Conda / Mamba (recommended)
+If you want to use `potpourri` in your own scripts or notebooks without
+modifying the source code, install the released package directly from PyPI.
+This is the recommended path for most users.
 
-This is the standard path on Linux and macOS. All Python dependencies and
-the IPOPT / GLPK solvers are pinned in `environment.yaml`.
+**Requirements:** Python 3.9–3.12.
+
+```bash
+pip install opf-potpourri
+```
+
+Or with [uv](https://docs.astral.sh/uv/) (faster):
+
+```bash
+uv pip install opf-potpourri
+```
+
+Verify the installation:
+
+```bash
+python -c "import potpourri; print(potpourri.__version__)"
+```
+
+!!! note "Solvers not included"
+    `potpourri` does not bundle any solvers. You need to install at least one
+    separately — see [Solver Setup](#solver-setup) below. For AC OPF, IPOPT is
+    required. For DC OPF or hosting-capacity problems, GLPK or CBC suffice.
+    Alternatively, use [NEOS](#option-c-neos-no-local-solver-required) for
+    free remote solver access.
+
+---
+
+### For contributors — local development install
+
+Clone the repository and install in editable mode if you plan to modify the
+source code, run the full test suite, or build the documentation locally.
+
+**Requirements:** Python 3.9–3.12 and Conda (or Mamba).
+
+#### Option A — Conda / Mamba (recommended)
+
+All Python dependencies and the IPOPT / GLPK solvers are pinned in
+`environment.yaml`.
 
 **1. Install Miniconda or Mamba**
 
@@ -30,9 +62,14 @@ Download the installer for your platform from
 bash Miniconda3-latest-Linux-x86_64.sh   # or the Mamba equivalent
 ```
 
-**2. Create the environment**
+**2. Clone the repository**
 
-From the repository root:
+```bash
+git clone https://github.com/RWTH-IAEW/opf-potpourri.git
+cd opf-potpourri
+```
+
+**3. Create the environment**
 
 ```bash
 conda env create -f environment.yaml   # Miniconda
@@ -43,22 +80,23 @@ mamba env create -f environment.yaml   # Mamba (faster)
 This creates the `potpourri_env` environment with all pinned dependencies
 including IPOPT 3.14.19 and GLPK 5.0.
 
-**3. Activate the environment**
+**4. Activate the environment**
 
 ```bash
 conda activate potpourri_env
 ```
 
-**4. Install the `potpourri` package in editable mode**
+**5. Install the package in editable mode**
 
 ```bash
-pip install -e .
+pip install -e ".[dev]"
 ```
 
 The `-e` flag (editable install) means changes to the source code under
-`src/potpourri/` take effect immediately without reinstalling.
+`src/potpourri/` take effect immediately without reinstalling. The `[dev]`
+extra installs `ruff`, `pytest`, `pytest-cov`, and `pre-commit`.
 
-**5. Update an existing environment**
+**6. Update an existing environment**
 
 When `environment.yaml` changes (e.g. after pulling new commits):
 
@@ -68,7 +106,7 @@ conda env update -f environment.yaml --prune
 
 ---
 
-### Option B — Docker (recommended for Windows)
+#### Option B — Docker (recommended for Windows)
 
 The Dockerfile provides a fully self-contained Linux environment with IPOPT
 3.14.16 compiled from source, CBC, and SHOT. This is the recommended path on
@@ -128,11 +166,11 @@ docker run --rm -v $(pwd):/app potpourri:latest \
 
 ---
 
-### Option C — NEOS (no local solver required)
+#### Option C — NEOS (no local solver required)
 
 [NEOS](https://neos-server.org/) is a free public optimisation server that
-accepts Pyomo models over the internet. Use this option when you cannot
-install a local solver (e.g. on a locked-down corporate machine).
+accepts Pyomo models over the internet. This option is available to both
+regular users and developers when no local solver can be installed.
 
 **1. Register an e-mail address** at [https://neos-server.org](https://neos-server.org).
 
@@ -197,20 +235,48 @@ following before calling `solve()`:
 | **CBC** | LP / MIP | `conda install -c conda-forge coincbc` |
 | **Gurobi** | LP / MIP / NLP | `pip install gurobipy` (licence required) |
 
-IPOPT and GLPK are included automatically when you create the environment
-from `environment.yaml`.
+IPOPT and GLPK are included automatically in the developer Conda environment
+(`environment.yaml`). PyPI users must install solvers separately using the
+commands above.
 
 ---
 
-## Development setup
+## Development workflow
+
+Once you have a local development install (Option A or B above):
 
 ```bash
-pip install -e ".[dev]"   # installs black, flake8, ruff, pytest
-black .                   # format
-flake8 .                  # lint
-ruff check .              # fast linting
-pytest                    # run tests
+ruff check .                        # lint
+ruff format .                       # format (auto-fix)
+pytest -m "not integration"         # unit tests — no solver required
+pytest                              # all tests — integration tests need IPOPT
 ```
 
-Validation scripts are available in `scripts/`. See the
-[Scripts](scripts/validation.md) section of this documentation for details.
+To build and serve the documentation locally:
+
+```bash
+pip install -e ".[docs]"
+mkdocs serve                        # available at http://127.0.0.1:8000/
+```
+
+Analysis and example scripts are in `scripts/`. See the
+[Examples](scripts/examples.md) section of this documentation for details.
+
+---
+
+## Acknowledgements
+
+The development of `potpourri` was inspired in part by modelling concepts from
+the `oats` package [@bukhsh2020oats]. Early development built on ideas and code
+structures from `oats`; over time, the project evolved into a standalone
+package focused on providing a pandapower-compatible interface to Pyomo-based
+OPF formulations.
+
+The modular and inheritance-based structure of `potpourri` was also influenced
+by PowerModels.jl [@coffrin2018powermodels].
+
+The authors thank the contributors to pandapower [@thurner2018pandapower],
+Pyomo [@bynum2021pyomo; @hart2011pyomo], and SimBench [@meinecke2020simbench],
+on which `potpourri` depends.
+
+\bibliography

@@ -10,7 +10,13 @@ repo_name: RWTH-IAEW/opf-potpourri
 theme:
   name: readthedocs
 
+plugins:
+  - search
+  - bibtex:
+      bib_file: "paper.bib"
+
 markdown_extensions:
+  - footnotes
   - pymdownx.arithmatex:
       generic: true
   - pymdownx.superfences:
@@ -44,3 +50,4 @@ nav:
       - Multi-Period Models: api/multi-period.md
       - Flexible Devices: api/devices.md
       - Utilities: api/utilities.md
+  - Scientific Work: scientific-work.md
