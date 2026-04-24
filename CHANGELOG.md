@@ -5,6 +5,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.1]
+
+### Changed
+- README: split installation into a user section (`pip install opf-potpourri`)
+  and a developer section (conda environment + editable install).
+- README: added PyPI badge and direct links to the Read the Docs sections.
+- README: moved solver installation guidance into a dedicated Solvers section
+  and noted that PyPI users must install solvers separately.
+
 ## [0.2.0] — initial public release
 
 ### Added

@@ -4,7 +4,7 @@ message: >-
   If you use this software, please cite it using the metadata in this file.
 type: software
 license: MIT
-version: "0.2.0"
+version: "0.2.1"
 date-released: "2026-04-24"   # update to the date of the tagged release
 repository-code: "https://github.com/RWTH-IAEW/opf-potpourri"
 url: "https://github.com/RWTH-IAEW/opf-potpourri"
