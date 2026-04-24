@@ -1,0 +1,79 @@
+cff-version: 1.2.0
+title: "potpourri: Multi-period Optimal Power Flow for Distribution Grids"
+message: >-
+  If you use this software, please cite it using the metadata in this file.
+type: software
+license: MIT
+version: "0.2.0"
+date-released: "2026-04-24"   # update to the date of the tagged release
+repository-code: "https://github.com/RWTH-IAEW/opf-potpourri"
+url: "https://github.com/RWTH-IAEW/opf-potpourri"
+abstract: >-
+  potpourri is a Python library for multi-period Optimal Power Flow (OPF) in
+  distribution grids. It wraps Pyomo for optimisation modelling over
+  pandapower network objects, supporting AC/DC power-flow formulations and
+  flexible resources such as batteries, electric vehicles, heat pumps,
+  photovoltaic systems, and wind generators.
+keywords:
+  - optimal power flow
+  - distribution grid
+  - power systems
+  - multi-period
+  - pyomo
+  - pandapower
+  - simbench
+  - battery storage
+  - hosting capacity
+authors:
+  - family-names: Kortmann
+    given-names: Steffen
+    email: s.kortmann@iaew.rwth-aachen.de
+    affiliation: >-
+      Institute for High Voltage Equipment and Grids, Digitalization and
+      Energy Economics (IAEW), RWTH Aachen University
+    orcid: ""   # add ORCID iD — https://orcid.org/
+  - family-names: Bong
+    given-names: Andreas
+    email: a.bong@iaew.rwth-aachen.de
+    affiliation: >-
+      Institute for High Voltage Equipment and Grids, Digitalization and
+      Energy Economics (IAEW), RWTH Aachen University
+    orcid: ""
+  - family-names: Braun
+    given-names: Simon
+    email: s.braun@iaew.rwth-aachen.de
+    affiliation: >-
+      Institute for High Voltage Equipment and Grids, Digitalization and
+      Energy Economics (IAEW), RWTH Aachen University
+    orcid: ""
+  - family-names: Och
+    given-names: Alexander
+    email: a.och@iaew.rwth-aachen.de
+    affiliation: >-
+      Institute for High Voltage Equipment and Grids, Digitalization and
+      Energy Economics (IAEW), RWTH Aachen University
+    orcid: ""
+  - family-names: Nasr
+    given-names: Farah
+    email: f.nasr@iaew.rwth-aachen.de
+    affiliation: >-
+      Institute for High Voltage Equipment and Grids, Digitalization and
+      Energy Economics (IAEW), RWTH Aachen University
+    orcid: ""
+  - family-names: Kvesic
+    given-names: Philip
+    email: p.kvesic@iaew.rwth-aachen.de
+    affiliation: >-
+      Institute for High Voltage Equipment and Grids, Digitalization and
+      Energy Economics (IAEW), RWTH Aachen University
+    orcid: ""
+  - family-names: Stumberger
+    given-names: Nina
+    email: n.stumberger@iaew.rwth-aachen.de
+    affiliation: >-
+      Institute for High Voltage Equipment and Grids, Digitalization and
+      Energy Economics (IAEW), RWTH Aachen University
+    orcid: ""
+# identifiers:
+#   - type: doi
+#     value: "10.XXXX/zenodo.XXXXXXX"   # add Zenodo DOI after archival

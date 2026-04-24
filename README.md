@@ -4,7 +4,12 @@
 
 > *Potpourri — piece of music composed from various popular smaller works or melodies*
 
+[![CI](https://github.com/RWTH-IAEW/opf-potpourri/actions/workflows/ci.yml/badge.svg)](https://github.com/RWTH-IAEW/opf-potpourri/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 `potpourri` is a Python library for AC/DC Optimal Power Flow (OPF) in distribution grids, with support for multi-period planning and flexible resources (batteries, EVs, heat pumps, PV, wind). It wraps [Pyomo](https://pyomo.readthedocs.io/) for optimisation modelling over [pandapower](https://pandapower.readthedocs.io/) network objects.
+
+**Repository:** <https://github.com/RWTH-IAEW/opf-potpourri>
 
 ---
 
@@ -182,3 +187,17 @@ for an overview of what each example demonstrates.
 - Farah Nasr — IAEW, RWTH Aachen University
 - Philip Kvesic — IAEW, RWTH Aachen University
 - Nina Stumberger — IAEW, RWTH Aachen University
+
+---
+
+## Citation
+
+If you use `potpourri` in your research, please cite it using the metadata in
+[`CITATION.cff`](CITATION.cff). A BibTeX entry will be available once a
+Zenodo DOI is registered for the release.
+
+---
+
+## License
+
+`potpourri` is released under the [MIT License](LICENSE).
