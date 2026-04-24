@@ -75,7 +75,7 @@ performance-test = [
 [project.urls]
 Homepage      = "https://github.com/RWTH-IAEW/opf-potpourri"
 Repository    = "https://github.com/RWTH-IAEW/opf-potpourri"
-Documentation = "https://github.com/RWTH-IAEW/opf-potpourri#readme"
+Documentation = "https://opf-potpourri.readthedocs.io/"
 "Bug Tracker" = "https://github.com/RWTH-IAEW/opf-potpourri/issues"
 
 [tool.setuptools.packages.find]
