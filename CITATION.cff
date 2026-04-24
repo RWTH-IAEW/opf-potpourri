@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-title: "potpourri: Multi-period Optimal Power Flow for Distribution Grids"
+title: "potpourri: A Python-Package for Multi-period Optimal Power Flow in Active Distribution Grids"
 message: >-
   If you use this software, please cite it using the metadata in this file.
 type: software
@@ -31,49 +31,56 @@ authors:
     affiliation: >-
       Institute for High Voltage Equipment and Grids, Digitalization and
       Energy Economics (IAEW), RWTH Aachen University
-    orcid: ""   # add ORCID iD — https://orcid.org/
+    orcid: "0009-0001-2074-773X"
   - family-names: Bong
     given-names: Andreas
     email: a.bong@iaew.rwth-aachen.de
     affiliation: >-
       Institute for High Voltage Equipment and Grids, Digitalization and
       Energy Economics (IAEW), RWTH Aachen University
-    orcid: ""
+    orcid: "0009-0008-0634-1056"
   - family-names: Braun
     given-names: Simon
     email: s.braun@iaew.rwth-aachen.de
     affiliation: >-
       Institute for High Voltage Equipment and Grids, Digitalization and
       Energy Economics (IAEW), RWTH Aachen University
-    orcid: ""
+    orcid: "0009-0008-9080-143X"
   - family-names: Och
     given-names: Alexander
     email: a.och@iaew.rwth-aachen.de
     affiliation: >-
       Institute for High Voltage Equipment and Grids, Digitalization and
       Energy Economics (IAEW), RWTH Aachen University
-    orcid: ""
+    orcid: "0009-0004-7221-6780"
   - family-names: Nasr
     given-names: Farah
     email: f.nasr@iaew.rwth-aachen.de
     affiliation: >-
       Institute for High Voltage Equipment and Grids, Digitalization and
       Energy Economics (IAEW), RWTH Aachen University
-    orcid: ""
+    orcid: "0009-0002-9951-3537"
   - family-names: Kvesic
     given-names: Philip
     email: p.kvesic@iaew.rwth-aachen.de
     affiliation: >-
       Institute for High Voltage Equipment and Grids, Digitalization and
       Energy Economics (IAEW), RWTH Aachen University
-    orcid: ""
+    orcid: "0009-0005-7514-488X"
   - family-names: Stumberger
     given-names: Nina
     email: n.stumberger@iaew.rwth-aachen.de
     affiliation: >-
       Institute for High Voltage Equipment and Grids, Digitalization and
       Energy Economics (IAEW), RWTH Aachen University
-    orcid: ""
+    orcid: "0009-0000-4436-4138"
+  - family-names: Ulbig
+    given-names: Andreas
+    email: a.ulbig@iaew.rwth-aachen.de
+    affiliation: >-
+      Institute for High Voltage Equipment and Grids, Digitalization and
+      Energy Economics (IAEW), RWTH Aachen University
+    orcid: "0000-0001-5834-1842"
 # identifiers:
 #   - type: doi
 #     value: "10.XXXX/zenodo.XXXXXXX"   # add Zenodo DOI after archival

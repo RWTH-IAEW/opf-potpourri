@@ -1,0 +1,203 @@
+% External references
+
+@article{thurner2018pandapower,
+  author={L. Thurner and A. Scheidler and F. Sch{\"a}fer and J. Menke and J. Dollichon and F. Meier and S. Meinecke and M. Braun},
+    journal={IEEE Transactions on Power Systems},
+    title={pandapower — An Open-Source Python Tool for Convenient Modeling, Analysis, and Optimization of Electric Power Systems},
+    year={2018},
+    month={Nov},
+    volume={33},
+    number={6},
+    pages={6510-6521},
+    doi={10.1109/TPWRS.2018.2829021},
+    ISSN={0885-8950}
+}
+
+@ARTICLE{bukhsh2020oats,
+  author={Bukhsh, Waqquas and Edmunds, Calum and Bell, Keith},
+  journal={IEEE Transactions on Power Systems},
+  title={OATS: Optimisation and Analysis Toolbox for Power Systems},
+  year={2020},
+  volume={35},
+  number={5},
+  pages={3552-3561},
+  keywords={Open area test sites;Power systems;Tools;Analytical models;Optimization;Open source software;Mathematical model;Power systems analysis;load flow analysis;optimal power flow;integer programming;unit commitment problem;linear programming;mixed integer programming},
+  doi={10.1109/TPWRS.2020.2986081}
+}
+
+
+@book{bynum2021pyomo,
+  title = {Pyomo — {{Optimization Modeling}} in {{Python}}},
+  author = {Bynum, Michael L. and Hackebeil, Gabriel A. and Hart, William E. and Laird, Carl D. and Nicholson, Bethany L. and Siirola, John D. and Watson, Jean-Paul and Woodruff, David L.},
+  date = {2021},
+  series = {Springer {{Optimization}} and {{Its Applications}}},
+  volume = {67},
+  publisher = {Springer International Publishing},
+  location = {Cham},
+  doi = {10.1007/978-3-030-68928-5},
+  url = {http://link.springer.com/10.1007/978-3-030-68928-5},
+  urldate = {2026-04-24},
+  isbn = {978-3-030-68927-8 978-3-030-68928-5},
+  langid = {english},
+  keywords = {algebraic modeling languages,hybrid optimization,mathematical modeling tool,Matplotlib,modeling and simulation,NumPy,Pyomo modeling library,Pyomo tutorial,PySP,Python data,Python optimization,Python script,SciPy},
+}
+
+@article{hart2011pyomo,
+  title = {Pyomo: Modeling and Solving Mathematical Programs in {{Python}}},
+  shorttitle = {Pyomo},
+  author = {Hart, William E. and Watson, Jean-Paul and Woodruff, David L.},
+  date = {2011-09-01},
+  journaltitle = {Mathematical Programming Computation},
+  shortjournal = {Math. Prog. Comp.},
+  volume = {3},
+  number = {3},
+  pages = {219--260},
+  issn = {1867-2957},
+  doi = {10.1007/s12532-011-0026-8},
+  url = {https://doi.org/10.1007/s12532-011-0026-8},
+  urldate = {2026-04-24},
+  abstract = {We describe Pyomo, an open source software package for modeling and solving mathematical programs in Python. Pyomo can be used to define abstract and concrete problems, create problem instances, and solve these instances with standard open-source and commercial solvers. Pyomo provides a capability that is commonly associated with algebraic modeling languages such as AMPL, AIMMS, and GAMS. In contrast, Pyomo’s modeling objects are embedded within a full-featured high-level programming language with a rich set of supporting libraries. Pyomo leverages the capabilities of the Coopr software library, which together with Pyomo is part of IBM’s COIN-OR open-source initiative for operations research software. Coopr integrates Python packages for defining optimizers, modeling optimization applications, and managing computational experiments. Numerous examples illustrating advanced scripting applications are provided.},
+  langid = {english},
+  keywords = {90C99,93A30,97N80,Algebraic modeling language,Open source optimization software,Optimization,Python},
+}
+
+
+@article{meinecke2020simbench,
+  title = {{{SimBench}}---{{A Benchmark Dataset}} of {{Electric Power Systems}} to {{Compare Innovative Solutions Based}} on {{Power Flow Analysis}}},
+  author = {Meinecke, Steffen and Sarajli{\'c}, D{\v z}anan and Drauz, Simon Ruben and Klettke, Annika and Lauven, Lars-Peter and Rehtanz, Christian and Moser, Albert and Braun, Martin},
+  year = 2020,
+  month = jun,
+  journal = {Energies},
+  volume = {13},
+  number = {12},
+  pages = {3290},
+  issn = {1996-1073},
+  doi = {10.3390/en13123290},
+  urldate = {2025-09-09},
+  abstract = {Publicly accessible, elaborated grid datasets, i.e., benchmark grids, are well suited to publish and compare methods or study results. Similarly, developing innovative tools and algorithms in the fields of grid planning and grid operation is based on grid datasets. Therefore, a general methodology to generate benchmark datasets and its voltage level dependent implementation is described in this paper. As a result, SimBench, a comprehensive dataset for the low, medium, high and extra-high voltage level, is presented. Besides grids that can be combined across several voltage levels, the dataset offers an added value by providing time series for a whole year as well as future scenarios. In this way, SimBench is applicable for many use cases and simplifies reproducing study results. As proof, different automated algorithms for grid planning are compared to show how to apply SimBench and make use of it as a simulation benchmark.},
+  copyright = {https://creativecommons.org/licenses/by/4.0/},
+  langid = {english},
+}
+
+
+@article{wachter2006ipopt,
+  title = {On the Implementation of an Interior-Point Filter Line-Search Algorithm for Large-Scale Nonlinear Programming},
+  author = {W{\"a}chter, Andreas and Biegler, Lorenz T.},
+  year = 2006,
+  month = mar,
+  journal = {Mathematical Programming},
+  volume = {106},
+  number = {1},
+  pages = {25--57},
+  issn = {1436-4646},
+  doi = {10.1007/s10107-004-0559-y},
+  urldate = {2026-04-24},
+  abstract = {We present a primal-dual interior-point algorithm with a filter line-search method for nonlinear programming. Local and global convergence properties of this method were analyzed in previous work. Here we provide a comprehensive description of the algorithm, including the feasibility restoration phase for the filter method, second-order corrections, and inertia correction of the KKT matrix. Heuristics are also considered that allow faster performance. This method has been implemented in the IPOPT code, which we demonstrate in a detailed numerical study based on 954 problems from the CUTEr test set. An evaluation is made of several line-search options, and a comparison is provided with two state-of-the-art interior-point codes for nonlinear programming.},
+  langid = {english},
+  keywords = {49M37,65K05,90C30,90C51,Barrier method,Filter method,Interior-point method,Line search,Nonconvex constrained optimization,Nonlinear programming},
+}
+
+@INPROCEEDINGS{coffrin2018powermodels,
+  author={Coffrin, Carleton and Bent, Russell and Sundar, Kaarthik and Ng, Yeesian and Lubin, Miles},
+  booktitle={2018 Power Systems Computation Conference (PSCC)},
+  title={PowerModels. JL: An Open-Source Framework for Exploring Power Flow Formulations},
+  year={2018},
+  volume={},
+  number={},
+  pages={1-8},
+  keywords={Mathematical model;Mathematical programming;Open source software;Matlab;Load flow;Nonlinear Optimization;Convex Optimization AC Optimal Power Flow;AC Optimal Transmission Switching Julia Language;Open-Source},
+  doi={10.23919/PSCC.2018.8442948}}
+
+@ARTICLE{zimmerman2011matpower,
+  author={Zimmerman, Ray Daniel and Murillo-Sánchez, Carlos Edmundo and Thomas, Robert John},
+  journal={IEEE Transactions on Power Systems},
+  title={MATPOWER: Steady-State Operations, Planning, and Analysis Tools for Power Systems Research and Education},
+  year={2011},
+  volume={26},
+  number={1},
+  pages={12-19},
+  keywords={Power system planning;Steady-state;Power system analysis computing;Power system simulation;Load flow;Open source software;Computer languages;Packaging;Costs;Mathematical model;Load flow analysis;optimal power flow;optimization methods;power engineering;power engineering education;power system economics;power system simulation;power systems;simulation software;software tools},
+  doi={10.1109/TPWRS.2010.2051168}}
+
+% Current publications with potpourri
+
+@INPROCEEDINGS{braun2024hcopf,
+  author={Braun, Simon and Lohse, Franca and Kortmann, Steffen and Ulbig, Andreas},
+  booktitle={2024 IEEE PES Innovative Smart Grid Technologies Europe (ISGT EUROPE)},
+  title={Evaluation of Grid Connection Points on the Basis of Hosting Capacity in High-Voltage Distribution Grids},
+  year={2024},
+  pages={1-5},
+  keywords={Renewable energy sources;Adaptation models;Limiting;Europe;High-voltage techniques;Transformers;Linear programming;Smart grids;Delays;Faces;Distribution Grid;High Voltage Grid;Hosting Capacity;Grid Integration;Locational Hosting Capacity},
+  doi={10.1109/ISGTEUROPE62998.2024.10863045}}
+
+@INPROCEEDINGS{kvesic2025mpc,
+  author={Kvesić, Philip and Bouchkati, Sarra and Och, Alexander and Ulbig, Andreas},
+  booktitle={2025 IEEE PES Innovative Smart Grid Technologies Conference Europe (ISGT Europe)},
+  title={Robustness Analysis of MPC-based Voltage Control in Distribution Grids Under Uncertainties},
+  year={2025},
+  pages={1-5},
+  keywords={Low voltage;Uncertainty;Measurement uncertainty;Europe;Stochastic processes;Robustness;Stability analysis;Smart grids;Voltage control;Predictive control;Active Distribution Grids;Voltage Control;Model Predictive Control},
+  doi={10.1109/ISGTEurope64741.2025.11305364}}
+
+@INPROCEEDINGS{nasr2025ev,
+  author={Nasr, Farah and Bong, Andreas and Ulbig, Andreas},
+  booktitle={2025 IEEE PES Innovative Smart Grid Technologies Conference Europe (ISGT Europe)},
+  title={Investigation of Dispatch Uncertainties Using an Electric Vehicle Two-Stage Optimisation Model},
+  year={2025},
+  pages={1-5},
+  keywords={Uncertainty;Optimization models;Europe;Electric vehicles;Real-time systems;Planning;Smart grids;Iterative methods;Optimization;Load flow;Distribution Grids;Electric Vehicle;Flexibility Provision;Two-Stage Optimisation;Uncertainty},
+  doi={10.1109/ISGTEurope64741.2025.11305554}}
+
+@INPROCEEDINGS{bong2025mopf,
+  author={Bong, Andreas and Nasr, Farah and Kortmann, Steffen and Ulbig, Andreas},
+  booktitle={2025 IEEE Kiel PowerTech},
+  title={Investigation of the Electrical Grid Limitations on Market-Oriented Electric Vehicles using a Multi-Period Optimal Power Flow Model},
+  year={2025},
+  pages={1-6},
+  keywords={Hands;Electric potential;Low voltage;Optimization models;Electric vehicles;Safety;Batteries;State of charge;Optimization;Load flow;Distribution Grid;Electric Vehicle;MultiPeriod;Optimal Power Flow;Optimised Charging},
+  doi={10.1109/PowerTech59965.2025.11180695}}
+
+@INPROCEEDINGS{braun2025hcopf,
+  author={Braun, Simon and Kortmann, Steffen and Ulbig, Andreas},
+  booktitle={2025 IEEE Kiel PowerTech},
+  title={Assessment of Distributed Generation Placement Based on Hosting Capacity in Distribution Grids},
+  year={2025},
+  pages={1-6},
+  keywords={Economics;Renewable energy sources;Power demand;High-voltage techniques;Wind farms;Transformers;Wind turbines;Distributed power generation;Iterative methods;Load flow;Distribution Grid;Hosting Capacity;Grid Connection Assessment;High Voltage Grid},
+  doi={10.1109/PowerTech59965.2025.11180732}}
+
+@INPROCEEDINGS{kleinhelmkamp2025ofofor,
+  author={Klein-Helmkamp, Florian and Möllemann, Tina and Zettl, Irina and Ulbig, Andreas},
+  booktitle={2025 IEEE Kiel PowerTech},
+  title={Stability and Performance of Online Feedback Optimization for Distribution Grid Flexibility},
+  year={2025},
+  pages={1-6},
+  keywords={Systematics;Sensitivity;Systems operation;Power system stability;Stability analysis;Power system reliability;Trajectory;Reliability;Tuning;Optimization;Ancillary services;curative system operation;flexibility;online feedback optimization;system stability},
+  doi={10.1109/PowerTech59965.2025.11180220}}
+
+@article{kleinhelmkamp2025safeofo,
+  title = {Safe Trajectory Sets for Online Operation of Power Systems under Uncertainty},
+  author = {Klein-Helmkamp, Florian and Möllemann, Tina and Zettl, Irina and Kortmann, Steffen and Ulbig, Andreas},
+  date = {2025-09},
+  journaltitle = {Sustainable Energy, Grids and Networks},
+  shortjournal = {Sustainable Energy, Grids and Networks},
+  volume = {43},
+  pages = {101910},
+  issn = {23524677},
+  doi = {10.1016/j.segan.2025.101910},
+  url = {https://linkinghub.elsevier.com/retrieve/pii/S2352467725002929},
+  urldate = {2026-04-24},
+  abstract = {Flexibility provision from active distribution grids requires efficient and robust methods of optimization and control suitable for online operation. In this paper we introduce conditions for the secure operation of power systems using feedback optimization based controllers. The feasibility of system operation is defined using the Feasible Operating Region (FOR), which serves as a boundary for safe system states. We propose a method to compute safe trajectory sets by projecting the high-dimensional system state onto the two-dimensional PQ-plane, enabling intuitive analysis of controller behavior. Our method is demonstrated on an exemplary sub-transmission system, where we evaluate the controller’s performance and robustness under disturbances and uncertainties. Results highlight the suitability of the proposed approach for assessing reachable and feasible system states in cases where the controlled grid is subjected to disturbances.},
+  langid = {english},
+}
+
+@INPROCEEDINGS{och2025for,
+  author={Och, Alexander and Kortmann, Steffen and Ehis, Mike and Peeck, Adrian and Ulbig, Andreas},
+  booktitle={2025 IEEE International Conference on Communications, Control, and Computing Technologies for Smart Grids (SmartGridComm)},
+  title={A Control Framework for Aggregating and Dispatching Low-Voltage Flexibility in Medium-Voltage Grid Operation},
+  year={2025},
+  volume={},
+  number={},
+  pages={1-7},
+  keywords={Low voltage;Medium voltage;Stability analysis;Real-time systems;Topology;Smart grids;Synchronization;Reliability;Resistance heating;Predictive control;Low-Voltage Flexibility;Grid Operation;Flexibility Aggregation;VPP;MPC;FOR},
+  doi={10.1109/SmartGridComm65349.2025.11204604}}
