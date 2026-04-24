@@ -78,7 +78,7 @@ Visualisation utilities for OPF results and grid code characteristics. All plott
 
 ### `set_plt_config()`
 
-Applies standard IAEW figure configuration (text width, colour scheme, font settings) to Matplotlib.
+Applies standard figure configuration (text width, colour scheme, font settings) to Matplotlib.
 
 ### `plot_wind_hc_results(nets, offset=None)`
 

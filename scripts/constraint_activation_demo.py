@@ -216,7 +216,7 @@ def _plot(df, save_path):
     x = np.arange(len(df))
     labels = df["short"].tolist()
 
-    # colour: highlight "All limits" in gold, rest in IAEW blue
+    # colour: highlight "All limits" in gold, rest in blue
     colors = ["#F6A800" if s == "All" else "#00549F" for s in df["short"]]
 
     fig, axes = plt.subplots(2, 2, figsize=(10, 7))

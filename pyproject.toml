@@ -73,10 +73,10 @@ performance-test = [
 ]
 
 [project.urls]
-Homepage      = "https://github.com/IAEW-RWTH/opf-potpourri"
-Repository    = "https://github.com/IAEW-RWTH/opf-potpourri"
-Documentation = "https://github.com/IAEW-RWTH/opf-potpourri#readme"
-"Bug Tracker" = "https://github.com/IAEW-RWTH/opf-potpourri/issues"
+Homepage      = "https://github.com/RWTH-IAEW/opf-potpourri"
+Repository    = "https://github.com/RWTH-IAEW/opf-potpourri"
+Documentation = "https://github.com/RWTH-IAEW/opf-potpourri#readme"
+"Bug Tracker" = "https://github.com/RWTH-IAEW/opf-potpourri/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
