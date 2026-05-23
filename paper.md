@@ -58,7 +58,8 @@ systems, and wind generators — to be attached to a multi-period model as
 composable mix-in objects.
 
 A typical workflow has four stages: (1) load a benchmark distribution network
-from SimBench [@meinecke2020simbench]; (2) instantiate an OPF model class,
+from SimBench [@meinecke2020simbench] or a custom pandapower network model; 
+(2) instantiate an OPF model class,
 which maps pandapower bus, line, generator, and load tables to Pyomo sets and
 parameters; (3) call `add_OPF()` to activate operational constraints and an
 objective function; and (4) invoke `solve()` with a selected solver such as
@@ -78,7 +79,7 @@ medium-voltage distribution grids requires planning and operation tools that
 can jointly optimise power dispatch and network constraints over multiple time
 steps. Single-snapshot power-flow calculations, as commonly provided by tools
 such as pandapower, are not sufficient for problems in which energy storage,
-demand flexibility, or other inter-temporal constraints couple decisions across
+demand flexibility, or other time-coupling constraints link decisions across
 hours or days.
 
 Several established OPF frameworks exist, including MATLAB-based tools such as
@@ -96,15 +97,20 @@ the same structured interface for attaching multi-period flexible resources.
 1. Bridges pandapower's network-data model and Pyomo's algebraic modelling
    language, so users do not need to manually translate network tables into
    optimisation variables and constraints.
-2. Supports multi-period time horizons with configurable step sizes, enabling
+2. Supports both exact and linearised power-flow formulations, with the
+   flexibility to choose between AC and DC-linearised power flow.
+3. Highly scalable and easily adaptable to specific use cases, as demonstrated here with the hosting-capacity problem or the feasible-operation-region.
+4. Supports multi-period time horizons with configurable step sizes, enabling
    joint optimisation over full operating days, for example 96 time steps with
    15-minute resolution.
-3. Provides a composable device architecture in which flexible resources are
+5. Provides a composable device architecture in which flexible resources are
    instantiated as independent objects that attach their own Pyomo constraints
    and variables to an existing model, rather than requiring a monolithic class
    hierarchy.
-4. Is validated against pandapower's Newton-Raphson power-flow solver on
+6. Is validated against pandapower's Newton-Raphson power-flow solver on
    standard SimBench benchmark networks.
+7. Validation against the powerful pglib-opf benchmark library for optimal power
+   flow formulations [@babaeinejadsarookolaee2021powergridlibrarybenchmarking].
 
 The library is primarily intended for power-systems researchers and
 distribution-grid engineers who are familiar with pandapower and want to add
