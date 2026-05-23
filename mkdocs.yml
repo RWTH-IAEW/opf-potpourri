@@ -33,6 +33,9 @@ nav:
   - Home: index.md
   - Getting Started: getting-started.md
   - Class Architecture: architecture.md
+  - Mathematical Modelling:
+      - Formulations: mathematical-modelling.md
+      - Scientific Work: scientific-work.md
   - User Guide:
       - Single-Period OPF: user-guide/single-period.md
       - Multi-Period OPF: user-guide/multi-period.md
@@ -50,6 +53,3 @@ nav:
       - Multi-Period Models: api/multi-period.md
       - Flexible Devices: api/devices.md
       - Utilities: api/utilities.md
-  - Mathematical Modelling:
-      - Formulations: mathematical-modelling.md
-      - Scientific Work: scientific-work.md
