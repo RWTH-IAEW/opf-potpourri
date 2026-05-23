@@ -7,7 +7,7 @@ license: MIT
 version: "0.3.1"
 date-released: "2026-05-23"
 repository-code: "https://github.com/RWTH-IAEW/opf-potpourri"
-url: "https://opf-potpourri.readthedocs.io/"
+url: "https://github.com/RWTH-IAEW/opf-potpourri"
 identifiers:
   - type: doi
     value: "10.5281/zenodo.20357012"
