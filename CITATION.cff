@@ -84,6 +84,6 @@ authors:
       Institute for High Voltage Equipment and Grids, Digitalization and
       Energy Economics (IAEW), RWTH Aachen University
     orcid: "0000-0001-5834-1842"
-# identifiers:
-#   - type: doi
-#     value: "10.XXXX/zenodo.XXXXXXX"   # add Zenodo DOI after archival
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.20357012"
