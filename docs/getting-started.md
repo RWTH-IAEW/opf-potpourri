@@ -65,7 +65,7 @@ bash Miniconda3-latest-Linux-x86_64.sh   # or the Mamba equivalent
 **2. Clone the repository**
 
 ```bash
-git clone https://github.com/RWTH-IAEW/opf-potpourri.git
+git clone --recurse-submodules https://github.com/RWTH-IAEW/opf-potpourri.git
 cd opf-potpourri
 ```
 

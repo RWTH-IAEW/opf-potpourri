@@ -90,6 +90,32 @@ Hosting capacity analysis with binary wind placement.  Sweeps the minimum
 turbine size (`SWmin`) and the wind-vs-loss trade-off parameter (`eps`).
 Enforces VDE-AR-N 4105 grid-code Q constraints.
 
+### `timeseries_acopf.py`
+Integrates the single-period AC OPF into pandapower's `run_timeseries`
+framework. Attaches SimBench 15-min load and sgen profiles via
+`ConstControl` / `DFData`, defines a custom `run=run_acopf` callback that
+builds and solves a fresh `ACOPF` model at every time step, and records
+results with `OutputWriter`. Runs one full day (96 steps) on a LV rural
+network and prints a summary of voltage, line loading, and dispatch.
+
+---
+
+## Benchmarking
+
+### `pglib_benchmark.py`
+Benchmarks potpourri DC and AC OPF against the
+[PGLib-OPF](https://github.com/power-grid-lib/pglib-opf) reference results
+(PowerModels.jl + IPOPT). Loads cases via `potpourri.benchmarks.load_pglib_case`,
+applies PGLib-compatible flags (`thermal_limit='mva'`, `free_slack_vm=True`,
+`angle_limits=True`), wires the polynomial generator cost from `net.poly_cost`,
+and writes `results/pglib_benchmark.{csv,md}` with a BASELINE.md-style table
+comparing objective values.
+
+Requires the PGLib-OPF submodule:
+```bash
+git submodule update --init benchmarks/pglib-opf
+```
+
 ---
 
 ## Validation

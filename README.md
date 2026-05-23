@@ -42,7 +42,7 @@ Clone the repository and create the Conda environment, which includes IPOPT
 and GLPK:
 
 ```bash
-git clone https://github.com/RWTH-IAEW/opf-potpourri.git
+git clone --recurse-submodules https://github.com/RWTH-IAEW/opf-potpourri.git
 cd opf-potpourri
 
 conda env create -f environment.yaml   # creates potpourri_env, includes solvers
@@ -182,6 +182,41 @@ pandapower net
   → .solve(solver)          SolverFactory → NLP/MIP
   → pyo_to_net()            write solution back to net.res_*
 ```
+
+---
+
+## Benchmarking against PGLib-OPF
+
+[PGLib-OPF](https://github.com/power-grid-lib/pglib-opf) is the IEEE PES
+Power Grid Library benchmark suite for optimal power flow. Each case ships
+with a published reference objective (DC and AC, solved by PowerModels.jl +
+IPOPT) so results from different solvers and formulations can be compared
+directly.
+
+The repository includes PGLib-OPF as a git submodule under `benchmarks/pglib-opf/`.
+Clone with submodules to enable it:
+
+```bash
+git clone --recurse-submodules https://github.com/RWTH-IAEW/opf-potpourri.git
+```
+
+Run the benchmark script against a configurable PGLib subset:
+
+```bash
+python scripts/pglib_benchmark.py
+```
+
+This solves DC and AC OPF on each case with PGLib-compatible flags
+(`thermal_limit='mva'`, `free_slack_vm=True`, `angle_limits=True`) and writes
+`results/pglib_benchmark.{csv,md}` with a BASELINE.md-style comparison table.
+
+The `potpourri.benchmarks` package provides `load_pglib_case` for loading any
+`.m` case file into a pandapower network ready for OPF, and reference baseline
+dicts (`PGLIB_BASELINE_TYP`, `PGLIB_BASELINE_API`, `PGLIB_BASELINE_SAD`)
+parsed from PGLib's upstream `BASELINE.md`.
+
+The PGLib submodule is only needed for benchmarking. Normal `pip install
+opf-potpourri` is unaffected — the submodule is not part of the PyPI package.
 
 ---
 
