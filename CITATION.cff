@@ -5,9 +5,12 @@ message: >-
 type: software
 license: MIT
 version: "0.3.1"
-date-released: "2026-05-23"   # update to the date of the tagged release
+date-released: "2026-05-23"
 repository-code: "https://github.com/RWTH-IAEW/opf-potpourri"
-url: "https://github.com/RWTH-IAEW/opf-potpourri"
+url: "https://opf-potpourri.readthedocs.io/"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.20357012"
 abstract: >-
   potpourri is a Python library for multi-period Optimal Power Flow (OPF) in
   distribution grids. It wraps Pyomo for optimisation modelling over
