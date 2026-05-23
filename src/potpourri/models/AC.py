@@ -1,6 +1,7 @@
 """AC power flow mixin: adds full AC equations (voltage magnitudes, reactive
 power) to Basemodel."""
 
+import numpy as np
 import pyomo.environ as pyo
 from potpourri.models.basemodel import Basemodel
 
@@ -23,25 +24,56 @@ class AC(Basemodel):
             -self.net.shunt.q_mvar * self.net.shunt.step / self.baseMVA
         )
 
-        # line and transformer addmittances
+        # --- line and transformer admittances (symmetric π model) ---
+        # The branch series admittance is y_s = 1/(r + jx) = g + jb. We split
+        # the branch into a from/to shunt of half the total line-charging
+        # susceptance b_c and a mutual series term y_s.
+        #
+        # ASSUMPTION (D11 in the formulation audit): we read y from
+        # ``_ppc["branch"][:, 4]`` and treat it as purely imaginary
+        # (``y = j·b_c``), so no branch-shunt CONDUCTANCE is modelled. This
+        # matches the standard MATPOWER convention (BR_B is susceptance
+        # only; MATPOWER has no BR_G column) and is fine for PGLib cases
+        # and pandapower's standard ``_ppc`` build. Magnetising-loss
+        # transformers with a non-zero g_m would be silently approximated
+        # by g_m = 0 here.
         r = self.net._ppc["branch"][:, 2].real
         x = self.net._ppc["branch"][:, 3].real
-        y = self.net._ppc["branch"][:, 4] * 1j
-        gt_ik = r / (r**2 + x**2)
-        bt_ik = -x / (r**2 + x**2)
-        BiiT = bt_ik + y.imag / 2
-        BikT = -bt_ik
-        GiiT = gt_ik + y.real / 2
-        GikT = -gt_ik
+        y = self.net._ppc["branch"][:, 4] * 1j  # j·b_c (no branch shunt G)
+        gt_ik = r / (r**2 + x**2)  # series conductance g
+        bt_ik = -x / (r**2 + x**2)  # series susceptance b (b<0 inductive)
+        BiiT = bt_ik + y.imag / 2  # self susceptance: b + b_c/2
+        BikT = -bt_ik  # mutual susceptance: -b
+        GiiT = gt_ik + y.real / 2  # self conductance: g + g_c/2 (g_c==0)
+        GikT = -gt_ik  # mutual conductance: -g
         trafo_start = len(self.net.line)
         trafo_end = trafo_start + len(self.net.trafo)
+        imp_table = self.net.get("impedance")
+        n_imp = (
+            len(imp_table)
+            if imp_table is not None and not imp_table.empty
+            else 0
+        )
+        # _ppc['branch'] layout (pandapower convention):
+        #   [0 : trafo_start)              → lines
+        #   [trafo_start : trafo_end)      → trafos
+        #   [trafo_end : trafo_end + n_imp)→ impedance branches
+        # We treat impedance rows as additional lines in the model — see
+        # the matching block in Basemodel.__init__.
+        if n_imp:
+            line_idx_ppc = np.r_[
+                np.arange(0, trafo_start),
+                np.arange(trafo_end, trafo_end + n_imp),
+            ]
+        else:
+            line_idx_ppc = np.arange(0, trafo_start)
 
         self.line_data = self.line_data.assign(
             **{
-                "Bii_data": BiiT[:trafo_start],
-                "Bik_data": BikT[:trafo_start],
-                "Gii_data": GiiT[:trafo_start],
-                "Gik_data": GikT[:trafo_start],
+                "Bii_data": BiiT[line_idx_ppc],
+                "Bik_data": BikT[line_idx_ppc],
+                "Gii_data": GiiT[line_idx_ppc],
+                "Gik_data": GikT[line_idx_ppc],
             }
         )
         self.trafo_data = self.trafo_data.assign(

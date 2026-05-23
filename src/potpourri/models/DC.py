@@ -1,6 +1,8 @@
 """DC power flow mixin: adds linearised DC equations (voltage angles only)
 to Basemodel."""
 
+import numpy as np
+import pandas as pd
 import pyomo.environ as pyo
 from potpourri.models.basemodel import Basemodel
 
@@ -23,18 +25,45 @@ class DC(Basemodel):
         BL = -1 / x
         trafo_start = len(self.net.line)
         trafo_end = trafo_start + len(self.net.trafo)
+        imp_table = self.net.get("impedance")
+        n_imp = (
+            len(imp_table)
+            if imp_table is not None and not imp_table.empty
+            else 0
+        )
 
         self.trafo_data = self.trafo_data.assign(
             **{"BLT_data": BL[trafo_start:trafo_end]}
         )
-        self.line_data["BL_data"] = BL[:trafo_start]
 
+        # DC susceptance for lines: −1/x (matpower DC convention).
+        # For native lines we recompute from net.line for traceability;
+        # for impedance branches (which carry per-unit r/x referenced to
+        # impedance.sn_mva, in actual ohms per the from-bus), we read the
+        # per-unit value pandapower already wrote into _ppc['branch'].
         ZN = self.net.bus.vn_kv**2 / self.baseMVA
-        y_s = -1 / (
+        y_s_line = -1 / (
             self.net.line.x_ohm_per_km * self.net.line.length_km
         )  # according to matpower manual dc modeling
-
-        self.BL_data = y_s * ZN[self.net.line.from_bus].values
+        bl_line = y_s_line * ZN[self.net.line.from_bus].values
+        # Use a pd.Series keyed by the model.L indices (native line indices +
+        # synthetic impedance indices) so out-of-service line rows — whose
+        # indices are skipped in model.L — don't shift the lookup.
+        line_index = list(self.net.line.index)
+        if n_imp:
+            bl_imp = BL[trafo_end : trafo_end + n_imp]
+            self.BL_data = pd.Series(
+                np.concatenate([bl_line, bl_imp]),
+                index=line_index + [trafo_start + i for i in range(n_imp)],
+            )
+            line_idx_ppc = np.r_[
+                np.arange(0, trafo_start),
+                np.arange(trafo_end, trafo_end + n_imp),
+            ]
+        else:
+            self.BL_data = pd.Series(bl_line, index=line_index)
+            line_idx_ppc = np.arange(0, trafo_start)
+        self.line_data["BL_data"] = BL[line_idx_ppc]
 
         self.create_model()
 

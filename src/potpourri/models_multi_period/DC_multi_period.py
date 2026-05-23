@@ -1,6 +1,8 @@
 """Multi-period DC power flow mixin: adds linearised DC equations indexed
 over time steps."""
 
+import numpy as np
+import pandas as pd
 from pyomo.environ import *
 from potpourri.models_multi_period.basemodel_multi_period import (
     Basemodel_multi_period,
@@ -12,211 +14,149 @@ from potpourri.models_multi_period.basemodel_multi_period import (
 class DC_multi_period(Basemodel_multi_period):
     """Multi-period linearised DC power flow model."""
 
-    def __init__(self, net, toT, fromT=None):
-        super().__init__(net, toT, fromT)
+    def __init__(self, net, toT, fromT=None, pf=1):
+        super().__init__(net, toT, fromT, pf)
 
         x = self.net._ppc["branch"][:, 3].real
         BL = -1 / x
         trafo_start = len(self.net.line)
         trafo_end = trafo_start + len(self.net.trafo)
+        imp_table = self.net.get("impedance")
+        n_imp = (
+            len(imp_table)
+            if imp_table is not None and not imp_table.empty
+            else 0
+        )
 
         self.trafo_data = self.trafo_data.assign(
             **{"BLT_data": BL[trafo_start:trafo_end]}
         )
-        self.line_data["BL_data"] = BL[:trafo_start]
+
+        # native lines + impedance rows (in that order) populate line_data
+        if n_imp:
+            line_idx_ppc = np.r_[
+                np.arange(0, trafo_start),
+                np.arange(trafo_end, trafo_end + n_imp),
+            ]
+        else:
+            line_idx_ppc = np.arange(0, trafo_start)
+        self.line_data["BL_data"] = BL[line_idx_ppc]
 
         ZN = self.net.bus.vn_kv**2 / self.baseMVA
-        y_s = -1 / (
+        y_s_line = -1 / (
             self.net.line.x_ohm_per_km * self.net.line.length_km
         )  # according to matpower manual dc modeling
-
-        self.BL_data = y_s * ZN[self.net.line.from_bus].values
+        bl_line = y_s_line * ZN[self.net.line.from_bus].values
+        # Use a pd.Series so ``self.BL_data[self.model.L]`` indexing works
+        # the same way it does for native lines + impedance synthetic IDs.
+        line_index = list(self.net.line.index)
+        if n_imp:
+            bl_imp = BL[trafo_end : trafo_end + n_imp]
+            self.BL_data = pd.Series(
+                np.concatenate([bl_line, bl_imp]),
+                index=line_index + [trafo_start + i for i in range(n_imp)],
+            )
+        else:
+            self.BL_data = pd.Series(bl_line, index=line_index)
 
         self.create_model()
 
     def create_model(self):
         """Build the multi-period DC Pyomo model with susceptance parameters
-        and KCL/KVL constraints."""
+        and time-variant KCL/KVL constraints.
+
+        Conventions
+        -----------
+        * `BL`, `BLT`, `shift`, `GB` — single-period parameters indexed by
+          branch / shunt (no time index).
+        * `delta[bus, t]`, `pLfrom[l, t]`, `pLto[l, t]`, `pThv/pTlv[l, t]`,
+          `psG/pG[g, t]`, `pD[d, t]` — time-indexed variables.
+        * `deltaL[l, t]`, `deltaLT[l, t]` — time-indexed angle differences.
+
+        The previous version had a dead ``self.T is None`` branch (``self.T``
+        is always an int set by ``Basemodel_multi_period.__init__``), used the
+        bare int ``self.T`` rather than the Pyomo Set ``self.model.T`` for
+        constraint indexing, and accessed several single-period parameters
+        with a spurious time index.
+        """
         super().create_model()
 
         self.model.name = "DC"
 
-        # lines and transformer chracteristics
+        # --- single-period line / transformer parameters ---
         self.model.BL = Param(
             self.model.L, within=Reals, initialize=self.BL_data[self.model.L]
-        )  # susceptance of a line
+        )  # line + impedance series susceptance
         self.model.BLT = Param(
             self.model.TRANSF,
             within=Reals,
             initialize=self.trafo_data.BLT_data[self.model.TRANSF],
-        )  # susceptance of a transformer
+        )  # transformer series susceptance
 
-        # --- Variables ---
+        # --- time-indexed angle differences ---
         self.model.deltaL = Var(
             self.model.L, self.model.T, domain=Reals
-        )  # angle difference across lines
+        )  # angle difference across lines + impedance branches
         self.model.deltaLT = Var(
             self.model.TRANSF, self.model.T, domain=Reals
         )  # angle difference across transformers
 
-        if self.T is None:
+        # --- KCL at each bus, per time step ---
+        @self.model.Constraint(self.model.B, self.model.T)
+        def KCL_def(model, b, t):
+            kcl = sum(
+                model.psG[g, t] for g in model.sG if (g, b) in model.sGbs
+            ) + sum(
+                model.pG[g, t] for g in model.G if (g, b) in model.Gbs
+            ) == sum(
+                model.pD[d, t] for d in model.D if (b, d) in model.Dbs
+            ) + sum(
+                model.pLfrom[l, t] for l in model.L if model.A[l, 1] == b
+            ) + sum(
+                model.pLto[l, t] for l in model.L if model.A[l, 2] == b
+            ) + sum(
+                model.pThv[l, t] for l in model.TRANSF if model.AT[l, 1] == b
+            ) + sum(
+                model.pTlv[l, t] for l in model.TRANSF if model.AT[l, 2] == b
+            ) + sum(
+                model.GB[s] for s in model.SHUNT if (b, s) in model.SHUNTbs
+            )
+            if isinstance(kcl, bool):
+                return Constraint.Skip
+            return kcl
 
-            @self.model.Constraint(self.model.B)
-            def KCL_def(model, b):
-                kcl = sum(
-                    self.model.psG[g]
-                    for g in self.model.sG
-                    if (g, b) in self.model.sGbs
-                ) + sum(
-                    self.model.pG[g]
-                    for g in self.model.G
-                    if (g, b) in self.model.Gbs
-                ) == sum(
-                    self.model.pD[d]
-                    for d in self.model.D
-                    if (b, d) in self.model.Dbs
-                ) + sum(
-                    self.model.pLfrom[l]
-                    for l in self.model.L
-                    if self.model.A[l, 1] == b
-                ) + sum(
-                    self.model.pLto[l]
-                    for l in self.model.L
-                    if self.model.A[l, 2] == b
-                ) + sum(
-                    self.model.pThv[l]
-                    for l in self.model.TRANSF
-                    if self.model.AT[l, 1] == b
-                ) + sum(
-                    self.model.pTlv[l]
-                    for l in self.model.TRANSF
-                    if self.model.AT[l, 2] == b
-                ) + sum(
-                    self.model.GB[s]
-                    for s in self.model.SHUNT
-                    if (b, s) in self.model.SHUNTbs
-                )
-                if isinstance(kcl, bool):
-                    return Constraint.Skip
-                return kcl == 0
+        # --- KVL on lines + impedance branches ---
+        @self.model.Constraint(self.model.L, self.model.T)
+        def KVL_real_fromend(model, l, t):
+            return model.pLfrom[l, t] == (-model.BL[l]) * model.deltaL[l, t]
 
-            # --- Kirchoff's voltage law at each line and transformer---
-            @self.model.Constraint(self.model.L)
-            def KVL_real_fromend(model, l):
-                return model.pLfrom[l] == (-model.BL[l]) * model.deltaL[l]
+        @self.model.Constraint(self.model.L, self.model.T)
+        def KVL_real_toend(model, l, t):
+            return model.pLto[l, t] == (model.BL[l]) * model.deltaL[l, t]
 
-            @self.model.Constraint(self.model.L)
-            def KVL_real_toend(model, l):
-                return model.pLto[l] == (model.BL[l]) * model.deltaL[l]
+        # --- KVL on transformers ---
+        @self.model.Constraint(self.model.TRANSF, self.model.T)
+        def KVL_trans_fromend(model, l, t):
+            return model.pThv[l, t] == (-model.BLT[l]) * model.deltaLT[l, t]
 
-            @self.model.Constraint(self.model.TRANSF, self.model.T)
-            def KVL_trans_fromend(model, l):
-                return model.pThv[l] == (-model.BLT[l]) * (model.deltaLT[l])
+        @self.model.Constraint(self.model.TRANSF, self.model.T)
+        def KVL_trans_toend(model, l, t):
+            return model.pTlv[l, t] == (model.BLT[l]) * model.deltaLT[l, t]
 
-            @self.model.Constraint(self.model.TRANSF)
-            def KVL_trans_toend(model, l):
-                return model.pTlv[l] == (model.BLT[l]) * (model.deltaLT[l])
+        # --- angle-difference identities ---
+        @self.model.Constraint(self.model.L, self.model.T)
+        def phase_angle_diff1(model, l, t):
+            return (
+                model.deltaL[l, t]
+                == model.delta[model.A[l, 1], t]
+                - model.delta[model.A[l, 2], t]
+            )
 
-            # --- phase angle constraints ---
-            @self.model.Constraint(self.model.L)
-            def phase_angle_diff1(model, l):
-                return (
-                    model.deltaL[l]
-                    == model.delta[model.A[l, 1]] - model.delta[model.A[l, 2]]
-                )
-
-            # --- phase angle constraints ---
-            @self.model.Constraint(self.model.TRANSF)
-            def phase_angle_diff2(model, l):
-                return (
-                    model.deltaLT[l]
-                    == model.delta[model.AT[l, 1]]
-                    - model.delta[model.AT[l, 2]]
-                    - model.shift[l]
-                )
-
-        else:
-            # --- Kirchoff's current law at each bus b time variant---
-            @self.model.Constraint(self.model.B, self.T)
-            def KCL_def(model, b, t):
-                kcl = sum(
-                    self.model.psG[g, t]
-                    for g in self.model.sG
-                    if (g, b) in self.model.sGbs
-                ) + sum(
-                    self.model.pG[g, t]
-                    for g in self.model.G
-                    if (g, b) in self.model.Gbs
-                ) == sum(
-                    self.model.pD[d, t]
-                    for d in self.model.D
-                    if (b, d) in self.model.Dbs
-                ) + sum(
-                    self.model.pLfrom[l, t]
-                    for l in self.model.L
-                    if self.model.A[l, 1] == b
-                ) + sum(
-                    self.model.pLto[l, t]
-                    for l in self.model.L
-                    if self.model.A[l, 2] == b
-                ) + sum(
-                    self.model.pThv[l, t]
-                    for l in self.model.TRANSF
-                    if self.model.AT[l, 1] == b
-                ) + sum(
-                    self.model.pTlv[l, t]
-                    for l in self.model.TRANSF
-                    if self.model.AT[l, 2] == b
-                ) + sum(
-                    self.model.GB[s, t]
-                    for s in self.model.SHUNT
-                    if (b, s) in self.model.SHUNTbs
-                )
-                if isinstance(kcl, bool):
-                    return Constraint.Skip
-                return kcl == 0
-
-            # --- Kirchoff's voltage law at each line and transformer---
-            @self.model.Constraint(self.model.L, self.model.T)
-            def KVL_real_fromend(model, l, t):
-                return (
-                    model.pLfrom[l, t] == (-model.BL[l, t]) * model.deltaL[l]
-                )
-
-            @self.model.Constraint(self.model.L, self.model.T)
-            def KVL_real_toend(model, l, t):
-                return (
-                    model.pLto[l, t] == (model.BL[l, t]) * model.deltaL[l, t]
-                )
-
-            @self.model.Constraint(self.model.TRANSF, self.model.T)
-            def KVL_trans_fromend(model, l, t):
-                return (
-                    model.pThv[l, t]
-                    == (-model.BLT[l, t]) * (model.deltaLT[l, t])
-                )
-
-            @self.model.Constraint(self.model.TRANSF, self.model.T)
-            def KVL_trans_toend(model, l, t):
-                return (
-                    model.pTlv[l, t]
-                    == (model.BLT[l, t]) * (model.deltaLT[l, t])
-                )
-
-            # --- phase angle constraints ---
-            @self.model.Constraint(self.model.L, self.model.T)
-            def phase_angle_diff1(model, l, t):
-                return (
-                    model.deltaL[l, t]
-                    == model.delta[model.A[l, 1]] - model.delta[model.A[l, 2]]
-                )
-
-            # --- phase angle constraints ---
-            @self.model.Constraint(self.model.TRANSF, self.model.T)
-            def phase_angle_diff2(model, l, t):
-                return (
-                    model.deltaLT[l, t]
-                    == model.delta[model.AT[l, 1]]
-                    - model.delta[model.AT[l, 2]]
-                    - model.shift[l, t]
-                )
+        @self.model.Constraint(self.model.TRANSF, self.model.T)
+        def phase_angle_diff2(model, l, t):
+            return (
+                model.deltaLT[l, t]
+                == model.delta[model.AT[l, 1], t]
+                - model.delta[model.AT[l, 2], t]
+                - model.shift[l]
+            )

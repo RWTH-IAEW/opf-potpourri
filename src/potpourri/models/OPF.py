@@ -27,48 +27,82 @@ class OPF(Basemodel):
     def generation_real_power_limits(self):
         """Read generator real power limits from net into generation_data.
 
-        Populates generation_data['max_p'] and ['min_p'] (per-unit on baseMVA).
-        Non-controllable generators are pinned to their current p_mw setpoint.
+        Populates ``generation_data['max_p']`` and ``['min_p']`` (per-unit on
+        baseMVA). Non-controllable generators are pinned to their current
+        ``p_mw`` setpoint.
+
+        ``net._gen_order`` slice lengths reflect only the in-service rows of
+        each element type (ext_grid/gen). We must therefore filter the source
+        DataFrames to in-service rows before broadcasting into ``[f:t]``;
+        otherwise networks with any out-of-service generator produce a shape
+        mismatch.
         """
         max_p = np.full(len(self.generation_data), 1e9) / self.baseMVA
         min_p = np.full(len(self.generation_data), -1e9) / self.baseMVA
 
         for element, (f, t) in self.net._gen_order.items():
-            if "max_p_mw" in self.net[element]:
+            if element not in self.net or self.net[element].empty:
+                continue
+            table = self.net[element]
+            if "in_service" in table.columns:
+                table = table.loc[table.in_service.astype(bool)]
+            if len(table) != t - f:
+                continue
+            if "max_p_mw" in table:
                 max_p[f:t] = (
-                    self.net[element].max_p_mw.astype(float).fillna(1e9).values
+                    table.max_p_mw.astype(float).fillna(1e9).values
                     / self.baseMVA
                 )
-            if "min_p_mw" in self.net[element]:
+            if "min_p_mw" in table:
                 min_p[f:t] = (
-                    self.net[element]
-                    .min_p_mw.astype(float)
-                    .fillna(-1e9)
-                    .values
+                    table.min_p_mw.astype(float).fillna(-1e9).values
                     / self.baseMVA
                 )
 
-        if "controllable" in self.net.gen:
-            controllable = self.net["gen"]["controllable"].values
-            not_controllable = ~controllable.astype(bool)
-
-            if np.any(not_controllable):
+        # Pin non-controllable in-service gens to their dispatched p_mw.
+        gen_tbl = self.net.get("gen")
+        if (
+            gen_tbl is not None
+            and not gen_tbl.empty
+            and "controllable" in gen_tbl.columns
+        ):
+            in_service = (
+                gen_tbl.in_service.astype(bool).values
+                if "in_service" in gen_tbl.columns
+                else np.ones(len(gen_tbl), dtype=bool)
+            )
+            controllable = gen_tbl["controllable"].astype(bool).values
+            not_ctrl_in_service = (~controllable) & in_service
+            if np.any(not_ctrl_in_service):
                 f, t = self.net._gen_order["gen"]
-
-                p_mw = self.net["gen"]["p_mw"].values[not_controllable]
-
-                not_controllable_gens = np.arange(f, t)[not_controllable]
-                max_p[not_controllable_gens] = p_mw / self.baseMVA
-                min_p[not_controllable_gens] = p_mw / self.baseMVA
+                ppc_mask = not_ctrl_in_service[in_service]
+                target_idx = np.arange(f, t)[ppc_mask]
+                p_mw = gen_tbl["p_mw"].values[not_ctrl_in_service]
+                max_p[target_idx] = p_mw / self.baseMVA
+                min_p[target_idx] = p_mw / self.baseMVA
 
         self.generation_data["max_p"] = max_p
         self.generation_data["min_p"] = min_p
 
     def static_generation_real_power_limits(self):
-        """Read static generator real power limits from net.sgen.
+        """Read static generator real power limits from ``net.sgen``.
 
-        Populates static_generation_data['max_p'], ['min_p'], and
-        ['controllable'] (per-unit). Defaults: max = p_mw, min = 0.
+        Populates ``static_generation_data['max_p']``, ``['min_p']``, and
+        ``['controllable']`` (per-unit).
+
+        Defaults (kept for backwards-compatibility, see D10 in the audit):
+
+        * ``max_p`` falls back to ``net.sgen.p_mw`` when ``max_p_mw`` is
+          missing or NaN. This pins the upper bound to the dispatched
+          setpoint by default.
+        * ``min_p`` falls back to ``0`` when ``min_p_mw`` is missing or
+          NaN — distribution-grid convention, i.e. sgens (PV, wind) can be
+          curtailed to zero but cannot reverse. This matches the historical
+          assumption pandapower makes when ``min_p_mw`` is absent. If you
+          want a non-zero lower bound, set ``net.sgen.min_p_mw`` explicitly.
+
+        Set ``controllable=False`` on an sgen if you do not want curtailment;
+        the basemodel then pins ``psG`` to ``p_mw``.
         """
         if "controllable" in self.net.sgen:
             self.static_generation_data["controllable"] = (
@@ -132,12 +166,13 @@ class OPF(Basemodel):
         )
 
     def __calc_SLmax(self, max_loading_percent=100):
+        # Native lines: max_i_ka @ from-bus vn_kv → MVA limit, p.u.
         vr = self.net.bus.loc[
             self.net.line["from_bus"].values, "vn_kv"
         ].values * np.sqrt(3.0)
         max_i_ka = self.net.line.max_i_ka.values
         df = self.net.line.df.values
-        return (
+        line_lim = (
             max_loading_percent
             / 100.0
             * max_i_ka
@@ -146,6 +181,23 @@ class OPF(Basemodel):
             * vr
             / self.baseMVA
         )
+
+        # Impedance branches: pandapower stores an apparent-power rating
+        # in net.impedance.sn_mva (0 = no rating). They feed into model.L
+        # alongside lines (see Basemodel.__init__). Use sn_mva/baseMVA as the
+        # p.u. limit; if sn_mva == 0, set a very large limit (essentially
+        # unrated, matching pandapower's own "no limit" interpretation).
+        imp = self.net.get("impedance")
+        if imp is not None and not imp.empty:
+            sn_imp = imp["sn_mva"].astype(float).values.copy()
+            unrated = sn_imp <= 0
+            sn_imp[unrated] = 1e6  # MVA — well above any realistic flow
+            # max_loading_percent may be an array of length n_line; default to
+            # 100 % for the impedance entries (pandapower has no max_loading
+            # column on net.impedance).
+            imp_lim = 1.0 * sn_imp / self.baseMVA
+            return np.concatenate([line_lim, imp_lim])
+        return line_lim
 
     def _calc_opf_parameters(self, **kwargs):
         """Compute all OPF limit data from the network before model
@@ -242,7 +294,24 @@ class OPF(Basemodel):
         )  # real power transformer limit
 
         # --- static generator power limits ---
+        # When sPGmin == sPGmax (synchronous condensers, fixed sgens) we pin
+        # the variable via tight bounds rather than adding a degenerate
+        # range constraint OR a hard fix. Calling Var.fix() makes Pyomo's NL
+        # writer eliminate the variable, which can drive IPOPT's
+        # post-substitution problem past `TOO_FEW_DEGREES_OF_FREEDOM`; using
+        # an epsilon-padded bound keeps the variable in the NL file with a
+        # value pinned to within numerical tolerance.
+        _DEGENERATE_EPS = 1e-9
+
         def static_generation_real_power_bounds(model, g):
+            lo = float(pyo.value(model.sPGmin[g]))
+            hi = float(pyo.value(model.sPGmax[g]))
+            if abs(hi - lo) < 1e-12:
+                model.psG[g].unfix()
+                model.psG[g].setlb(lo - _DEGENERATE_EPS)
+                model.psG[g].setub(hi + _DEGENERATE_EPS)
+                model.psG[g].set_value(lo)
+                return pyo.Constraint.Skip
             model.psG[g].unfix()
             return model.sPGmin[g], model.psG[g], model.sPGmax[g]
 
@@ -252,6 +321,14 @@ class OPF(Basemodel):
 
         # --- generation real power limits ---
         def real_power_bounds(model, g):
+            lo = float(pyo.value(model.PGmin[g]))
+            hi = float(pyo.value(model.PGmax[g]))
+            if abs(hi - lo) < 1e-12:
+                model.pG[g].unfix()
+                model.pG[g].setlb(lo - _DEGENERATE_EPS)
+                model.pG[g].setub(hi + _DEGENERATE_EPS)
+                model.pG[g].set_value(lo)
+                return pyo.Constraint.Skip
             model.pG[g].unfix()
             return model.PGmin[g], model.pG[g], model.PGmax[g]
 

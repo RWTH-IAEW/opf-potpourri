@@ -60,25 +60,62 @@ class Basemodel_multi_period:
         # --- Param Data ---
         self.baseMVA = self.net.sn_mva
 
-        # --- line ---
+        # --- line (+ pandapower impedance branches) ---
+        # Mirror of the single-period Basemodel fix: net.impedance carries
+        # branches whose from/to vn_kv differ but with no off-nominal tap; in
+        # _ppc['branch'] they live in the slice [trafo_end : trafo_end+n_imp]
+        # and are otherwise indistinguishable from lines in per-unit. We
+        # include them in model.L using synthetic indices >= len(net.line).
         hv_bus = self.net._ppc["branch"][:, 0].real
         lv_bus = self.net._ppc["branch"][:, 1].real
         trafo_start = len(self.net.line.index)
         trafo_end = trafo_start + len(self.net.trafo.index)
 
-        hv_bus_line = hv_bus[:trafo_start]
-        lv_bus_line = lv_bus[:trafo_start]
+        n_line = trafo_start
+        imp_table = self.net.get("impedance")
+        n_imp = (
+            len(imp_table)
+            if imp_table is not None and not imp_table.empty
+            else 0
+        )
+
+        # synthetic indices for impedance rows: n_line, n_line+1, ...
+        line_indices = list(self.net.line.index) + [
+            n_line + i for i in range(n_imp)
+        ]
+        line_in_service = np.concatenate(
+            [
+                self.net.line.in_service.astype(bool).values,
+                (
+                    imp_table["in_service"].astype(bool).values
+                    if n_imp and "in_service" in imp_table.columns
+                    else np.ones(n_imp, dtype=bool)
+                ),
+            ]
+        )
         self.line_data = pd.DataFrame(
-            {"in_service": self.net.line.in_service.values}
+            {"in_service": line_in_service}, index=line_indices
         )
+        # Bus references: native lines from _ppc[:n_line], impedance from
+        # _ppc[trafo_end : trafo_end + n_imp].
+        if n_imp:
+            line_idx_ppc = np.r_[
+                np.arange(0, n_line),
+                np.arange(trafo_end, trafo_end + n_imp),
+            ]
+        else:
+            line_idx_ppc = np.arange(0, n_line)
+        hv_bus_line = hv_bus[line_idx_ppc]
+        lv_bus_line = lv_bus[line_idx_ppc]
         line_ind = self.line_data.index[self.line_data.in_service]
-        self.bus_line_dict = dict(
-            zip(
-                list(zip(line_ind, [1] * len(line_ind)))
-                + list(zip(line_ind, [2] * len(line_ind))),
-                np.concatenate([hv_bus_line[line_ind], lv_bus_line[line_ind]]),
-            )
-        )
+        # Map line_ind -> position in line_idx_ppc array
+        pos = {idx: p for p, idx in enumerate(self.line_data.index)}
+        self.bus_line_dict = {}
+        for li in line_ind:
+            p = pos[li]
+            self.bus_line_dict[(int(li), 1)] = int(hv_bus_line[p])
+            self.bus_line_dict[(int(li), 2)] = int(lv_bus_line[p])
+        self._n_native_lines = n_line
 
         # --- transformer ---
         shift = (

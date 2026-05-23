@@ -110,6 +110,12 @@ def _get_bus_power_results(net):
 
 
 def _line_results_to_net(net, model):
+    # model.L includes both net.line rows (indices < n_line) and any
+    # net.impedance rows (indices >= n_line). pyo_to_net writes line flows
+    # back to net.res_line for the native lines only; impedance results are
+    # written to net.res_impedance.
+    n_line = len(net.line.index)
+
     net.res_line.vm_from_pu = pd.Series(
         net.res_bus.vm_pu[net.line.from_bus].values, index=net.line.index
     )
@@ -120,17 +126,27 @@ def _line_results_to_net(net, model):
     ].values
     net.res_line.va_to_degree = net.res_bus.va_degree[net.line.to_bus].values
 
-    net.res_line.p_from_mw = model.pLfrom.get_values()
-    net.res_line.p_from_mw *= model.baseMVA.value
-    net.res_line.p_to_mw = model.pLto.get_values()
-    net.res_line.p_to_mw *= model.baseMVA.value
+    pL_from = model.pLfrom.get_values()
+    pL_to = model.pLto.get_values()
+    base = model.baseMVA.value
+
+    # Index by net.line.index so out-of-service lines (absent from model.L)
+    # get filled with 0.
+    def _series_for_lines(d):
+        return pd.Series(
+            [d.get(int(idx), 0.0) * base for idx in net.line.index],
+            index=net.line.index,
+        )
+
+    net.res_line.p_from_mw = _series_for_lines(pL_from)
+    net.res_line.p_to_mw = _series_for_lines(pL_to)
     net.res_line.pl_mw = net.res_line.p_from_mw + net.res_line.p_to_mw
 
     if _is_ac(model):
-        net.res_line.q_from_mvar = model.qLfrom.get_values()
-        net.res_line.q_from_mvar *= model.baseMVA.value
-        net.res_line.q_to_mvar = model.qLto.get_values()
-        net.res_line.q_to_mvar *= model.baseMVA.value
+        qL_from = model.qLfrom.get_values()
+        qL_to = model.qLto.get_values()
+        net.res_line.q_from_mvar = _series_for_lines(qL_from)
+        net.res_line.q_to_mvar = _series_for_lines(qL_to)
         net.res_line.ql_mvar = (
             net.res_line.q_from_mvar + net.res_line.q_to_mvar
         )
@@ -162,17 +178,50 @@ def _line_results_to_net(net, model):
 
     net.res_line.fillna(0, inplace=True)
 
+    # Write impedance branch flows back to net.res_impedance if present.
+    imp = net.get("impedance")
+    if imp is not None and not imp.empty:
+        # impedance synthetic indices in model.L start at n_line
+        def _imp_series(d):
+            return [
+                d.get(int(n_line + i), 0.0) * base for i in range(len(imp))
+            ]
+
+        rows_p_from = _imp_series(pL_from)
+        rows_p_to = _imp_series(pL_to)
+        if _is_ac(model):
+            qL_from = model.qLfrom.get_values()
+            qL_to = model.qLto.get_values()
+            rows_q_from = _imp_series(qL_from)
+            rows_q_to = _imp_series(qL_to)
+        else:
+            rows_q_from = [0.0] * len(imp)
+            rows_q_to = [0.0] * len(imp)
+        net.res_impedance = pd.DataFrame(
+            {
+                "p_from_mw": rows_p_from,
+                "q_from_mvar": rows_q_from,
+                "p_to_mw": rows_p_to,
+                "q_to_mvar": rows_q_to,
+            },
+            index=imp.index,
+        )
+
 
 def _generation_results_to_net(net, model):
     pg = model.pG.get_values()
-    for gen, ord in net._gen_order.items():
-        net["res_" + gen].p_mw = [pg[i] for i in range(ord[0], ord[1])]
-        net["res_" + gen].p_mw *= model.baseMVA.value
+    qg = model.qG.get_values() if _is_ac(model) else None
+    base = model.baseMVA.value
+    G_keys = list(model.G)
 
-        if _is_ac(model):
-            qg = model.qG.get_values()
-            net["res_" + gen].q_mvar = [qg[i] for i in range(ord[0], ord[1])]
-            net["res_" + gen].q_mvar *= model.baseMVA.value
+    for gen, ord in net._gen_order.items():
+        # Use the actual element indices that fall in this [f, t) slice,
+        # rather than assuming pg/qg dicts have contiguous integer keys.
+        keys = [k for k in G_keys if ord[0] <= k < ord[1]]
+        keys.sort()
+        net["res_" + gen].p_mw = [pg[k] * base for k in keys]
+        if qg is not None:
+            net["res_" + gen].q_mvar = [qg[k] * base for k in keys]
 
         net["res_" + gen].set_index(net[gen].index, inplace=True)
 

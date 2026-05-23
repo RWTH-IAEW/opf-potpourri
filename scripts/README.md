@@ -32,6 +32,7 @@ python scripts/minimal_ac_power_flow.py
 | `objective_tradeoff_demo.py` | How four different objectives (voltage deviation, reactive generation, active import, network losses) produce different dispatch decisions on the same network |
 | `constraint_activation_demo.py` | How activating each constraint group (voltage bounds, line loading, Q limits) restricts the feasible space and changes the optimal PV dispatch |
 | `time_series_snapshot_opf.py` | Independent AC OPF for 8 representative seasonal/diurnal snapshots; illustrates the snapshot-OPF paradigm |
+| `timeseries_acopf.py` | AC OPF at every step of a full-day pandapower `run_timeseries` simulation; passes `run_acopf` as the `run=` kwarg, drives loads and sgens from simbench profiles via `ConstControl`/`DFData`, and logs results with `OutputWriter` |
 | `compute_feasible_operation_region.py` | Traces the (P, Q) feasible operation region at the grid connection point using angle-based boundary sampling |
 
 ### Multi-period planning
@@ -49,6 +50,7 @@ python scripts/minimal_ac_power_flow.py
 | `validate_ac_model_against_pandapower.py` | Full AC model validation on 6 SimBench networks; reports MAE, RMSE, and max error for voltage magnitude, angle, and line losses |
 | `compare_solvers.py` | Compares NEOS NLP solver backends (IPOPT, KNITRO, BONMIN, …) across 6 SimBench networks; records solve time and accuracy; saves CSV (requires NEOS email) |
 | `performance_test_solver.py` | Perfplot-based scaling benchmark: solve time vs. network size across NEOS solvers; saves a PNG chart (requires `pip install potpourri[performance-test]` and NEOS email) |
+| `pglib_benchmark.py` | Validates the AC- and DC-OPF formulations against the IEEE PES PGLib-OPF reference values. Loads MATPOWER `.m` cases via `potpourri.benchmarks.load_pglib_case`, applies the PGLib-compatible OPF flags (`thermal_limit='mva'`, `free_slack_vm=True`, `angle_limits=True`), and reports objective gaps. Writes `results/pglib_benchmark.{csv,md}`. |
 
 ---
 
@@ -63,6 +65,7 @@ python scripts/minimal_ac_power_flow.py
 | `objective_tradeoff_demo.py` | IPOPT |
 | `constraint_activation_demo.py` | IPOPT |
 | `time_series_snapshot_opf.py` | IPOPT |
+| `timeseries_acopf.py` | IPOPT |
 | `compute_feasible_operation_region.py` | IPOPT |
 | `multi_period_acopf.py` | IPOPT |
 | `battery_multi_period_opf.py` | IPOPT |
@@ -70,5 +73,6 @@ python scripts/minimal_ac_power_flow.py
 | `validate_ac_model_against_pandapower.py` | IPOPT |
 | `compare_solvers.py` | NEOS (requires `NEOS_EMAIL`) |
 | `performance_test_solver.py` | NEOS + `perfplot` (see `performance-test` optional dep) |
+| `pglib_benchmark.py` | IPOPT; needs the `pglib-opf` benchmark cases cloned to `benchmarks/pglib-opf/` and `pip install matpowercaseframes` for parsing `.m` files |
 
 IPOPT and GLPK are installed automatically via `environment.yaml`.

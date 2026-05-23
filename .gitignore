@@ -36,3 +36,9 @@ results/
 # OS
 .DS_Store
 Thumbs.db
+
+# Claude Code session state
+/.claude/
+
+# Ad-hoc debugging output
+/scripts/nohup.out

@@ -43,6 +43,11 @@ class Sgens_multi_period(Flexibility_multi_period):
         self.get_all_Constraints_opf(model)
 
     def get_all_acopf(self, model):
+        """Attach AC-specific OPF parameters (reactive-power limits) and the
+        corresponding range constraints. Separated from ``get_all_opf`` so
+        that the DC OPF path can ignore Q entirely.
+        """
+        self.get_acopf_parameters(model)
         self.get_all_Constraints_acopf(model)
 
     def get_sets(self, model):
@@ -89,6 +94,14 @@ class Sgens_multi_period(Flexibility_multi_period):
         return True
 
     def get_opf_parameters(self, model):
+        """Attach the OPF parameters that are common to AC and DC: the
+        controllable-sgen real-power bounds. The reactive-power bounds
+        (`QsGmax` / `QsGmin`) are AC-specific and live in
+        :meth:`get_acopf_parameters`; calling ``get_opf_parameters`` from the
+        DC OPF path therefore no longer requires `QsGmax_tuple` /
+        `QsGmin_tuple` (which are populated only by
+        :meth:`static_generation_reactive_power_limits`, an AC step).
+        """
         # static generation real power limits
         model.sPGmax = pyo.Param(
             self.PsGmax_tuple, initialize=self.PsGmax_data_dict
@@ -97,9 +110,8 @@ class Sgens_multi_period(Flexibility_multi_period):
             self.PsGmin_tuple, initialize=self.PsGmin_data_dict
         )
 
-        # Only for AC OPF, maybe need to be moved into other function?
-        # static generation reactive power limits
-        # static generation reactive power limits
+    def get_acopf_parameters(self, model):
+        """Attach AC-only OPF parameters (reactive-power bounds)."""
         model.QsGmax = pyo.Param(
             self.QsGmax_tuple,
             within=pyo.Reals,

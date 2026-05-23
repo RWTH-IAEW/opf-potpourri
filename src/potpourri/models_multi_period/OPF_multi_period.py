@@ -21,12 +21,13 @@ class OPF_multi_period(Basemodel_multi_period):
         super().__init__(net, toT, fromT, pf)
 
     def __calc_SLmax(self, max_loading_percent=100):
+        # Native lines: max_i_ka @ from-bus vn_kv → MVA limit, p.u.
         vr = self.net.bus.loc[
             self.net.line["from_bus"].values, "vn_kv"
         ].values * np.sqrt(3.0)
         max_i_ka = self.net.line.max_i_ka.values
         df = self.net.line.df.values
-        return (
+        line_lim = (
             max_loading_percent
             / 100.0
             * max_i_ka
@@ -35,6 +36,20 @@ class OPF_multi_period(Basemodel_multi_period):
             * vr
             / self.baseMVA
         )
+
+        # Impedance branches: per-unit S limit from net.impedance.sn_mva
+        # (0 → unrated). They appear in model.L after the native lines (see
+        # Basemodel_multi_period.__init__). max_loading_percent may be an
+        # array over net.line only — apply 100% by default for impedance
+        # entries (pandapower has no max_loading column on net.impedance).
+        imp = self.net.get("impedance")
+        if imp is not None and not imp.empty:
+            sn_imp = imp["sn_mva"].astype(float).values.copy()
+            unrated = sn_imp <= 0
+            sn_imp[unrated] = 1e6
+            imp_lim = 1.0 * sn_imp / self.baseMVA
+            return np.concatenate([line_lim, imp_lim])
+        return line_lim
 
     def _calc_opf_parameters(self, **kwargs):
         """Compute line/transformer ratings and call generator/demand limit

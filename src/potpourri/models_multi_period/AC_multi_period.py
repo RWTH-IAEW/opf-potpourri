@@ -1,6 +1,7 @@
 """Multi-period AC power flow mixin: adds full AC equations with voltage
 magnitudes over time."""
 
+import numpy as np
 from pyomo.environ import *
 from potpourri.models_multi_period.basemodel_multi_period import (
     Basemodel_multi_period,
@@ -31,13 +32,29 @@ class AC_multi_period(Basemodel_multi_period):
         GikT = -gt_ik
         trafo_start = len(self.net.line)
         trafo_end = trafo_start + len(self.net.trafo)
+        imp_table = self.net.get("impedance")
+        n_imp = (
+            len(imp_table)
+            if imp_table is not None and not imp_table.empty
+            else 0
+        )
+        # Mirror of single-period AC: include impedance rows (slice
+        # [trafo_end : trafo_end + n_imp]) alongside native lines in
+        # line_data so model.L sees them.
+        if n_imp:
+            line_idx_ppc = np.r_[
+                np.arange(0, trafo_start),
+                np.arange(trafo_end, trafo_end + n_imp),
+            ]
+        else:
+            line_idx_ppc = np.arange(0, trafo_start)
 
         self.line_data = self.line_data.assign(
             **{
-                "Bii_data": BiiT[:trafo_start],
-                "Bik_data": BikT[:trafo_start],
-                "Gii_data": GiiT[:trafo_start],
-                "Gik_data": GikT[:trafo_start],
+                "Bii_data": BiiT[line_idx_ppc],
+                "Bik_data": BikT[line_idx_ppc],
+                "Gii_data": GiiT[line_idx_ppc],
+                "Gik_data": GikT[line_idx_ppc],
             }
         )
         self.trafo_data = self.trafo_data.assign(

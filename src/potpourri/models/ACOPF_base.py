@@ -81,28 +81,30 @@ class ACOPF(AC, OPF):
     def generation_reactive_power_limits(self):
         """Read reactive power limits for external grid generators.
 
-        Populates generation_data['max_q'] and ['min_q'] (per-unit).
+        Populates ``generation_data['max_q']`` and ``['min_q']`` (per-unit).
+        Filters each source table to in-service rows so the slice in
+        ``net._gen_order`` matches the broadcast target (see also
+        ``generation_real_power_limits``).
         """
         max_q = np.full(len(self.generation_data), 1e9) / self.baseMVA
         min_q = np.full(len(self.generation_data), -1e9) / self.baseMVA
 
         for element, (f, t) in self.net._gen_order.items():
-            if element not in self.net:
+            if element not in self.net or self.net[element].empty:
                 continue
-            if "max_q_mvar" in self.net[element]:
+            table = self.net[element]
+            if "in_service" in table.columns:
+                table = table.loc[table.in_service.astype(bool)]
+            if len(table) != t - f:
+                continue
+            if "max_q_mvar" in table:
                 max_q[f:t] = (
-                    self.net[element]
-                    .max_q_mvar.astype(float)
-                    .fillna(1e9)
-                    .values
+                    table.max_q_mvar.astype(float).fillna(1e9).values
                     / self.baseMVA
                 )
-            if "min_q_mvar" in self.net[element]:
+            if "min_q_mvar" in table:
                 min_q[f:t] = (
-                    self.net[element]
-                    .min_q_mvar.astype(float)
-                    .fillna(-1e9)
-                    .values
+                    table.min_q_mvar.astype(float).fillna(-1e9).values
                     / self.baseMVA
                 )
 
@@ -304,17 +306,46 @@ class ACOPF(AC, OPF):
         else:
             self.static_generation_data["wind_hc"] = False
 
-    def add_OPF(self, **kwargs):
-        """Attach AC-OPF sets, parameters, and constraints to self.model.
+    def add_OPF(
+        self,
+        thermal_limit: str = "current",
+        free_slack_vm: bool = True,
+        fix_hv_buses: bool = False,
+        hv_bus_kv: float = 110.0,
+        angle_limits: bool = False,
+        **kwargs,
+    ):
+        """Attach AC-OPF sets, parameters, and constraints to ``self.model``.
 
-        Extends OPF.add_OPF() with bus voltage bounds (Vmin, Vmax), apparent
-        power limits on lines and transformers, reactive power bounds for
-        static generators, external grids, and controllable loads, and wind
-        Q-P/Q-U
-        curve constraints for sgens with var_q set.
+        Extends :meth:`OPF.add_OPF` with bus voltage bounds (Vmin, Vmax),
+        apparent-power thermal limits on lines and transformers, reactive
+        power bounds for static generators, external grids and controllable
+        loads, and the wind Q-P / Q-U capability constraints for sgens with
+        ``var_q`` set.
 
         Args:
-            **kwargs: Forwarded to _calc_opf_parameters.
+            thermal_limit: ``"current"`` enforces ``|S|² ≤ SLmax² · v²``
+                (current-limit form, physically meaningful for distribution
+                conductors). ``"mva"`` enforces ``|S|² ≤ SLmax²``
+                (constant-MVA limit, matches MATPOWER / PGLib-OPF). Defaults
+                to ``"current"`` for backward compatibility.
+            free_slack_vm: When ``True`` (default), the slack-bus voltage
+                magnitude floats within ``[Vmin, Vmax]``. The reference angle
+                stays fixed. Set ``False`` to reproduce the legacy AC-PF
+                behaviour where the slack ``vm`` is pinned to the base-case
+                value (e.g. for redispatch studies around a fixed slack).
+            fix_hv_buses: When ``True``, pin the voltage magnitude of every
+                bus with ``vn_kv == hv_bus_kv`` to its base-case voltage.
+                Disabled by default. The historical 110 kV pinning in
+                German distribution studies can be re-enabled by setting
+                ``fix_hv_buses=True``.
+            hv_bus_kv: Voltage level (kV) used by ``fix_hv_buses``.
+            angle_limits: When ``True``, enforce branch phase-angle-difference
+                constraints ``angmin ≤ δ_from − δ_to ≤ angmax`` using
+                ``net.line.angmin_degree`` / ``net.line.angmax_degree`` (and
+                the transformer equivalent if present). Defaults disabled to
+                preserve previous behaviour.
+            **kwargs: Forwarded to :meth:`_calc_opf_parameters`.
         """
         super().add_OPF(**kwargs)
 
@@ -401,18 +432,65 @@ class ACOPF(AC, OPF):
             self.model.D, initialize=self.QDmin_data[self.model.D]
         )
 
-        # --- line power limits ---
-        def line_lim_from_def(model, l):
-            return (
-                model.pLfrom[l] ** 2 + model.qLfrom[l] ** 2
-                <= model.SLmax[l] ** 2 * model.v[model.A[l, 1]] ** 2
+        # --- line and transformer apparent-power limits ---
+        if thermal_limit not in ("current", "mva"):
+            raise ValueError(
+                f"thermal_limit must be 'current' or 'mva', got "
+                f"{thermal_limit!r}"
             )
 
-        def line_lim_to_def(model, l):
-            return (
-                model.pLto[l] ** 2 + model.qLto[l] ** 2
-                <= model.SLmax[l] ** 2 * model.v[model.A[l, 2]] ** 2
-            )
+        if thermal_limit == "current":
+            # |S|^2 ≤ SLmax^2 · v^2 (i.e. |I| ≤ I_max). Physically meaningful
+            # for thermal current rating; varies with voltage.
+            def line_lim_from_def(model, l):
+                return (
+                    model.pLfrom[l] ** 2 + model.qLfrom[l] ** 2
+                    <= model.SLmax[l] ** 2 * model.v[model.A[l, 1]] ** 2
+                )
+
+            def line_lim_to_def(model, l):
+                return (
+                    model.pLto[l] ** 2 + model.qLto[l] ** 2
+                    <= model.SLmax[l] ** 2 * model.v[model.A[l, 2]] ** 2
+                )
+
+            def transf_lim1_def(model, l):
+                return (
+                    model.pThv[l] ** 2 + model.qThv[l] ** 2
+                    <= model.SLmaxT[l] ** 2 * model.v[model.AT[l, 1]] ** 2
+                )
+
+            def transf_lim2_def(model, l):
+                return (
+                    model.pTlv[l] ** 2 + model.qTlv[l] ** 2
+                    <= model.SLmaxT[l] ** 2 * model.v[model.AT[l, 2]] ** 2
+                )
+        else:
+            # |S|^2 ≤ SLmax^2 (constant-MVA limit, matches MATPOWER /
+            # PowerModels' constraint_thermal_limit_* and PGLib-OPF rate_a).
+            def line_lim_from_def(model, l):
+                return (
+                    model.pLfrom[l] ** 2 + model.qLfrom[l] ** 2
+                    <= model.SLmax[l] ** 2
+                )
+
+            def line_lim_to_def(model, l):
+                return (
+                    model.pLto[l] ** 2 + model.qLto[l] ** 2
+                    <= model.SLmax[l] ** 2
+                )
+
+            def transf_lim1_def(model, l):
+                return (
+                    model.pThv[l] ** 2 + model.qThv[l] ** 2
+                    <= model.SLmaxT[l] ** 2
+                )
+
+            def transf_lim2_def(model, l):
+                return (
+                    model.pTlv[l] ** 2 + model.qTlv[l] ** 2
+                    <= model.SLmaxT[l] ** 2
+                )
 
         self.model.line_lim_from = pyo.Constraint(
             self.model.L, rule=line_lim_from_def
@@ -420,26 +498,13 @@ class ACOPF(AC, OPF):
         self.model.line_lim_to = pyo.Constraint(
             self.model.L, rule=line_lim_to_def
         )
-
-        # --- power flow limits on transformer lines---
-        def transf_lim1_def(model, l):
-            return (
-                model.pThv[l] ** 2 + model.qThv[l] ** 2
-                <= model.SLmaxT[l] ** 2 * model.v[model.AT[l, 1]] ** 2
-            )
-
-        def transf_lim2_def(model, l):
-            return (
-                model.pTlv[l] ** 2 + model.qTlv[l] ** 2
-                <= model.SLmaxT[l] ** 2 * model.v[model.AT[l, 2]] ** 2
-            )
-
         self.model.transf_lim1 = pyo.Constraint(
             self.model.TRANSF, rule=transf_lim1_def
         )
         self.model.transf_lim2 = pyo.Constraint(
             self.model.TRANSF, rule=transf_lim2_def
         )
+        self.thermal_limit_mode = thermal_limit
 
         # --- static generation reactive power limits ---
         def static_generation_reactive_power_bounds(model, g):
@@ -476,18 +541,44 @@ class ACOPF(AC, OPF):
         # --- voltage pyo.Constraints ---
         self.model.v_bPV_setpoint.deactivate()
 
+        # The base AC model fixes the slack v to its load-flow value. For a
+        # true AC OPF, the slack voltage magnitude should float within
+        # [Vmin, Vmax]; the reference angle remains pinned at delta_b0.
+        if free_slack_vm:
+            for b0 in self.model.b0:
+                self.model.v[b0].unfix()
+
         def v_bounds(model, b):
             return model.Vmin[b], model.v[b], model.Vmax[b]
 
         self.model.v_pyo = pyo.Constraint(self.model.B, rule=v_bounds)
 
-        fixed_buses = list(self.net.bus.index[self.net.bus.vn_kv == 110.0])
+        # Optional opt-in: pin voltage magnitude at every bus whose nominal
+        # voltage matches `hv_bus_kv` to the base-case load-flow value. This
+        # was the historical default at 110 kV in German distribution
+        # studies; off by default for compatibility with generic OPF
+        # benchmarks (e.g. PGLib-OPF).
+        if fix_hv_buses:
+            fixed_buses = list(
+                self.net.bus.index[self.net.bus.vn_kv == hv_bus_kv]
+            )
+        else:
+            fixed_buses = []
         self.model.Bfix = pyo.Set(initialize=fixed_buses)
 
         def fixed_v_rule(model, b):
             return model.v[b] == float(self.bus_data.loc[b, "v_m"])
 
         self.model.v_fixed = pyo.Constraint(self.model.Bfix, rule=fixed_v_rule)
+
+        # --- optional branch angle-difference limits ---
+        # PowerModels.jl convention: angmin ≤ δ_from − δ_to ≤ angmax.
+        # MATPOWER stores these as ANGMIN/ANGMAX columns in mpc.branch (deg);
+        # we read them from net.line.angmin_degree / angmax_degree and the
+        # transformer equivalent if those columns exist. Branches missing
+        # angle data fall back to ±π (effectively unconstrained).
+        if angle_limits:
+            self._add_branch_angle_limits()
 
         # --- wind generation q requirements variant 3---
         def QW_pos(model, w):
@@ -542,6 +633,79 @@ class ACOPF(AC, OPF):
             )
 
         self.model.QU_max_pyo = pyo.Constraint(self.model.WINDc, rule=QV_max)
+
+    def _add_branch_angle_limits(self):
+        """Attach branch phase-angle-difference constraints to ``self.model``.
+
+        Reads per-line / per-transformer angle bounds from
+        ``net.line.angmin_degree`` / ``net.line.angmax_degree`` (and the
+        transformer equivalent if present), converts to radians, and adds
+        ``angmin_rad ≤ delta[from] − delta[to] ≤ angmax_rad`` on every branch
+        that has finite bounds.
+        """
+
+        def _bounds(table, idx_set, hv_col, lv_col):
+            angmin_col = "angmin_degree"
+            angmax_col = "angmax_degree"
+            if (
+                angmin_col not in table.columns
+                or angmax_col not in table.columns
+            ):
+                return {}
+            valid = set(table.index)
+            out = {}
+            for ix in idx_set:
+                if ix not in valid:
+                    # synthetic impedance indices live in model.L beyond
+                    # net.line — they have no MATPOWER angle bound
+                    continue
+                amin = float(table.at[ix, angmin_col])
+                amax = float(table.at[ix, angmax_col])
+                if (
+                    not np.isfinite(amin)
+                    or not np.isfinite(amax)
+                    or abs(amin) >= 359.0
+                    or abs(amax) >= 359.0
+                ):
+                    continue
+                out[ix] = (
+                    self.bus_lookup[int(table.at[ix, hv_col])],
+                    self.bus_lookup[int(table.at[ix, lv_col])],
+                    np.deg2rad(amin),
+                    np.deg2rad(amax),
+                )
+            return out
+
+        line_bounds = _bounds(
+            self.net.line, list(self.model.L), "from_bus", "to_bus"
+        )
+        trafo_bounds = _bounds(
+            self.net.trafo, list(self.model.TRANSF), "hv_bus", "lv_bus"
+        )
+
+        if line_bounds:
+            line_idx = list(line_bounds.keys())
+            self.model.LineAngleSet = pyo.Set(initialize=line_idx)
+
+            def _line_angle_rule(model, l):
+                f, t, amin, amax = line_bounds[l]
+                return amin, model.delta[f] - model.delta[t], amax
+
+            self.model.line_angle_diff = pyo.Constraint(
+                self.model.LineAngleSet, rule=_line_angle_rule
+            )
+
+        if trafo_bounds:
+            tr_idx = list(trafo_bounds.keys())
+            self.model.TrafoAngleSet = pyo.Set(initialize=tr_idx)
+
+            def _trafo_angle_rule(model, l):
+                f, t, amin, amax = trafo_bounds[l]
+                return amin, model.delta[f] - model.delta[t], amax
+
+            self.model.trafo_angle_diff = pyo.Constraint(
+                self.model.TrafoAngleSet, rule=_trafo_angle_rule
+            )
 
     def add_voltage_deviation_objective(self):
         """Set objective to minimise sum of squared voltage deviations from

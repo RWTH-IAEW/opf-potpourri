@@ -30,8 +30,8 @@ class Basemodel:
     def __init__(self, net):
         if not isinstance(net, pp.pandapowerNet):
             raise ValueError("Input network must be a pandapower network.")
-
-        self.net = copy.deepcopy(net)
+        # Make sure bus-to-bus switches are handled correctly by merging them
+        self.net = preprocess_grid(copy.deepcopy(net))
         pp.runpp(self.net, voltage_depend_loads=False)
 
         # --- pyo.Sets ---
@@ -116,14 +116,8 @@ class Basemodel:
         # --- line ---
         hv_bus = self.net._ppc["branch"][:, 0].real
         lv_bus = self.net._ppc["branch"][:, 1].real
-
-        lookup = np.asarray(self.bus_lookup)
-        from_bus = self.net.line.from_bus.to_numpy()
-        hv_bus[: len(self.net.line)] = lookup[from_bus]
-
-        to_bus = self.net.line.to_bus.to_numpy()
-        lv_bus[: len(self.net.line)] = lookup[to_bus]
-
+        # hv_bus = self.net._ppc['branch'][:, 0].real
+        # lv_bus = self.net._ppc['branch'][:, 1].real
         trafo_start = len(self.net.line.index)
         trafo_end = trafo_start + len(self.net.trafo.index)
 
@@ -140,6 +134,48 @@ class Basemodel:
                 np.concatenate([hv_bus_line[line_ind], lv_bus_line[line_ind]]),
             )
         )
+        # Build bus_line_dict directly using pandapower net bus indices.
+        # We treat ``net.impedance`` rows as additional "lines" in the model.
+        # pandapower puts these in a separate table when ``from_vn_kv !=
+        # to_vn_kv`` (and the branch has no off-nominal tap or phase shift),
+        # but in per-unit on the system base they obey exactly the same
+        # ``y = 1/(r + jx) + j·b/2`` model as a normal line, so we include
+        # them in ``model.L`` to honour the full network topology. (Skipping
+        # them caused PGLib case118_ieee bus 115 to be isolated and case89
+        # to find suboptimal dispatches via 15 missing parallel paths.)
+        n_line = len(self.net.line.index)
+        line_in_service = self.net.line["in_service"].astype(bool).values
+        imp_table = self.net.get("impedance")
+        has_impedance = imp_table is not None and not imp_table.empty
+        if has_impedance:
+            imp_in_service = (
+                imp_table["in_service"].astype(bool).values
+                if "in_service" in imp_table.columns
+                else np.ones(len(imp_table), dtype=bool)
+            )
+            ext_index = pd.Index(
+                list(self.net.line.index)
+                + [n_line + i for i in range(len(imp_table))]
+            )
+            ext_in_service = np.concatenate([line_in_service, imp_in_service])
+        else:
+            ext_index = self.net.line.index
+            ext_in_service = line_in_service
+        self.line_data = pd.DataFrame(
+            {"in_service": ext_in_service}, index=ext_index
+        )
+        self.bus_line_dict = {}
+        for line_idx in self.line_data.index[self.line_data["in_service"]]:
+            if int(line_idx) < n_line:
+                fb = int(self.net.line.at[line_idx, "from_bus"])
+                tb = int(self.net.line.at[line_idx, "to_bus"])
+            else:
+                imp_row = int(line_idx) - n_line
+                fb = int(imp_table.iloc[imp_row]["from_bus"])
+                tb = int(imp_table.iloc[imp_row]["to_bus"])
+            self.bus_line_dict[(int(line_idx), 1)] = fb
+            self.bus_line_dict[(int(line_idx), 2)] = tb
+        self._n_native_lines = n_line  # used by subclasses to slice _ppc
 
         # --- transformer ---
         shift = (
@@ -153,20 +189,23 @@ class Basemodel:
                 "tap": tap,
             }
         )
-
-        hv_bus_trafo = hv_bus[trafo_start:trafo_end]
-        lv_bus_trafo = lv_bus[trafo_start:trafo_end]
-
-        trafo_ind = self.trafo_data.index[self.trafo_data.in_service]
-        self.bus_trafo_dict = dict(
-            zip(
-                list(zip(trafo_ind, [1] * len(trafo_ind)))
-                + list(zip(trafo_ind, [2] * len(trafo_ind))),
-                np.concatenate(
-                    [hv_bus_trafo[trafo_ind], lv_bus_trafo[trafo_ind]]
-                ),
-            )
+        # Same for the bus_trafo_dict
+        self.trafo_data = pd.DataFrame(
+            {
+                "in_service": self.net.trafo["in_service"].astype(bool),
+                "shift_rad": shift,
+                "tap": tap,
+            },
+            index=self.net.trafo.index,
         )
+        self.bus_trafo_dict = {}
+        for trafo_idx in self.trafo_data.index[self.trafo_data["in_service"]]:
+            self.bus_trafo_dict[(int(trafo_idx), 1)] = int(
+                self.net.trafo.at[trafo_idx, "hv_bus"]
+            )
+            self.bus_trafo_dict[(int(trafo_idx), 2)] = int(
+                self.net.trafo.at[trafo_idx, "lv_bus"]
+            )
 
     def create_model(self):
         """Create the Pyomo ConcreteModel with sets, parameters, and fixed
@@ -512,9 +551,30 @@ class Basemodel:
     def add_storage(self):
         """Add storage parameters, variables, and constraints.
 
-        STOR set and STOR_bus param are already initialized in create_model().
-        Assumes net.storage has: sn_mva, p_mw, scaling, max_e_mwh,
-        efficiency_percent (0–100), soc_percent (0–100).
+        STOR set and STOR_bus param are already initialised in
+        :meth:`create_model`. Assumes ``net.storage`` has: ``sn_mva``,
+        ``p_mw``, ``scaling``, ``max_e_mwh``, ``efficiency_percent`` (0–100),
+        ``soc_percent`` (0–100).
+
+        Modelling notes (D12 in the formulation audit):
+
+        * **Symmetric round-trip efficiency**: charge gain and discharge loss
+          share the same parameter, modelled as ``η·Pchg − Pdis/η``. This
+          corresponds to ``η_chg = η_dis = √η_roundtrip``. PowerModels.jl
+          supports independent charge/discharge efficiencies; this model
+          does not.
+        * **Convex relaxation of complementarity**: the true
+          no-simultaneous-charge-discharge constraint ``Pchg·Pdis = 0`` is
+          relaxed to ``Pchg + Pdis ≤ Pmax``. This is *stricter* than
+          independent ``Pchg, Pdis ∈ [0, Pmax]`` bounds (no double-use of
+          the inverter), but *looser* than complementarity (the optimiser
+          can still split a small amount of power between both legs to skim
+          the round-trip loss). For exact behaviour, use a MILP with a
+          binary direction variable or set ``η = 1``.
+        * **Single-period energy balance**: the SOC update uses the
+          time-step ``STOR_dt`` (15 min by default) and the initial SOC
+          ``SOC0``; this is a single-shot snapshot, not a multi-period
+          balance.
         """
         if "soc_percent" not in self.net.storage.columns:
             self.net.storage["soc_percent"] = 50.0
@@ -650,3 +710,97 @@ class Basemodel:
         self.model.stor_inverter_cap = pyo.Constraint(
             self.model.STOR, rule=stor_inverter_cap_rule
         )
+
+
+_ELEMENT_BUS_COLUMNS = {
+    "line": ("from_bus", "to_bus"),
+    "trafo": ("hv_bus", "lv_bus"),
+    "trafo3w": ("hv_bus", "mv_bus", "lv_bus"),
+    "impedance": ("from_bus", "to_bus"),
+    "dcline": ("from_bus", "to_bus"),
+    "load": ("bus",),
+    "sgen": ("bus",),
+    "gen": ("bus",),
+    "ext_grid": ("bus",),
+    "shunt": ("bus",),
+    "storage": ("bus",),
+    "ward": ("bus",),
+    "xward": ("bus",),
+    "motor": ("bus",),
+    "asymmetric_load": ("bus",),
+    "asymmetric_sgen": ("bus",),
+}
+
+
+def preprocess_grid(grid):
+    """Merge zero-impedance bus-bus switches; drop fully orphan buses.
+
+    Updates every element table that carries a bus reference (lines, trafos,
+    trafo3w, impedance, dcline, load, sgen, gen, ext_grid, shunt, storage,
+    ward/xward, motor, asymmetric loads/sgens) when remapping bus ids, so
+    shunt-only / storage-only / trafo-only buses stay consistent after the
+    merge. The "referenced buses" computation also includes those tables, so
+    a bus that is only connected via, e.g., a shunt or a transformer terminal
+    is no longer silently dropped before ``pp.create_continuous_bus_index``.
+    """
+    grid = copy.deepcopy(grid)
+
+    def _present(name):
+        return name in grid and hasattr(grid[name], "loc") and len(grid[name])
+
+    # Iterate over closed bus-bus switches with zero impedance and merge the
+    # connected buses across every bus-referencing table.
+    for sw_idx, sw in grid.switch.iterrows():
+        if (
+            sw["closed"]
+            and sw["et"] == "b"
+            and float(sw.get("z_ohm", 0.0)) == 0.0
+        ):
+            keep_bus = int(sw["bus"])
+            remove_bus = int(sw["element"])
+            for name, cols in _ELEMENT_BUS_COLUMNS.items():
+                if not _present(name):
+                    continue
+                table = grid[name]
+                for col in cols:
+                    if col in table.columns:
+                        mask = table[col] == remove_bus
+                        if mask.any():
+                            table.loc[mask, col] = keep_bus
+            grid.switch.drop(sw_idx, inplace=True)
+
+    # Remove self-loop branches/transformers created by the merge.
+    if _present("line"):
+        self_loop = grid.line.index[
+            grid.line["from_bus"] == grid.line["to_bus"]
+        ]
+        grid.line.drop(self_loop, inplace=True)
+    if _present("trafo"):
+        self_loop_t = grid.trafo.index[
+            grid.trafo["hv_bus"] == grid.trafo["lv_bus"]
+        ]
+        grid.trafo.drop(self_loop_t, inplace=True)
+
+    # Collect every bus id still referenced by any element table.
+    referenced_buses = set()
+    for name, cols in _ELEMENT_BUS_COLUMNS.items():
+        if not _present(name):
+            continue
+        for col in cols:
+            if col in grid[name].columns:
+                referenced_buses.update(grid[name][col].astype(int).tolist())
+
+    unused_buses = [
+        bus for bus in grid.bus.index if int(bus) not in referenced_buses
+    ]
+    grid.bus.drop(unused_buses, inplace=True)
+    for key in list(grid.keys()):
+        if key.startswith("res_") and hasattr(grid[key], "drop"):
+            grid[key].drop(grid[key].index, inplace=True)
+    if "bus_geodata" in grid and len(grid["bus_geodata"]):
+        grid["bus_geodata"] = grid["bus_geodata"].loc[
+            grid["bus_geodata"].index.intersection(grid.bus.index)
+        ]
+    pp.create_continuous_bus_index(grid, start=0)
+
+    return grid

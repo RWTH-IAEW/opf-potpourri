@@ -9,7 +9,7 @@ Built on Pyomo and pandapower.  Key entry points::
 """
 
 __all__ = ["__version__"]
-__version__ = "0.2.1"
+__version__ = "0.3.0"
 
 from loguru import logger
 
