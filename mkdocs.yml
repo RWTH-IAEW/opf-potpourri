@@ -43,6 +43,7 @@ nav:
   - Examples:
       - Overview: scripts/examples.md
       - AC Validation: scripts/validation.md
+      - PGLib-OPF Benchmark: scripts/pglib-validation.md
       - Load-Case OPF: scripts/loadcases.md
       - Feasible Operation Region: scripts/feasible-operation-region.md
   - API Reference:
