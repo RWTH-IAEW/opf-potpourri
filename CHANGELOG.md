@@ -5,6 +5,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-05-23
+
+### Added
+
+- **PGLib-OPF git submodule** at `benchmarks/pglib-opf/` — the
+  [IEEE PES Power Grid Library](https://github.com/power-grid-lib/pglib-opf)
+  benchmark dataset is now included as a submodule. Clone with
+  `git clone --recurse-submodules` to enable benchmark runs. The submodule
+  is not part of the PyPI package; `pip install opf-potpourri` is unaffected.
+- Documentation updates: README "Benchmarking against PGLib-OPF" section,
+  `docs/scripts/examples.md` entries for `pglib_benchmark.py` and
+  `timeseries_acopf.py`, developer clone command updated to
+  `--recurse-submodules`.
+
 ## [0.3.0] — 2026-05-23
 
 ### Added
