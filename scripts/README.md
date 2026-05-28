@@ -22,6 +22,7 @@ python scripts/minimal_ac_power_flow.py
 | `minimal_ac_power_flow.py` | End-to-end AC power flow: pandapower network → Pyomo AC model → IPOPT solve → compare against pandapower Newton-Raphson |
 | `pandapower_to_pyomo_inspection.py` | How each pandapower table maps to Pyomo sets, parameters, variables, and constraints; prints a structured model summary |
 | `dc_opf.py` | Linearised DC power flow and DC OPF (maximise local generation, line-loading constraint); solved with GLPK in milliseconds |
+| `ehv_grid_opf.py` | Feasibility test on the large EHV/HV simbench grid (`1-EHVHV-mixed-all-0-no_sw`); runs both DC-OPF (GLPK) and AC-OPF (IPOPT) and reports solve time, voltage range, and ext-grid dispatch |
 
 ### Optimisation studies
 
@@ -29,6 +30,7 @@ python scripts/minimal_ac_power_flow.py
 |--------|---------------------|
 | `acopf_loadcase_analysis.py` | Two-step AC OPF: (1) reactive-power minimisation at a fixed dispatch, (2) voltage-deviation minimisation per SimBench load case |
 | `generator_capability_curve_demo.py` | How PV/wind power-factor limits and battery S² inverter circles constrain reactive dispatch; compares voltage profile and ext-grid Q between a wide-limits and a grid-code scenario |
+| `custom_objective_weighted_voltage.py` | How to define a **custom objective** outside the ACOPF class: attaches a per-voltage-level weighted voltage-deviation objective (`C_lv * Σ(v_lv−1)² + C_mv * Σ(v_mv−1)²`) directly to `ac.model`; compares equal-weight, LV-priority, and MV-priority scenarios on the 3-level mixed MVLV feeder `1-MVLV-urban-5.303-0-no_sw` (110 kV / 10 kV / 0.4 kV) |
 | `objective_tradeoff_demo.py` | How four different objectives (voltage deviation, reactive generation, active import, network losses) produce different dispatch decisions on the same network |
 | `constraint_activation_demo.py` | How activating each constraint group (voltage bounds, line loading, Q limits) restricts the feasible space and changes the optimal PV dispatch |
 | `time_series_snapshot_opf.py` | Independent AC OPF for 8 representative seasonal/diurnal snapshots; illustrates the snapshot-OPF paradigm |
@@ -70,6 +72,8 @@ python scripts/minimal_ac_power_flow.py
 | `multi_period_acopf.py` | IPOPT |
 | `battery_multi_period_opf.py` | IPOPT |
 | `hosting_capacity_opf.py` | GLPK (MindtPy); Gurobi recommended for larger runs |
+| `ehv_grid_opf.py` | GLPK (DC-OPF) + IPOPT (AC-OPF) |
+| `custom_objective_weighted_voltage.py` | IPOPT |
 | `validate_ac_model_against_pandapower.py` | IPOPT |
 | `compare_solvers.py` | NEOS (requires `NEOS_EMAIL`) |
 | `performance_test_solver.py` | NEOS + `perfplot` (see `performance-test` optional dep) |
