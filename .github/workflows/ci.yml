@@ -18,6 +18,20 @@ jobs:
       - run: ruff check .
       - run: ruff format --check .
 
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # mkdocs.yml declares no plugins that import the package, so rendering
+      # the site needs neither the conda environment nor potpourri itself.
+      - run: pip install mkdocs mkdocs-material pymdown-extensions mkdocs-bibtex
+      # --strict promotes mkdocs warnings (broken internal links, unreadable
+      # references, invalid config) to build failures.
+      - run: mkdocs build --strict
+
   unit-tests:
     runs-on: ubuntu-latest
     strategy:

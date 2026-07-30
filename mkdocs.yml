@@ -14,6 +14,11 @@ plugins:
   - search
   - bibtex:
       bib_file: "paper.bib"
+      # Bracketed [@key] citations are unaffected. Inline (bare) @key parsing
+      # runs on the raw markdown before code fences are handled, so a Pyomo
+      # decorator such as `@model.Constraint(...)` in a code example is read
+      # as a citation key and fails the strict build.
+      enable_inline_citations: false
 
 markdown_extensions:
   - admonition

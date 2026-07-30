@@ -63,6 +63,10 @@ docs = [
     "mkdocs>=1.5",
     "mkdocs-material>=9.0",
     "mkdocs-bibtex>=4.0",
+    # mkdocs.yml enables pymdownx.arithmatex and pymdownx.superfences
+    # directly, so declare this rather than relying on mkdocs-material
+    # pulling it in transitively.
+    "pymdown-extensions>=10.0",
 ]
 dev = [
     "pytest>=8.0",
