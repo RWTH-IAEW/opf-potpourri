@@ -67,13 +67,18 @@ Widen the selection when a study needs the other categories:
 ```python
 opf.add_OPF(
     pv_q_control="both",
-    sgen_types=("PV", "PV_MV", "Wind_MV", "lv_RES"),
+    sgen_types=("PV", "PV_MV", "pv", "lv_RES"),
 )
 ```
 
-On the MV grids above that raises the reach from 2–5 units to 87–133.
-`1-MV-urban` has no `PV_MV` at all, so it needs `lv_RES` listed explicitly
-before Q-control applies to anything.
+Adding `lv_RES` raises the reach on the MV grids above from 2–5 units to
+79–133, since it is by far the largest category there.  `1-MV-urban` has no
+`PV_MV` at all, so it needs `lv_RES` listed explicitly before Q-control
+applies to anything.
+
+Wind categories are deliberately absent from that list — they belong to
+`wind_sgen_types` (below), and listing them in both places triggers a
+`SgenTypeOverlapWarning`.
 
 !!! note "Medium-voltage grids and auxiliary buses"
     SimBench models every switch as a node-node switch, which inserts
@@ -88,12 +93,45 @@ before Q-control applies to anything.
     derives the same number of auxiliary ppc buses either way, so `no_sw`
     does **not** avoid the issue.
 
-!!! note "Two related paths are filtered differently"
-    The **wind** Q-control path (`model.WINDc`) is selected separately and
-    still matches `type == "Wind"` exactly, so SimBench's `Wind_MV` units are
-    not reached through it.  The **multi-period** model applies no type filter
-    at all — it keys purely off `var_q`, so it reaches every annotated sgen
-    regardless of category.
+### Wind uses a separate list
+
+The wind Q-control path (`model.WIND` / `model.WINDc`) is selected
+independently of `pv_q_control`, against `wind_sgen_types` (default
+`("Wind", "Wind_MV", "wind onshore", "wind offshore")` — the constant
+`DEFAULT_WIND_SGEN_TYPES` in `potpourri.technologies.q_control`).  SimBench
+spells wind once per voltage level, so all four are needed:
+
+| Spelling | Voltage level |
+|---|---|
+| `Wind` | HV |
+| `Wind_MV` | MV |
+| `wind onshore`, `wind offshore` | EHV |
+
+Hosting-capacity units flagged via `net.sgen.wind_hc` are included regardless
+of type.
+
+Measured reach on the SimBench grids (`WINDc`, previously **0** everywhere
+outside HV because only `Wind` matched):
+
+| Grid | wind sgens | reached |
+|---|---|---|
+| `1-LV-rural1` | 0 | 0 |
+| `1-MV-rural` | 6 | 6 |
+| `1-MV-semiurb` | 5 | 5 |
+| `1-MV-urban` | 0 | 0 |
+| `1-MV-comm` | 3 | 3 |
+
+!!! warning "Do not list wind categories in `sgen_types`"
+    Both paths impose the same grid-code characteristic on the same `qsG`, so
+    an sgen matching *both* lists would receive two redundant constraint sets.
+    If that happens the model emits a `SgenTypeOverlapWarning`, names the
+    affected sgens, and leaves them to the wind path — `PVc` gives them up.
+    With the defaults the two lists are disjoint, so this cannot occur unless
+    `sgen_types` is widened to include a wind category.
+
+!!! note "The multi-period model applies no type filter"
+    It keys purely off `var_q`, so it reaches every annotated sgen regardless
+    of category.  Only the single-period model filters by `type`.
 
 ---
 

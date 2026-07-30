@@ -379,6 +379,84 @@ def test_sgen_types_accepts_any_iterable(lv_rural_net):
     assert hasattr(opf.model, "PV_QP_pos")
 
 
+# ── wind path: sgen type selection ────────────────────────────────────────
+
+
+def test_default_wind_types_cover_every_simbench_spelling():
+    """SimBench spells wind four ways across the voltage levels."""
+    assert set(qc.DEFAULT_WIND_SGEN_TYPES) == {
+        "Wind",
+        "Wind_MV",
+        "wind onshore",
+        "wind offshore",
+    }
+
+
+@pytest.mark.parametrize(
+    "sgen_type", ["Wind", "Wind_MV", "wind onshore", "wind offshore"]
+)
+def test_wind_path_reaches_every_spelling(lv_rural_net, sgen_type):
+    """The wind Q path must reach wind at MV and EHV, not only HV.
+
+    Regression test: matching only ``type == "Wind"`` reached nothing on any
+    SimBench MV or EHV grid, so no wind Q-control was built and nothing
+    warned.
+    """
+    opf = _build_sp(_retype(lv_rural_net, sgen_type))
+    assert len(list(opf.model.WINDc)) > 0
+
+
+def test_wind_path_ignores_unrelated_types(lv_rural_net):
+    """A non-wind category stays out of the wind set."""
+    opf = _build_sp(_retype(lv_rural_net, "Biomass_MV"))
+    assert len(list(opf.model.WINDc)) == 0
+
+
+def test_wind_sgen_types_is_overridable(lv_rural_net):
+    """An explicit list replaces the default."""
+    opf = _build_sp(
+        _retype(lv_rural_net, "Wind_MV"), wind_sgen_types=("Wind",)
+    )
+    assert len(list(opf.model.WINDc)) == 0
+
+
+def test_pv_and_wind_paths_are_disjoint_by_default(lv_rural_net):
+    """With the defaults no sgen can be claimed by both paths."""
+    assert not (set(DEFAULT_PV_SGEN_TYPES) & set(qc.DEFAULT_WIND_SGEN_TYPES))
+
+
+def test_overlapping_selection_warns_and_defers_to_wind(lv_rural_net):
+    """Listing a wind category in sgen_types must not double-constrain qsG.
+
+    Both paths impose the same grid-code characteristic on the same
+    variable, so an sgen in both sets would get duplicate constraints.  The
+    wind path owns those types; PVc gives them up and the caller is told.
+    """
+    net = _retype(lv_rural_net, "Wind_MV")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        opf = ACOPF(net)
+        opf.add_OPF(
+            pv_q_control="both",
+            sgen_types=("PV", "PV_MV", "pv", "Wind_MV"),
+        )
+    overlaps = [
+        w for w in caught if issubclass(w.category, qc.SgenTypeOverlapWarning)
+    ]
+    assert overlaps, "expected an overlap warning"
+    wind = set(opf.model.WINDc)
+    pvc = set(opf.model.PVc) if hasattr(opf.model, "PVc") else set()
+    assert wind, "wind path should still claim them"
+    assert not (pvc & wind), "PVc must not overlap WINDc"
+
+
+def test_no_overlap_warning_with_default_types(lv_rural_net):
+    """The default configuration must stay silent."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", qc.SgenTypeOverlapWarning)
+        _build_sp(_retype(lv_rural_net, "Wind_MV"), pv_q_control="both")
+
+
 # ── bus numbering: ppc space vs pandapower space ──────────────────────────
 
 

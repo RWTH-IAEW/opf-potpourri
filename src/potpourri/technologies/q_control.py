@@ -34,6 +34,24 @@ class ProvisionalGridCodeWarning(UserWarning):
     """Raised when a grid code whose parameters are placeholders is used."""
 
 
+class SgenTypeOverlapWarning(UserWarning):
+    """Raised when an sgen is claimed by both the PV and the wind Q path."""
+
+
+# sgen ``type`` values treated as wind by the wind Q-control path.  SimBench
+# spells wind differently per voltage level — its RES dataset uses "Wind" in
+# HV, "Wind_MV" in MV and "wind onshore"/"wind offshore" in EHV — so matching
+# only "Wind" reaches nothing on any SimBench MV or EHV grid.  Matching is
+# exact and case-sensitive.  Lives here rather than in a model module so the
+# single-period and multi-period wind paths cannot drift apart.
+DEFAULT_WIND_SGEN_TYPES = (
+    "Wind",
+    "Wind_MV",
+    "wind onshore",
+    "wind offshore",
+)
+
+
 @dataclass(frozen=True, eq=False)
 class GridCode:
     """Reactive-power capability parameters for one grid code.

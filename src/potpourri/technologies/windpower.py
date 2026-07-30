@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import pyomo.environ as pyo
 from loguru import logger
+from potpourri.technologies.q_control import DEFAULT_WIND_SGEN_TYPES
 from potpourri.technologies.sgens import Sgens_multi_period
 
 
@@ -104,10 +105,14 @@ class Windpower_multi_period(Sgens_multi_period):
                 & self.static_generation_data.in_service
             ],
         )
+        # Match every SimBench wind spelling, not just the HV one; see
+        # DEFAULT_WIND_SGEN_TYPES. Shared with the single-period path so the
+        # two cannot drift apart.
+        wind_types = getattr(self, "wind_sgen_types", DEFAULT_WIND_SGEN_TYPES)
         model.WIND = model.WIND_HC | pyo.Set(
             within=model.sG,
             initialize=self.static_generation_data.index[
-                (self.static_generation_data["type"] == "Wind")
+                self.static_generation_data["type"].isin(wind_types)
                 & self.static_generation_data.in_service
             ],
         )

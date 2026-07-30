@@ -43,7 +43,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   unaffected. Note that the wind Q-control path is selected separately and
   still matches `type == "Wind"` exactly, and that the multi-period model
   applies no type filter at all.
-- **`tests/unit_tests/test_q_control.py`** — 71 solver-free unit tests for the
+- **`ACOPF.add_OPF(wind_sgen_types=…)`** — the sgen `type` values treated as
+  wind by the wind Q-control path (`model.WIND` / `model.WINDc`), defaulting to
+  `DEFAULT_WIND_SGEN_TYPES`
+  (`("Wind", "Wind_MV", "wind onshore", "wind offshore")`). The path previously
+  matched `type == "Wind"` exactly — the same defect fixed for PV — so it
+  reached **zero** sgens on every SimBench MV and EHV grid. Measured reach is
+  now 6 / 5 / 0 / 3 on the four MV grids, previously 0 throughout. The constant
+  lives in `q_control` so the single- and multi-period wind paths cannot drift
+  apart; both now use it.
+  - Because both paths impose the same characteristic on the same `qsG`, an
+    sgen matching `sgen_types` *and* `wind_sgen_types` would get duplicate
+    constraints. That now raises `SgenTypeOverlapWarning`, names the sgens and
+    leaves them to the wind path. The defaults are disjoint, so it can only
+    arise from a widened `sgen_types`; the documented widening example no
+    longer suggests `Wind_MV` for that reason.
+- **`tests/unit_tests/test_q_control.py`** — 81 solver-free unit tests for the
   Q-control code, which previously had no automated coverage at all. Covers
   the grid-code registry (capability curves against the VDE-AR-N 4105 table,
   variant ordering, alias resolution, unknown-code `ValueError`, the

@@ -1,5 +1,7 @@
 """Full AC OPF model combining AC power flow and OPF operational limits."""
 
+import warnings
+
 import numpy as np
 import pandas as pd
 import pyomo.environ as pyo
@@ -8,6 +10,8 @@ from loguru import logger
 from potpourri.models.AC import AC
 from potpourri.models.OPF import OPF
 from potpourri.technologies.q_control import (
+    DEFAULT_WIND_SGEN_TYPES,
+    SgenTypeOverlapWarning,
     compute_q_curves,
     resolve_grid_code,
 )
@@ -351,6 +355,7 @@ class ACOPF(AC, OPF):
         cos_phi_p_profile: bool = False,
         grid_code=None,
         sgen_types=None,
+        wind_sgen_types=None,
         **kwargs,
     ):
         """Attach AC-OPF sets, parameters, and constraints to ``self.model``.
@@ -433,12 +438,23 @@ class ACOPF(AC, OPF):
                 :data:`DEFAULT_PV_SGEN_TYPES` (``("PV", "PV_MV", "pv")``).
                 Matching is exact, so a network whose sgens use other
                 category names needs them listed here — for example
-                ``sgen_types=("PV", "PV_MV", "Wind_MV", "lv_RES")`` to
-                include SimBench medium-voltage wind and the aggregated
-                LV-renewable units.  Note that the wind Q-control path is
-                selected separately and still matches ``type == "Wind"``
-                exactly, and that the multi-period model applies no type
-                filter at all (it keys purely off ``var_q``).
+                ``sgen_types=("PV", "PV_MV", "pv", "lv_RES")`` to include
+                the aggregated LV-renewable units.  Wind categories do not
+                belong here: they are handled by ``wind_sgen_types`` below,
+                and listing them in both places makes an sgen match both
+                paths, which emits
+                :class:`~potpourri.technologies.q_control.SgenTypeOverlapWarning`
+                and leaves it to the wind path.  Note the multi-period model
+                applies no type filter at all (it keys purely off
+                ``var_q``).
+            wind_sgen_types: sgen ``type`` values treated as wind by the wind
+                Q-control path (``model.WIND`` / ``model.WINDc``).  Defaults
+                to
+                :data:`~potpourri.technologies.q_control.DEFAULT_WIND_SGEN_TYPES`
+                (``("Wind", "Wind_MV", "wind onshore", "wind offshore")``),
+                covering every SimBench spelling.  Matching is exact.
+                Hosting-capacity units selected via ``net.sgen.wind_hc`` are
+                included regardless of type.
             grid_code: Technical connection rule supplying the Q(P)/Q(U)
                 capability envelope and the P(U) / cos(phi)(P) thresholds.
                 Accepts ``None`` (VDE-AR-N 4105, the default), a short name
@@ -467,11 +483,19 @@ class ACOPF(AC, OPF):
                 & self.static_generation_data.in_service
             ],
         )
-        # all wind generators
+        # All wind generators.  SimBench spells wind differently per
+        # voltage level ("Wind" in HV, "Wind_MV" in MV, "wind onshore" /
+        # "wind offshore" in EHV), so match against a list rather than the
+        # single literal that reached nothing outside HV.
+        _wind_types = (
+            DEFAULT_WIND_SGEN_TYPES
+            if wind_sgen_types is None
+            else tuple(wind_sgen_types)
+        )
         self.model.WIND = self.model.WIND_HC | pyo.Set(
             within=self.model.sG,
             initialize=self.static_generation_data.index[
-                (self.static_generation_data["type"] == "Wind")
+                self.static_generation_data["type"].isin(_wind_types)
                 & self.static_generation_data.in_service
             ],
         )
@@ -761,9 +785,30 @@ class ACOPF(AC, OPF):
                 self.static_generation_data.index[pv_qctrl_mask]
             )
             pv_in_sGc = set(self.model.sGc)
+            pv_selected = [g for g in pv_qctrl_init if g in pv_in_sGc]
+
+            # The PV and wind paths both constrain qsG with the same
+            # grid-code characteristic, so an sgen claimed by both would get
+            # two redundant constraint sets.  This can only happen when
+            # sgen_types is widened to include a wind category.  Leave those
+            # to the wind path, which owns them, and say so rather than
+            # silently building either duplicate or no constraints.
+            wind_claimed = set(self.model.WINDc)
+            overlap = sorted(set(pv_selected) & wind_claimed)
+            if overlap:
+                warnings.warn(
+                    f"sgens {overlap} match both sgen_types and "
+                    f"wind_sgen_types, so they are already Q-controlled by "
+                    f"the wind path (model.WINDc). Excluding them from PVc "
+                    f"to avoid duplicate constraints on the same qsG; drop "
+                    f"the wind categories from sgen_types to silence this.",
+                    SgenTypeOverlapWarning,
+                    stacklevel=2,
+                )
+                pv_selected = [g for g in pv_selected if g not in wind_claimed]
+
             self.model.PVc = pyo.Set(
-                within=self.model.sGc,
-                initialize=[g for g in pv_qctrl_init if g in pv_in_sGc],
+                within=self.model.sGc, initialize=pv_selected
             )
             if list(self.model.PVc):
                 self.model.PV_var_q = pyo.Param(
