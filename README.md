@@ -8,7 +8,7 @@
 [![Documentation Status](https://readthedocs.org/projects/opf-potpourri/badge/?version=latest)](https://opf-potpourri.readthedocs.io/)
 [![PyPI](https://img.shields.io/pypi/v/opf-potpourri)](https://pypi.org/project/opf-potpourri/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20357012.svg)](https://doi.org/10.5281/zenodo.20357012)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20357011.svg)](https://doi.org/10.5281/zenodo.20357011)
 
 `potpourri` is a Python library for AC/DC Optimal Power Flow (OPF) in distribution grids, with support for multi-period planning and flexible resources (batteries, EVs, heat pumps, PV, wind). It wraps [Pyomo](https://pyomo.readthedocs.io/) for optimisation modelling over [pandapower](https://pandapower.readthedocs.io/) network objects.
 

@@ -10,7 +10,10 @@ repository-code: "https://github.com/RWTH-IAEW/opf-potpourri"
 url: "https://github.com/RWTH-IAEW/opf-potpourri"
 identifiers:
   - type: doi
-    value: "10.5281/zenodo.20357012"
+    value: "10.5281/zenodo.20357011"
+    description: >-
+      Concept DOI: always resolves to the most recent release. Cite a
+      specific version with its own DOI from the Zenodo version list.
 abstract: >-
   potpourri is a Python library for multi-period Optimal Power Flow (OPF) in
   distribution grids. It wraps Pyomo for optimisation modelling over

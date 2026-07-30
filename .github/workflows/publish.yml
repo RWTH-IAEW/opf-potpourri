@@ -45,3 +45,27 @@ jobs:
       - name: Publish to PyPI
         if: env.SHOULD_PUBLISH == 'true'
         run: uv publish --trusted-publishing always
+
+  # Archives the tagged source as a new version of the existing Zenodo concept
+  # record, so 10.5281/zenodo.20357011 keeps resolving to the newest release
+  # and the DOI cited by CITATION.cff, the README and the paper stays valid.
+  # Runs only after PyPI succeeded, so a failed publish is not archived.
+  zenodo:
+    needs: build-and-publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install pyyaml
+
+      # The script re-reads the tag, refuses to archive a version that is
+      # already published, and takes all metadata from CITATION.cff.
+      - name: Archive release on Zenodo
+        env:
+          ZENODO_TOKEN: ${{ secrets.ZENODO_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python .github/scripts/zenodo_release.py
