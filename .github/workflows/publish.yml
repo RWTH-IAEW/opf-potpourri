@@ -37,8 +37,11 @@ jobs:
         if: env.SHOULD_PUBLISH == 'true'
         run: uv build
 
+      # Authenticates through PyPI trusted publishing (OIDC) using the
+      # `id-token: write` permission above — no API token is involved, so
+      # there is nothing to expire, rotate or leak. `always` rather than
+      # `automatic` so a missing or misconfigured OIDC setup fails loudly
+      # instead of silently falling back to another credential source.
       - name: Publish to PyPI
         if: env.SHOULD_PUBLISH == 'true'
-        run: uv publish
-        env:
-          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: uv publish --trusted-publishing always
