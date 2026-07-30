@@ -26,7 +26,7 @@ no effect:
 
 | Constraint | Single-period (`ACOPF.add_OPF`) | Multi-period (`ACOPF_multi_period.add_OPF`) |
 |---|---|---|
-| Q(P) / Q(U) | `pv_q_control="qp"` / `"qu"` / `"both"` **and** `net.sgen.var_q` set | automatic from `net.sgen.var_q` |
+| Q(P) / Q(U) | `pv_q_control="qp"` / `"qu"` / `"both"`, `net.sgen.var_q` set, **and** the sgen's `type` in `sgen_types` | automatic from `net.sgen.var_q` (no type filter) |
 | Inverter S² circle | `inverter_s2=True` **and** `net.sgen.sn_mva` present | automatic from `net.sgen.sn_mva` |
 | cos(φ) cone | `inverter_s2=True` **and** `sn_mva` **and** a `cos_phi_min` value | automatic from `sn_mva` **and** `net.sgen.cos_phi_min` |
 | P(U) curtailment | `pu_curtail=True` | automatic from `net.sgen.pu_curtail` |
@@ -42,6 +42,44 @@ Two consequences worth calling out:
 * **The cos(φ) cone is nested inside the S² circle.**  Setting
   `net.sgen["cos_phi_min"]` alone does nothing; `inverter_s2=True` and a
   usable `sn_mva` are both required in the single-period model.
+
+---
+
+## Which sgens `pv_q_control` reaches
+
+The single-period model additionally filters by the sgen `type` column.
+Matching is **exact**, against `sgen_types` (default
+`("PV", "PV_MV")` — the constant `DEFAULT_PV_SGEN_TYPES`).  This matters
+because SimBench names rooftop PV in LV grids `PV` but medium-voltage PV
+`PV_MV`, and labels the aggregated LV renewables in MV grids `lv_RES`:
+
+| SimBench grid | sgen types present | reached by default |
+|---|---|---|
+| `1-LV-rural1` | `PV` | 4 |
+| `1-MV-rural` | `lv_RES`, `Wind_MV`, `Biomass_MV`, `PV_MV`, `Hydro_MV` | 2 |
+| `1-MV-semiurb` | `lv_RES`, `Wind_MV`, `PV_MV`, … | 4 |
+| `1-MV-urban` | `lv_RES`, `Hydro_MV` | **0** |
+| `1-MV-comm` | `lv_RES`, `PV_MV`, `Wind_MV`, … | 5 |
+
+Widen the selection when a study needs the other categories:
+
+```python
+opf.add_OPF(
+    pv_q_control="both",
+    sgen_types=("PV", "PV_MV", "Wind_MV", "lv_RES"),
+)
+```
+
+On the MV grids above that raises the reach from 2–5 units to 87–133.
+`1-MV-urban` has no `PV_MV` at all, so it needs `lv_RES` listed explicitly
+before Q-control applies to anything.
+
+!!! note "Two related paths are filtered differently"
+    The **wind** Q-control path (`model.WINDc`) is selected separately and
+    still matches `type == "Wind"` exactly, so SimBench's `Wind_MV` units are
+    not reached through it.  The **multi-period** model applies no type filter
+    at all — it keys purely off `var_q`, so it reaches every annotated sgen
+    regardless of category.
 
 ---
 

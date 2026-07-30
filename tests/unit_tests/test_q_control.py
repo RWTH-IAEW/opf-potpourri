@@ -22,7 +22,7 @@ import warnings
 import numpy as np
 import pytest
 
-from potpourri.models.ACOPF_base import ACOPF
+from potpourri.models.ACOPF_base import DEFAULT_PV_SGEN_TYPES, ACOPF
 from potpourri.models_multi_period.ACOPF_multi_period import (
     ACOPF_multi_period,
 )
@@ -297,6 +297,86 @@ def test_pv_q_control_needs_var_q(lv_rural_net):
     net = _annotate(lv_rural_net, var_q=None)
     opf = _build_sp(net, pv_q_control="both")
     assert not hasattr(opf.model, "PV_QP_pos")
+
+
+# ── single-period: sgen type selection ────────────────────────────────────
+
+
+def _retype(base_net, new_type):
+    """Deep copy with every sgen relabelled to ``new_type``.
+
+    SimBench names medium-voltage PV ``PV_MV`` rather than ``PV``, so
+    relabelling the LV fixture reproduces the MV naming without downloading
+    an MV grid.
+    """
+    net = _annotate(base_net)
+    net.sgen["type"] = new_type
+    return net
+
+
+def test_default_types_include_lv_and_mv_pv():
+    """The default must cover both SimBench PV spellings."""
+    assert "PV" in DEFAULT_PV_SGEN_TYPES
+    assert "PV_MV" in DEFAULT_PV_SGEN_TYPES
+
+
+@pytest.mark.parametrize("sgen_type", ["PV", "PV_MV"])
+def test_default_types_reach_both_pv_spellings(lv_rural_net, sgen_type):
+    """Q-control reaches PV at LV and at MV without extra arguments.
+
+    Regression test: matching only ``type == "PV"`` silently reached zero
+    sgens on every SimBench MV grid, building no constraints and raising no
+    warning.
+    """
+    opf = _build_sp(_retype(lv_rural_net, sgen_type), pv_q_control="both")
+    assert hasattr(opf.model, "PV_QP_pos")
+    assert len(list(opf.model.PVc)) > 0
+
+
+def test_unlisted_type_is_not_reached(lv_rural_net):
+    """A category outside the list stays unconstrained."""
+    opf = _build_sp(_retype(lv_rural_net, "Wind_MV"), pv_q_control="both")
+    assert not hasattr(opf.model, "PV_QP_pos")
+
+
+def test_sgen_types_widens_selection(lv_rural_net):
+    """An explicit list can pull in further categories."""
+    net = _retype(lv_rural_net, "lv_RES")
+    opf = _build_sp(
+        net, pv_q_control="both", sgen_types=("PV", "PV_MV", "lv_RES")
+    )
+    assert hasattr(opf.model, "PV_QP_pos")
+    assert len(list(opf.model.PVc)) > 0
+
+
+def test_sgen_types_narrows_selection(lv_rural_net):
+    """An explicit list can also exclude the defaults."""
+    opf = _build_sp(
+        _retype(lv_rural_net, "PV"),
+        pv_q_control="both",
+        sgen_types=("PV_MV",),
+    )
+    assert not hasattr(opf.model, "PV_QP_pos")
+
+
+def test_sgen_types_matching_is_exact(lv_rural_net):
+    """Matching is exact, not substring: 'PV' must not catch 'PV_MV_extra'."""
+    opf = _build_sp(
+        _retype(lv_rural_net, "PV_MV_extra"),
+        pv_q_control="both",
+        sgen_types=("PV",),
+    )
+    assert not hasattr(opf.model, "PV_QP_pos")
+
+
+def test_sgen_types_accepts_any_iterable(lv_rural_net):
+    """A list works as well as a tuple."""
+    opf = _build_sp(
+        _retype(lv_rural_net, "PV_MV"),
+        pv_q_control="both",
+        sgen_types=["PV_MV"],
+    )
+    assert hasattr(opf.model, "PV_QP_pos")
 
 
 # ── single-period: inverter S² circle and cos(phi) cone ───────────────────

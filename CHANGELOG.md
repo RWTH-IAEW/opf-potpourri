@@ -31,7 +31,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Not yet covered: the hosting-capacity wind path in `windpower.py` keeps a
     private copy of the 4105 table and is not registry-driven, so `grid_code`
     does not affect `HC_ACOPF` runs.
-- **`tests/unit_tests/test_q_control.py`** — 64 solver-free unit tests for the
+- **`ACOPF.add_OPF(sgen_types=…)`** — the sgen `type` values that
+  `pv_q_control` treats as PV, defaulting to `DEFAULT_PV_SGEN_TYPES`
+  (`("PV", "PV_MV")`). Previously the filter matched `type == "PV"` exactly,
+  which reached **zero** sgens on every SimBench medium-voltage grid (they are
+  labelled `PV_MV`, `Wind_MV`, `lv_RES`, …), so `pv_q_control` silently built
+  no constraints there and raised no warning. The new default reaches 2–5
+  units per MV grid; pass a wider list such as
+  `("PV", "PV_MV", "Wind_MV", "lv_RES")` to include the aggregated
+  LV-renewable and MV wind units, raising the reach to 87–133. LV grids are
+  unaffected. Note that the wind Q-control path is selected separately and
+  still matches `type == "Wind"` exactly, and that the multi-period model
+  applies no type filter at all.
+- **`tests/unit_tests/test_q_control.py`** — 71 solver-free unit tests for the
   Q-control code, which previously had no automated coverage at all. Covers
   the grid-code registry (capability curves against the VDE-AR-N 4105 table,
   variant ordering, alias resolution, unknown-code `ValueError`, the
@@ -119,6 +131,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   in a configuration block of module-level constants instead of
   command-line arguments. Some previously infeasible example setups were
   corrected.
+
+### Known issues
+
+- **Single-period models are built on the wrong bus set when pandapower's ppc
+  conversion adds auxiliary buses.** `Basemodel.__init__` truncates the ppc bus
+  table to `len(net.bus)` rows and uses those ppc bus numbers as `model.B`.
+  Where the ppc is longer — `1-MV-rural--0-sw` has 103 ppc buses for 97
+  pandapower buses, from switch handling — the slice keeps auxiliary buses
+  while dropping real pandapower buses along with the in-service branches
+  attached to them. It also lets `net._pd2ppc_lookups["bus"]` resolve to a bus
+  the model does not contain, raising `KeyError` in `pyo_to_net` when writing
+  results back (observed on `1-MV-rural--0-sw`; latent on `1-MV-comm--0-sw`).
+  Grids whose ppc has no auxiliary buses — all the LV cases — are unaffected,
+  which is why this went unnoticed. Fixing it is not a local change:
+  `model.B` is in ppc space while `get_v_limits()` returns arrays in
+  pandapower positional order, and twelve sites across the AC and LPAC models
+  (single- and multi-period) index the latter by the former. A correct fix
+  must also decide which voltage limits apply to auxiliary buses, which
+  pandapower does not expose directly. **Medium-voltage results should be
+  treated as unreliable until this is resolved.**
 
 ## [0.3.1] — 2026-05-23
 

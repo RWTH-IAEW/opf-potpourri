@@ -12,6 +12,13 @@ from potpourri.technologies.q_control import (
     resolve_grid_code,
 )
 
+# sgen ``type`` values treated as PV for ``pv_q_control``.  SimBench names
+# rooftop PV in LV grids "PV" but medium-voltage PV "PV_MV", so matching only
+# "PV" silently reaches nothing on any SimBench MV grid.  Override per call
+# with ``add_OPF(sgen_types=...)`` to include further categories such as
+# "Wind_MV" or the aggregated "lv_RES".
+DEFAULT_PV_SGEN_TYPES = ("PV", "PV_MV")
+
 
 class ACOPF(AC, OPF):
     """Full AC Optimal Power Flow model.
@@ -314,6 +321,7 @@ class ACOPF(AC, OPF):
         fixed_cos_phi: "float | None" = None,
         cos_phi_p_profile: bool = False,
         grid_code=None,
+        sgen_types=None,
         **kwargs,
     ):
         """Attach AC-OPF sets, parameters, and constraints to ``self.model``.
@@ -391,6 +399,17 @@ class ACOPF(AC, OPF):
                 ``net.line.angmin_degree`` / ``net.line.angmax_degree`` (and
                 the transformer equivalent if present). Defaults disabled to
                 preserve previous behaviour.
+            sgen_types: sgen ``type`` values treated as PV by
+                ``pv_q_control``.  Defaults to
+                :data:`DEFAULT_PV_SGEN_TYPES` (``("PV", "PV_MV")``).
+                Matching is exact, so a network whose sgens use other
+                category names needs them listed here — for example
+                ``sgen_types=("PV", "PV_MV", "Wind_MV", "lv_RES")`` to
+                include SimBench medium-voltage wind and the aggregated
+                LV-renewable units.  Note that the wind Q-control path is
+                selected separately and still matches ``type == "Wind"``
+                exactly, and that the multi-period model applies no type
+                filter at all (it keys purely off ``var_q``).
             grid_code: Technical connection rule supplying the Q(P)/Q(U)
                 capability envelope and the P(U) / cos(phi)(P) thresholds.
                 Accepts ``None`` (VDE-AR-N 4105, the default), a short name
@@ -697,8 +716,13 @@ class ACOPF(AC, OPF):
         # Normalise legacy bool to string mode; False/None → skip entirely.
         _pv_mode = "both" if pv_q_control is True else pv_q_control
         if _pv_mode and self.static_generation_data["var_q"] is not None:
+            _types = (
+                DEFAULT_PV_SGEN_TYPES
+                if sgen_types is None
+                else tuple(sgen_types)
+            )
             pv_qctrl_mask = (
-                (self.static_generation_data["type"] == "PV")
+                self.static_generation_data["type"].isin(_types)
                 & self.static_generation_data.in_service
                 & self.static_generation_data["var_q"].notna()
             )
