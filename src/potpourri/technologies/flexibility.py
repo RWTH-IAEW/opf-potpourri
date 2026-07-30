@@ -32,6 +32,15 @@ class Flexibility_multi_period:
             columns=["type", "v_m", "v_a_rad"],
         )
         self.bus_lookup = self.net._pd2ppc_lookups["bus"]
+        # ppc bus number carrying each pandapower bus, and the subset of ppc
+        # buses that a pandapower bus maps onto.  Auxiliary ppc buses inserted
+        # for node-node switches are absent from the latter: they have no
+        # pandapower row, so no per-bus user data (voltage limits) exists for
+        # them.  Consumed by get_sets() to build the Bpd set.
+        self.pd_bus_to_ppc = self.bus_lookup[self.net.bus.index.values]
+        self.ppc_buses_with_pd = pd.Index(
+            sorted({int(b) for b in self.pd_bus_to_ppc})
+        )
 
         self.baseMVA = self.net.sn_mva
 
@@ -42,10 +51,23 @@ class Flexibility_multi_period:
 
     def get_sets(self, model):
         """Initialise (or re-initialise) the bus set B on the Pyomo model
-        from network topology."""
+        from network topology.
+
+        Also defines ``Bpd``, the buses that a pandapower bus maps onto —
+        everything in ``B`` except the auxiliary nodes pandapower inserts for
+        node-node switches.  Per-bus user data (voltage limits) exists only
+        for those, so constraints derived from ``net.bus`` are indexed over
+        ``Bpd``.  On grids without auxiliary nodes ``Bpd == B``.
+        """
         if hasattr(model, "B"):
             model.del_component(model.B)
         model.B = pyo.Set(initialize=self.bus_data.index)
+        if hasattr(model, "Bpd"):
+            model.del_component(model.Bpd)
+        model.Bpd = pyo.Set(
+            within=model.B,
+            initialize=getattr(self, "ppc_buses_with_pd", self.bus_data.index),
+        )
         return True
 
     def make_to_dict(self, model_obj, model_time, data, time_dependent=True):

@@ -35,7 +35,16 @@ class Basemodel:
         pp.runpp(self.net, voltage_depend_loads=False)
 
         # --- pyo.Sets ---
-        bus_set = self.net._ppc["bus"][: len(self.net.bus), [0, 1, 7, 8]]
+        # Every ppc bus, not the first len(net.bus) rows.  pandapower's ppc
+        # conversion can add auxiliary buses (switch handling), so the ppc bus
+        # table is longer than net.bus on some grids — 103 rows for 97
+        # pandapower buses on 1-MV-rural--0-sw.  Truncating took the wrong
+        # subset there: it kept auxiliary buses while dropping real pandapower
+        # buses together with the in-service branches attached to them, and
+        # left `_pd2ppc_lookups` able to resolve to a bus the model did not
+        # contain (KeyError when writing results back).  The multi-period
+        # Basemodel has always used the full table; this matches it.
+        bus_set = self.net._ppc["bus"][:, [0, 1, 7, 8]]
         bus_set[:, -1] *= pi / 180
         self.bus_data = pd.DataFrame(
             bus_set[:, 1:],
@@ -44,6 +53,15 @@ class Basemodel:
         )
 
         self.bus_lookup = self.net._pd2ppc_lookups["bus"]
+        # ppc bus number carrying each pandapower bus, and the subset of ppc
+        # buses that a pandapower bus maps onto.  Auxiliary ppc buses are
+        # absent from the latter: they are internal nodes with no pandapower
+        # row, so no user-supplied per-bus data (voltage limits in
+        # particular) exists for them.
+        self.pd_bus_to_ppc = self.bus_lookup[self.net.bus.index.values]
+        self.ppc_buses_with_pd = pd.Index(
+            sorted({int(b) for b in self.pd_bus_to_ppc})
+        )
         self.demand_set = self.net.load.index[self.net.load.in_service]
         self.shunt_set = self.net.shunt.index[self.net.shunt.in_service]
         self.storage_set = self.net.storage.index[self.net.storage.in_service]
@@ -230,6 +248,14 @@ class Basemodel:
 
         # --- pyo.SetS ---
         self.model.B = pyo.Set(initialize=self.bus_data.index)  # buses
+        # Buses that a pandapower bus maps onto, i.e. everything in B except
+        # the auxiliary nodes pandapower inserts for node-node switches.
+        # Per-bus user data (voltage limits) exists only for these, so
+        # constraints derived from net.bus are indexed over Bpd rather than B.
+        # On grids without auxiliary nodes Bpd == B and nothing changes.
+        self.model.Bpd = pyo.Set(
+            within=self.model.B, initialize=self.ppc_buses_with_pd
+        )
         self.model.b0 = pyo.Set(
             initialize=self.bus_data.index[self.bus_data.type == 3],
             within=self.model.B,

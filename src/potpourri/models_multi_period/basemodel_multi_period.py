@@ -56,6 +56,15 @@ class Basemodel_multi_period:
             columns=["type", "v_m", "v_a_rad"],
         )
         self.bus_lookup = self.net._pd2ppc_lookups["bus"]
+        # ppc bus number carrying each pandapower bus, and the subset of ppc
+        # buses that a pandapower bus maps onto.  Auxiliary ppc buses added by
+        # pandapower's switch handling are absent from the latter: they are
+        # internal nodes with no pandapower row, so no user-supplied per-bus
+        # data (voltage limits in particular) exists for them.
+        self.pd_bus_to_ppc = self.bus_lookup[self.net.bus.index.values]
+        self.ppc_buses_with_pd = pd.Index(
+            sorted({int(b) for b in self.pd_bus_to_ppc})
+        )
 
         # --- Param Data ---
         self.baseMVA = self.net.sn_mva

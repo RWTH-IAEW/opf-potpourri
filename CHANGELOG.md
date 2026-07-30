@@ -33,7 +33,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     does not affect `HC_ACOPF` runs.
 - **`ACOPF.add_OPF(sgen_types=…)`** — the sgen `type` values that
   `pv_q_control` treats as PV, defaulting to `DEFAULT_PV_SGEN_TYPES`
-  (`("PV", "PV_MV")`). Previously the filter matched `type == "PV"` exactly,
+  (`("PV", "PV_MV", "pv")`). Previously the filter matched `type == "PV"` exactly,
   which reached **zero** sgens on every SimBench medium-voltage grid (they are
   labelled `PV_MV`, `Wind_MV`, `lv_RES`, …), so `pv_q_control` silently built
   no constraints there and raised no warning. The new default reaches 2–5
@@ -114,6 +114,47 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Bus numbering: the auxiliary buses that pandapower inserts for node-node
+  switches are handled correctly.** Previously this left every medium-voltage
+  grid either wrong or unusable.
+
+  `Basemodel.__init__` truncated the ppc bus table to `len(net.bus)` rows and
+  used those ppc bus numbers as `model.B`. Where the ppc table is longer —
+  `1-MV-rural--0-sw` has 103 ppc buses for 97 pandapower buses — that slice
+  kept auxiliary buses while **dropping real pandapower buses along with the
+  in-service branches attached to them**, so the optimisation ran on an
+  incomplete network. It also let `net._pd2ppc_lookups["bus"]` resolve to a bus
+  the model did not contain, raising `KeyError` in `pyo_to_net` on write-back
+  (observed on `1-MV-rural--0-sw`, latent on `1-MV-comm--0-sw`). The
+  multi-period model already used the full ppc table but failed earlier still,
+  with `IndexError` in `add_OPF`, so multi-period AC OPF had never run on any
+  SimBench MV grid.
+
+  SimBench documents these nodes: in its CSV format all switches are modelled
+  as node-node switches, which inserts `auxiliary`-type nodes between busbars
+  and the edge elements attached through them. SimBench's `no_sw` variant reduces its
+  own auxiliary nodes, as its documentation describes — 95 rather than 97
+  pandapower buses for `1-MV-rural` — but pandapower still derives the
+  same number of auxiliary ppc buses either way (6 in both), so choosing
+  `no_sw` does not avoid this defect.
+
+  `model.B` now spans the whole ppc bus table, and a new set `model.Bpd` holds
+  the buses that a pandapower bus maps onto. Voltage limits and their bound
+  constraints are indexed over `Bpd`, because auxiliary nodes have no
+  pandapower row and hence no user-supplied limits; their voltage follows from
+  the power-flow equations. Where the ppc has no auxiliary buses `Bpd == B` and
+  nothing changes, which covers every LV grid.
+
+  `get_v_limits()` now returns `pandas.Series` keyed by ppc bus number instead
+  of arrays in pandapower positional order. That also repairs
+  `add_generator_v_limits()`, which indexed a positional array with ppc bus
+  numbers — correct only while the two numbering spaces coincided. Where
+  several pandapower buses fuse onto one ppc bus (the multi-period path, which
+  does not run `preprocess_grid`), the tightest band is kept.
+
+  Eight regression tests cover the ppc/pandapower split, including the
+  compatibility guarantee that `Bpd == B` without auxiliary buses.
+
 - `Basemodel` no longer deletes buses aggressively during network
   preparation, which raised `KeyError` on HV/MV grids.
 - `mkdocs.yml` now enables the `admonition` markdown extension. It was
@@ -131,26 +172,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   in a configuration block of module-level constants instead of
   command-line arguments. Some previously infeasible example setups were
   corrected.
-
-### Known issues
-
-- **Single-period models are built on the wrong bus set when pandapower's ppc
-  conversion adds auxiliary buses.** `Basemodel.__init__` truncates the ppc bus
-  table to `len(net.bus)` rows and uses those ppc bus numbers as `model.B`.
-  Where the ppc is longer — `1-MV-rural--0-sw` has 103 ppc buses for 97
-  pandapower buses, from switch handling — the slice keeps auxiliary buses
-  while dropping real pandapower buses along with the in-service branches
-  attached to them. It also lets `net._pd2ppc_lookups["bus"]` resolve to a bus
-  the model does not contain, raising `KeyError` in `pyo_to_net` when writing
-  results back (observed on `1-MV-rural--0-sw`; latent on `1-MV-comm--0-sw`).
-  Grids whose ppc has no auxiliary buses — all the LV cases — are unaffected,
-  which is why this went unnoticed. Fixing it is not a local change:
-  `model.B` is in ppc space while `get_v_limits()` returns arrays in
-  pandapower positional order, and twelve sites across the AC and LPAC models
-  (single- and multi-period) index the latter by the former. A correct fix
-  must also decide which voltage limits apply to auxiliary buses, which
-  pandapower does not expose directly. **Medium-voltage results should be
-  treated as unreliable until this is resolved.**
 
 ## [0.3.1] — 2026-05-23
 

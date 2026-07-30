@@ -49,9 +49,10 @@ Two consequences worth calling out:
 
 The single-period model additionally filters by the sgen `type` column.
 Matching is **exact**, against `sgen_types` (default
-`("PV", "PV_MV")` — the constant `DEFAULT_PV_SGEN_TYPES`).  This matters
-because SimBench names rooftop PV in LV grids `PV` but medium-voltage PV
-`PV_MV`, and labels the aggregated LV renewables in MV grids `lv_RES`:
+`("PV", "PV_MV", "pv")` — the constant `DEFAULT_PV_SGEN_TYPES`).  This matters
+because SimBench spells PV differently per voltage level — its RES dataset
+uses `PV` in LV (and HV2), `PV_MV` in MV and lowercase `pv` in EHV — and
+labels the aggregated LV renewables in MV grids `lv_RES`:
 
 | SimBench grid | sgen types present | reached by default |
 |---|---|---|
@@ -73,6 +74,19 @@ opf.add_OPF(
 On the MV grids above that raises the reach from 2–5 units to 87–133.
 `1-MV-urban` has no `PV_MV` at all, so it needs `lv_RES` listed explicitly
 before Q-control applies to anything.
+
+!!! note "Medium-voltage grids and auxiliary buses"
+    SimBench models every switch as a node-node switch, which inserts
+    `auxiliary`-type nodes between busbars and the elements attached through
+    them.  pandapower's ppc conversion therefore produces more buses than
+    `net.bus` on those grids — 103 against 97 for `1-MV-rural--0-sw`.  The
+    models account for this: `model.B` covers every ppc bus, while
+    `model.Bpd` covers those backed by a pandapower bus, and voltage limits
+    apply to `Bpd` because auxiliary nodes carry no user-supplied limits.
+    SimBench's `no_sw` variant reduces its own auxiliary nodes (95 rather
+    than 97 pandapower buses for `1-MV-rural`), but pandapower still
+    derives the same number of auxiliary ppc buses either way, so `no_sw`
+    does **not** avoid the issue.
 
 !!! note "Two related paths are filtered differently"
     The **wind** Q-control path (`model.WINDc`) is selected separately and

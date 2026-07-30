@@ -379,6 +379,91 @@ def test_sgen_types_accepts_any_iterable(lv_rural_net):
     assert hasattr(opf.model, "PV_QP_pos")
 
 
+# ── bus numbering: ppc space vs pandapower space ──────────────────────────
+
+
+def test_model_covers_every_ppc_bus(lv_rural_net):
+    """model.B must span the whole ppc bus table, not a truncated slice.
+
+    Regression test: the bus set was built from the first ``len(net.bus)``
+    ppc rows.  Where pandapower's conversion inserts auxiliary buses for
+    node-node switches the ppc table is longer, and that slice kept
+    auxiliary buses while dropping real pandapower buses together with the
+    branches attached to them.
+    """
+    opf = _build_sp(_annotate(lv_rural_net), pv_q_control="both")
+    assert len(list(opf.model.B)) == len(opf.net._ppc["bus"])
+
+
+def test_bpd_is_exactly_the_pandapower_backed_buses(lv_rural_net):
+    """Bpd must equal the set of ppc buses that a pandapower bus maps onto."""
+    opf = _build_sp(_annotate(lv_rural_net), pv_q_control="both")
+    mapped = {int(b) for b in opf.pd_bus_to_ppc}
+    assert set(opf.model.Bpd) == mapped
+    assert set(opf.model.Bpd) <= set(opf.model.B)
+
+
+def test_bpd_equals_b_without_auxiliary_buses(lv_rural_net):
+    """On a grid with no auxiliary ppc buses nothing changes.
+
+    This is the compatibility guarantee for the bus-numbering fix: whenever
+    the ppc bus count equals ``len(net.bus)``, ``Bpd`` and ``B`` coincide and
+    the voltage bounds cover every bus exactly as before.
+    """
+    opf = _build_sp(_annotate(lv_rural_net), pv_q_control="both")
+    if len(opf.net._ppc["bus"]) == len(opf.net.bus):
+        assert set(opf.model.Bpd) == set(opf.model.B)
+    else:  # pragma: no cover - fixture is an auxiliary-free LV grid
+        pytest.skip("fixture unexpectedly has auxiliary ppc buses")
+
+
+def test_voltage_limits_are_indexed_by_ppc_bus(lv_rural_net):
+    """get_v_limits must key on ppc bus numbers, matching bus_lookup.
+
+    Positional arrays were correct only while pandapower and ppc numbering
+    coincided; every consumer resolves through ``bus_lookup``.
+    """
+    opf = _build_sp(_annotate(lv_rural_net), pv_q_control="both")
+    vmax, vmin = opf.v_limits
+    assert set(vmax.index) == set(opf.model.Bpd)
+    assert set(vmin.index) == set(opf.model.Bpd)
+    # values must still be the ones from net.bus, resolved via the lookup
+    got_max = vmax.loc[opf.pd_bus_to_ppc].to_numpy()
+    assert np.allclose(got_max, opf.net.bus.max_vm_pu.values)
+
+
+def test_voltage_bounds_applied_to_pandapower_backed_buses(lv_rural_net):
+    """The bound constraint is indexed over Bpd, not B."""
+    opf = _build_sp(_annotate(lv_rural_net), pv_q_control="both")
+    assert set(opf.model.v_pyo) == set(opf.model.Bpd)
+
+
+def test_results_write_back_resolves_every_bus(lv_rural_net):
+    """Every bus_lookup target must exist in the voltage variable.
+
+    This is the precondition ``pyo_to_net._bus_voltage_results_to_net``
+    relies on; when it failed the write-back raised KeyError.
+    """
+    opf = _build_sp(_annotate(lv_rural_net), pv_q_control="both")
+    v_keys = set(opf.model.v.keys())
+    targets = {int(b) for b in opf.pd_bus_to_ppc}
+    assert targets <= v_keys
+
+
+def test_multi_period_defines_bpd(lv_rural_net):
+    """The multi-period model exposes Bpd as well."""
+    mp = _build_mp(_annotate(lv_rural_net))
+    assert hasattr(mp.model, "Bpd")
+    assert set(mp.model.Bpd) <= set(mp.model.B)
+
+
+def test_multi_period_voltage_bounds_over_bpd(lv_rural_net):
+    """Multi-period voltage bounds are indexed (Bpd, T)."""
+    mp = _build_mp(_annotate(lv_rural_net))
+    buses = {k[0] for k in mp.model.v_constraint}
+    assert buses == set(mp.model.Bpd)
+
+
 # ── single-period: inverter S² circle and cos(phi) cone ───────────────────
 
 

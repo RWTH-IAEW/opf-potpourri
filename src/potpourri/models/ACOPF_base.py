@@ -12,12 +12,15 @@ from potpourri.technologies.q_control import (
     resolve_grid_code,
 )
 
-# sgen ``type`` values treated as PV for ``pv_q_control``.  SimBench names
-# rooftop PV in LV grids "PV" but medium-voltage PV "PV_MV", so matching only
-# "PV" silently reaches nothing on any SimBench MV grid.  Override per call
-# with ``add_OPF(sgen_types=...)`` to include further categories such as
-# "Wind_MV" or the aggregated "lv_RES".
-DEFAULT_PV_SGEN_TYPES = ("PV", "PV_MV")
+# sgen ``type`` values treated as PV for ``pv_q_control``.  SimBench spells PV
+# differently per voltage level — its RES dataset uses "PV" in LV (and HV2),
+# "PV_MV" in MV and lowercase "pv" in EHV — so matching only "PV" silently
+# reaches nothing on any SimBench MV grid.  Matching is exact and
+# case-sensitive.  Override per call with ``add_OPF(sgen_types=...)`` to
+# include further categories: SimBench also ships "Wind"/"Wind_MV"/"wind
+# onshore"/"wind offshore", "Biomass_MV", "Hydro_MV", and the aggregated
+# "lv_RES" (low-voltage renewables lumped into one MV element).
+DEFAULT_PV_SGEN_TYPES = ("PV", "PV_MV", "pv")
 
 
 class ACOPF(AC, OPF):
@@ -124,22 +127,44 @@ class ACOPF(AC, OPF):
         self.generation_data["min_q"] = min_q
 
     def get_v_limits(self):
-        """Read bus voltage bounds from net.bus.
+        """Read bus voltage bounds from net.bus, keyed by ppc bus number.
 
         Returns:
-            tuple: (max_vm_pu, min_vm_pu) as numpy arrays indexed by internal
-            bus id. Defaults to 1.1 / 0.9 if columns are absent.
-            Generator-level limits override bus limits where stricter.
+            tuple: (max_vm_pu, min_vm_pu) as :class:`~pandas.Series` indexed
+            by **ppc** bus number, covering only the ppc buses that a
+            pandapower bus maps onto (``self.ppc_buses_with_pd``).  Defaults
+            to 1.1 / 0.9 if the columns are absent.  Generator-level limits
+            override bus limits where stricter.
+
+        Note:
+            The index is ppc bus numbers, not pandapower bus indices, because
+            every consumer looks these up through ``self.bus_lookup``.  Plain
+            positional arrays were correct only while the two numbering spaces
+            happened to coincide, which is not the case on grids where
+            pandapower's ppc conversion adds auxiliary buses.  Those auxiliary
+            buses carry no pandapower row and therefore no user-supplied
+            limits, so they are deliberately absent here and their voltage is
+            left to follow from the network equations.
         """
+        n_bus = len(self.net.bus.index)
         if "max_vm_pu" in self.net.bus:
-            max_vm_pu = self.net.bus.max_vm_pu.values
+            vmax = self.net.bus.max_vm_pu.values
         else:
-            max_vm_pu = np.full(len(self.net.bus.index), 1.1)
+            vmax = np.full(n_bus, 1.1)
 
         if "min_vm_pu" in self.net.bus:
-            min_vm_pu = self.net.bus.min_vm_pu.values
+            vmin = self.net.bus.min_vm_pu.values
         else:
-            min_vm_pu = np.full(len(self.net.bus.index), 0.9)
+            vmin = np.full(n_bus, 0.9)
+
+        ppc_of_bus = self.pd_bus_to_ppc
+        max_vm_pu = pd.Series(np.asarray(vmax, dtype=float), index=ppc_of_bus)
+        min_vm_pu = pd.Series(np.asarray(vmin, dtype=float), index=ppc_of_bus)
+        # Several pandapower buses can fuse onto one ppc bus; keep the
+        # tightest band so the merged node cannot be operated outside the
+        # limits of any bus that formed it.
+        max_vm_pu = max_vm_pu.groupby(level=0).min()
+        min_vm_pu = min_vm_pu.groupby(level=0).max()
 
         if any(self.net.gen.index):
             self.add_generator_v_limits(max_vm_pu, min_vm_pu)
@@ -154,14 +179,17 @@ class ACOPF(AC, OPF):
         bus-level value.
 
         Args:
-            max_vm_pu: Array of per-bus upper voltage limits (per-unit).
-            min_vm_pu: Array of per-bus lower voltage limits (per-unit).
+            max_vm_pu: Per-bus upper voltage limits (per-unit), a
+                :class:`~pandas.Series` indexed by ppc bus number.
+            min_vm_pu: Per-bus lower voltage limits (per-unit), same indexing.
         """
-        # check max_vm_pu / min_vm_pu bus limit violation by gens
+        # check max_vm_pu / min_vm_pu bus limit violation by gens.
+        # gen_buses are ppc bus numbers, matching the Series index.
         gen_buses = self.bus_lookup[self.net.gen.bus.values]
         if "max_vm_pu" in self.net["gen"].columns:
             v_max_bound = (
-                max_vm_pu[gen_buses] < self.net["gen"]["max_vm_pu"].values
+                max_vm_pu.loc[gen_buses].to_numpy()
+                < self.net["gen"]["max_vm_pu"].values
             )
             if np.any(v_max_bound):
                 bound_gens = self.net["gen"].index.values[v_max_bound]
@@ -171,16 +199,17 @@ class ACOPF(AC, OPF):
                     bound_gens,
                 )
                 # pyo.Set only vm of gens which do not violate the limits
-                max_vm_pu[gen_buses[~v_max_bound]] = self.net["gen"][
+                max_vm_pu.loc[gen_buses[~v_max_bound]] = self.net["gen"][
                     "max_vm_pu"
                 ].values[~v_max_bound]
             else:
                 # pyo.Set vm of all gens
-                max_vm_pu[gen_buses] = self.net["gen"]["max_vm_pu"].values
+                max_vm_pu.loc[gen_buses] = self.net["gen"]["max_vm_pu"].values
 
         if "min_vm_pu" in self.net["gen"].columns:
             v_min_bound = (
-                self.net["gen"]["min_vm_pu"].values < min_vm_pu[gen_buses]
+                self.net["gen"]["min_vm_pu"].values
+                < min_vm_pu.loc[gen_buses].to_numpy()
             )
             if np.any(v_min_bound):
                 bound_gens = self.net["gen"].index.values[v_min_bound]
@@ -190,12 +219,12 @@ class ACOPF(AC, OPF):
                     bound_gens,
                 )
                 # pyo.Set only vm of gens which do not violate the limits
-                min_vm_pu[gen_buses[~v_min_bound]] = self.net["gen"][
+                min_vm_pu.loc[gen_buses[~v_min_bound]] = self.net["gen"][
                     "min_vm_pu"
                 ].values[~v_min_bound]
             else:
                 # pyo.Set vm of all gens
-                min_vm_pu[gen_buses] = self.net["gen"]["min_vm_pu"].values
+                min_vm_pu.loc[gen_buses] = self.net["gen"]["min_vm_pu"].values
 
         if "controllable" in self.net.gen:
             controllable = self.net["gen"]["controllable"].values
@@ -401,7 +430,7 @@ class ACOPF(AC, OPF):
                 preserve previous behaviour.
             sgen_types: sgen ``type`` values treated as PV by
                 ``pv_q_control``.  Defaults to
-                :data:`DEFAULT_PV_SGEN_TYPES` (``("PV", "PV_MV")``).
+                :data:`DEFAULT_PV_SGEN_TYPES` (``("PV", "PV_MV", "pv")``).
                 Matching is exact, so a network whose sgens use other
                 category names needs them listed here — for example
                 ``sgen_types=("PV", "PV_MV", "Wind_MV", "lv_RES")`` to
@@ -466,16 +495,18 @@ class ACOPF(AC, OPF):
             initialize=self.static_generation_data["p_inst"][self.model.WINDc],
         )
 
-        # voltage limits
+        # Voltage limits, over Bpd only: auxiliary ppc buses have no
+        # pandapower row and therefore no user-supplied limits.  Their voltage
+        # follows from the power-flow equations instead.
         self.model.Vmax = pyo.Param(
-            self.model.B,
+            self.model.Bpd,
             within=pyo.NonNegativeReals,
-            initialize=self.v_limits[0][self.model.B],
+            initialize=self.v_limits[0][self.model.Bpd],
         )  # max voltage (p.u.)
         self.model.Vmin = pyo.Param(
-            self.model.B,
+            self.model.Bpd,
             within=pyo.NonNegativeReals,
-            initialize=self.v_limits[1][self.model.B],
+            initialize=self.v_limits[1][self.model.Bpd],
         )  # min voltage (p.u.)
 
         # generation reactive power limits
@@ -629,7 +660,7 @@ class ACOPF(AC, OPF):
         def v_bounds(model, b):
             return model.Vmin[b], model.v[b], model.Vmax[b]
 
-        self.model.v_pyo = pyo.Constraint(self.model.B, rule=v_bounds)
+        self.model.v_pyo = pyo.Constraint(self.model.Bpd, rule=v_bounds)
 
         # Optional opt-in: pin voltage magnitude at every bus whose nominal
         # voltage matches `hv_bus_kv` to the base-case load-flow value. This

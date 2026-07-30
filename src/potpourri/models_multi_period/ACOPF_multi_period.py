@@ -9,6 +9,7 @@ from potpourri.technologies.demand import Demand_multi_period
 from potpourri.technologies.windpower import Windpower_multi_period
 from potpourri.technologies.sgens import Sgens_multi_period
 import numpy as np
+import pandas as pd
 from loguru import logger
 
 
@@ -99,19 +100,41 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
         demand_object.get_demand_reactive_data(self.model)
 
     def get_v_limits(self):
-        """Read per-bus voltage bounds from net.bus.
+        """Read per-bus voltage bounds from net.bus, keyed by ppc bus number.
 
-        Returns (max_vm_pu, min_vm_pu) arrays.
+        Returns:
+            tuple: (max_vm_pu, min_vm_pu) as :class:`~pandas.Series` indexed
+            by **ppc** bus number, covering only the ppc buses that a
+            pandapower bus maps onto.
+
+        Note:
+            The index is ppc bus numbers, not pandapower bus indices, because
+            every consumer looks these up through ``self.bus_lookup``.  Plain
+            positional arrays were correct only while the two numbering spaces
+            coincided, which fails on grids where pandapower's ppc conversion
+            adds auxiliary buses for node-node switches.  Those auxiliary
+            buses have no pandapower row and hence no user-supplied limits, so
+            they are absent here and their voltage follows from the network
+            equations.
         """
+        n_bus = len(self.net.bus.index)
         if "max_vm_pu" in self.net.bus:
-            max_vm_pu = self.net.bus.max_vm_pu.values
+            vmax = self.net.bus.max_vm_pu.values
         else:
-            max_vm_pu = np.full(len(self.net.bus.index), 1.1)
+            vmax = np.full(n_bus, 1.1)
 
         if "min_vm_pu" in self.net.bus:
-            min_vm_pu = self.net.bus.min_vm_pu.values
+            vmin = self.net.bus.min_vm_pu.values
         else:
-            min_vm_pu = np.full(len(self.net.bus.index), 0.9)
+            vmin = np.full(n_bus, 0.9)
+
+        ppc_of_bus = self.pd_bus_to_ppc
+        max_vm_pu = pd.Series(np.asarray(vmax, dtype=float), index=ppc_of_bus)
+        min_vm_pu = pd.Series(np.asarray(vmin, dtype=float), index=ppc_of_bus)
+        # Several pandapower buses can fuse onto one ppc bus; keep the
+        # tightest band.
+        max_vm_pu = max_vm_pu.groupby(level=0).min()
+        min_vm_pu = min_vm_pu.groupby(level=0).max()
 
         if any(self.net.gen.index):
             self.add_generator_v_limits(max_vm_pu, min_vm_pu)
@@ -125,7 +148,8 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
         gen_buses = self.bus_lookup[self.net.gen.bus.values]
         if "max_vm_pu" in self.net["gen"].columns:
             v_max_bound = (
-                max_vm_pu[gen_buses] < self.net["gen"]["max_vm_pu"].values
+                max_vm_pu.loc[gen_buses].to_numpy()
+                < self.net["gen"]["max_vm_pu"].values
             )
             if np.any(v_max_bound):
                 bound_gens = self.net["gen"].index.values[v_max_bound]
@@ -135,16 +159,17 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
                     bound_gens,
                 )
                 # set only vm of gens which do not violate the limits
-                max_vm_pu[gen_buses[~v_max_bound]] = self.net["gen"][
+                max_vm_pu.loc[gen_buses[~v_max_bound]] = self.net["gen"][
                     "max_vm_pu"
                 ].values[~v_max_bound]
             else:
                 # set vm of all gens
-                max_vm_pu[gen_buses] = self.net["gen"]["max_vm_pu"].values
+                max_vm_pu.loc[gen_buses] = self.net["gen"]["max_vm_pu"].values
 
         if "min_vm_pu" in self.net["gen"].columns:
             v_min_bound = (
-                self.net["gen"]["min_vm_pu"].values < min_vm_pu[gen_buses]
+                self.net["gen"]["min_vm_pu"].values
+                < min_vm_pu.loc[gen_buses].to_numpy()
             )
             if np.any(v_min_bound):
                 bound_gens = self.net["gen"].index.values[v_min_bound]
@@ -154,12 +179,12 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
                     bound_gens,
                 )
                 # set only vm of gens which do not violate the limits
-                min_vm_pu[gen_buses[~v_min_bound]] = self.net["gen"][
+                min_vm_pu.loc[gen_buses[~v_min_bound]] = self.net["gen"][
                     "min_vm_pu"
                 ].values[~v_min_bound]
             else:
                 # set vm of all gens
-                min_vm_pu[gen_buses] = self.net["gen"]["min_vm_pu"].values
+                min_vm_pu.loc[gen_buses] = self.net["gen"]["min_vm_pu"].values
 
         if "controllable" in self.net.gen:
             controllable = self.net["gen"]["controllable"].values
@@ -200,16 +225,18 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
             flex.get_all_acopf(self.model)
 
         # voltage limits DONE: make non time dependent
+        # Over Bpd only: auxiliary ppc buses have no pandapower row and so
+        # no user-supplied limits; their voltage follows from the equations.
         self.model.Vmax = Param(
-            self.model.B,
+            self.model.Bpd,
             within=NonNegativeReals,
-            initialize=self.v_limits[0][self.model.B],
+            initialize=self.v_limits[0][self.model.Bpd],
             mutable=True,
         )  # max voltage (p.u.)
         self.model.Vmin = Param(
-            self.model.B,
+            self.model.Bpd,
             within=NonNegativeReals,
-            initialize=self.v_limits[1][self.model.B],
+            initialize=self.v_limits[1][self.model.Bpd],
             mutable=True,
         )  # min voltage (p.u.)
 
@@ -258,7 +285,7 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
             return model.Vmin[b], model.v[b, t], model.Vmax[b]
 
         self.model.v_constraint = Constraint(
-            self.model.B, self.model.T, rule=v_bounds
+            self.model.Bpd, self.model.T, rule=v_bounds
         )
 
     def add_voltage_deviation_objective(self):
