@@ -36,4 +36,5 @@ print(net.res_bus[["vm_pu", "va_degree"]])
 - [**Single-Period OPF**](user-guide/single-period.md) — AC/DC OPF tutorial
 - [**Multi-Period OPF**](user-guide/multi-period.md) — time-series OPF tutorial
 - [**Flexible Devices**](user-guide/devices.md) — batteries, EVs, heat pumps
+- [**Reactive-Power Control**](user-guide/reactive-power-control.md) — VDE-AR-N 4105 Q(P)/Q(U) constraints, inverter S² circle, cos(φ) cone
 - [**API Reference**](api/models.md) — full class and method documentation

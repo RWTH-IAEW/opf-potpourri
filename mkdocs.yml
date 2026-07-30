@@ -16,6 +16,7 @@ plugins:
       bib_file: "paper.bib"
 
 markdown_extensions:
+  - admonition
   - footnotes
   - pymdownx.arithmatex:
       generic: true
@@ -40,6 +41,7 @@ nav:
       - Single-Period OPF: user-guide/single-period.md
       - Multi-Period OPF: user-guide/multi-period.md
       - Flexible Devices: user-guide/devices.md
+      - Reactive-Power Control: user-guide/reactive-power-control.md
       - Solvers: user-guide/solvers.md
       - Logging: user-guide/logging.md
   - Examples:

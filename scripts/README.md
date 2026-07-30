@@ -44,6 +44,7 @@ python scripts/minimal_ac_power_flow.py
 | `multi_period_acopf.py` | 24-hour AC OPF (96 × 15 min) without storage; all time steps solved jointly as one NLP |
 | `battery_multi_period_opf.py` | Multi-period AC OPF with battery storage; compares voltage deviation with and without batteries; shows SOC trajectories |
 | `hosting_capacity_opf.py` | Hosting capacity analysis with binary wind placement, VDE-AR-N 4105 grid-code Q constraints, and eps/SWmin parameter sweeps |
+| `q_control_opf.py` | **VDE-AR-N 4105 Q-control**: annotate PV/wind sgens with `var_q` and solve (1) a single-period AC OPF comparing the Q(P)/Q(U) modes, (2) the PV inverter controller modes (P(U) curtailment, fixed cos(φ), cos(φ)(P)), and (3) a 24-step multi-period AC OPF with automatic Q-control detection |
 
 ### Validation and benchmarking
 
@@ -72,6 +73,7 @@ python scripts/minimal_ac_power_flow.py
 | `multi_period_acopf.py` | IPOPT |
 | `battery_multi_period_opf.py` | IPOPT |
 | `hosting_capacity_opf.py` | GLPK (MindtPy); Gurobi recommended for larger runs |
+| `q_control_opf.py` | IPOPT |
 | `ehv_grid_opf.py` | GLPK (DC-OPF) + IPOPT (AC-OPF) |
 | `custom_objective_weighted_voltage.py` | IPOPT |
 | `validate_ac_model_against_pandapower.py` | IPOPT |

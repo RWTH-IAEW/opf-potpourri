@@ -1,11 +1,17 @@
 """Full AC OPF model combining AC power flow and OPF operational limits."""
 
+import numpy as np
 import pandas as pd
 import pyomo.environ as pyo
+from loguru import logger
+
 from potpourri.models.AC import AC
 from potpourri.models.OPF import OPF
-import numpy as np
-from loguru import logger
+from potpourri.technologies.q_control import (
+    CPP_P_THRESHOLD_PU,
+    VPU_V_CURTAIL,
+    VPU_V_MAX,
+)
 
 
 class ACOPF(AC, OPF):
@@ -313,6 +319,12 @@ class ACOPF(AC, OPF):
         fix_hv_buses: bool = False,
         hv_bus_kv: float = 110.0,
         angle_limits: bool = False,
+        pv_q_control: "str | bool | None" = None,
+        inverter_s2: bool = False,
+        cos_phi_min: "float | None" = None,
+        pu_curtail: bool = False,
+        fixed_cos_phi: "float | None" = None,
+        cos_phi_p_profile: bool = False,
         **kwargs,
     ):
         """Attach AC-OPF sets, parameters, and constraints to ``self.model``.
@@ -320,10 +332,34 @@ class ACOPF(AC, OPF):
         Extends :meth:`OPF.add_OPF` with bus voltage bounds (Vmin, Vmax),
         apparent-power thermal limits on lines and transformers, reactive
         power bounds for static generators, external grids and controllable
-        loads, and the wind Q-P / Q-U capability constraints for sgens with
-        ``var_q`` set.
+        loads, the wind Q-P / Q-U capability constraints for sgens with
+        ``var_q`` set, and optionally the same Q(P)/Q(U) grid-code constraints
+        for PV-type sgens via ``pv_q_control``.
 
         Args:
+            pv_q_control: VDE-AR-N 4105 Q-control mode for controllable
+                PV-type sgens (``type == "PV"`` and ``var_q`` set in
+                ``net.sgen``).  Accepted values:
+
+                * ``None`` or ``False`` — no Q-control (default)
+                * ``"qp"`` — Q(P) characteristic only
+                * ``"qu"`` — Q(U) droop only (requires AC model with ``v``)
+                * ``"both"`` or ``True`` — Q(P) and Q(U) combined
+            inverter_s2: When ``True``, add the apparent-power circle
+                constraint ``psG[g]² + qsG[g]² ≤ S_inv[g]²`` for every
+                controllable sgen with a finite ``net.sgen.sn_mva``.  The
+                rating ``S_inv = sn_mva * converter_sizing_pu / baseMVA``
+                (``converter_sizing_pu`` defaults to 1.0 when absent).
+                Defaults to ``False`` (opt-in).
+            cos_phi_min: Minimum power factor for the cos(φ) cone constraint
+                ``|qsG[g]| ≤ psG[g] · tan(arccos(cos_phi_min))``, applied to
+                every sgen in ``sGinv``.  Combined with ``psG ≥ 0`` this
+                restricts PV operation to a "pizza-slice" rather than a full
+                circle.  Per-sgen overrides can be set via
+                ``net.sgen["cos_phi_min"]`` (takes precedence over this
+                scalar).  Defaults to ``None`` (unconstrained). Typical
+                VDE-AR-N 4105 value: ``0.90``.  Only active when
+                ``inverter_s2=True`` and ``sn_mva`` is present.
             thermal_limit: ``"current"`` enforces ``|S|² ≤ SLmax² · v²``
                 (current-limit form, physically meaningful for distribution
                 conductors). ``"mva"`` enforces ``|S|² ≤ SLmax²``
@@ -340,6 +376,27 @@ class ACOPF(AC, OPF):
                 German distribution studies can be re-enabled by setting
                 ``fix_hv_buses=True``.
             hv_bus_kv: Voltage level (kV) used by ``fix_hv_buses``.
+            pu_curtail: When ``True``, add the P(U) active-power curtailment
+                constraint for controllable PV-type sgens (VDE-AR-N 4105
+                §8.5).  Above a voltage threshold the allowed active-power
+                output is reduced linearly to zero:
+                ``psG[g] · ΔV ≤ P_inst[g] · (V_max − v[bus[g]])``.
+                Per-sgen thresholds are read from ``net.sgen.v_curtail_pu``
+                (default 1.06 p.u.) and ``net.sgen.v_max_curtail_pu``
+                (default 1.10 p.u.).  Requires ``net.sgen.p_inst_mw``
+                (falls back to ``net.sgen.p_mw``).  Only active in AC models.
+            fixed_cos_phi: Fixed power-factor equality
+                ``qsG[g] == psG[g] · tan(arccos(cos_phi))`` applied to every
+                controllable sgen.  Supply a scalar to apply one value to all
+                sgens, or set ``net.sgen["fixed_cos_phi"]`` per-row (takes
+                precedence).  Defaults to ``None`` (disabled).
+            cos_phi_p_profile: When ``True``, add the VDE-AR-N 4105
+                cos(φ)(P) profile as a quadratic equality
+                ``qsG · (Pn − Pt) == tan_phi · psG · (psG − Pt)``.
+                Reads ``net.sgen.cos_phi_min`` (power factor at full output),
+                ``net.sgen.p_inst_mw`` (installed capacity Pn), and
+                optionally ``net.sgen.cpp_p_threshold_pu`` (default 0.2).
+                Requires IPOPT or another NLP solver.
             angle_limits: When ``True``, enforce branch phase-angle-difference
                 constraints ``angmin ≤ δ_from − δ_to ≤ angmax`` using
                 ``net.line.angmin_degree`` / ``net.line.angmax_degree`` (and
@@ -633,6 +690,314 @@ class ACOPF(AC, OPF):
             )
 
         self.model.QU_max_pyo = pyo.Constraint(self.model.WINDc, rule=QV_max)
+
+        # --- optional Q(P) / Q(U) for PV-type sgens ---
+        # Normalise legacy bool to string mode; False/None → skip entirely.
+        _pv_mode = "both" if pv_q_control is True else pv_q_control
+        if _pv_mode and self.static_generation_data["var_q"] is not None:
+            pv_qctrl_mask = (
+                (self.static_generation_data["type"] == "PV")
+                & self.static_generation_data.in_service
+                & self.static_generation_data["var_q"].notna()
+            )
+            pv_qctrl_init = list(
+                self.static_generation_data.index[pv_qctrl_mask]
+            )
+            pv_in_sGc = set(self.model.sGc)
+            self.model.PVc = pyo.Set(
+                within=self.model.sGc,
+                initialize=[g for g in pv_qctrl_init if g in pv_in_sGc],
+            )
+            if list(self.model.PVc):
+                self.model.PV_var_q = pyo.Param(
+                    self.model.PVc,
+                    initialize=self.static_generation_data["var_q"][
+                        self.model.PVc
+                    ],
+                )
+                self.model.PV_p_inst = pyo.Param(
+                    self.model.PVc,
+                    initialize=self.static_generation_data["p_inst"][
+                        self.model.PVc
+                    ],
+                )
+                qc = self.q_limit_parameter
+
+                if _pv_mode in ("qp", "both"):
+
+                    def PV_QP_pos(model, g):
+                        v = model.PV_var_q[g]
+                        return (
+                            model.qsG[g]
+                            <= qc.b_qp_max[v] * model.PV_p_inst[g]
+                            + qc.m_qp_max[v] * model.psG[g]
+                        )
+
+                    def PV_QP_neg(model, g):
+                        v = model.PV_var_q[g]
+                        return (
+                            model.qsG[g]
+                            >= qc.b_qp_min[v] * model.PV_p_inst[g]
+                            + qc.m_qp_min[v] * model.psG[g]
+                        )
+
+                    self.model.PV_QP_pos = pyo.Constraint(
+                        self.model.PVc, rule=PV_QP_pos
+                    )
+                    self.model.PV_QP_neg = pyo.Constraint(
+                        self.model.PVc, rule=PV_QP_neg
+                    )
+
+                if _pv_mode in ("qu", "both"):
+                    sGbs_lookup_pv = {g: b for (g, b) in self.model.sGbs}
+
+                    def PV_QU_min(model, g):
+                        if g not in sGbs_lookup_pv:
+                            return pyo.Constraint.Skip
+                        b = sGbs_lookup_pv[g]
+                        v = model.PV_var_q[g]
+                        return (
+                            model.qsG[g]
+                            >= (qc.m_qv[v] * model.v[b] + qc.b_qv_min[v])
+                            * model.PV_p_inst[g]
+                        )
+
+                    def PV_QU_max(model, g):
+                        if g not in sGbs_lookup_pv:
+                            return pyo.Constraint.Skip
+                        b = sGbs_lookup_pv[g]
+                        v = model.PV_var_q[g]
+                        return (
+                            model.qsG[g]
+                            <= (qc.m_qv[v] * model.v[b] + qc.b_qv_max[v])
+                            * model.PV_p_inst[g]
+                        )
+
+                    self.model.PV_QU_min = pyo.Constraint(
+                        self.model.PVc, rule=PV_QU_min
+                    )
+                    self.model.PV_QU_max = pyo.Constraint(
+                        self.model.PVc, rule=PV_QU_max
+                    )
+
+        # --- inverter apparent-power circle ---
+        if inverter_s2 and "sn_mva" in self.net.sgen:
+            conv_sz = (
+                self.net.sgen["converter_sizing_pu"].fillna(1.0)
+                if "converter_sizing_pu" in self.net.sgen
+                else pd.Series(1.0, index=self.net.sgen.index)
+            )
+            s_inv_pu = self.net.sgen["sn_mva"] * conv_sz / self.baseMVA
+            inv_idx = [
+                g
+                for g in self.model.sGc
+                if pd.notna(self.net.sgen.at[g, "sn_mva"])
+                and float(self.net.sgen.at[g, "sn_mva"]) > 0
+            ]
+            if inv_idx:
+                self.model.sGinv = pyo.Set(
+                    within=self.model.sGc, initialize=inv_idx
+                )
+                self.model.S_inv = pyo.Param(
+                    self.model.sGinv,
+                    initialize={g: float(s_inv_pu.at[g]) for g in inv_idx},
+                )
+
+                def sgen_inverter_s2_rule(model, g):
+                    return (
+                        model.psG[g] ** 2 + model.qsG[g] ** 2
+                        <= model.S_inv[g] ** 2
+                    )
+
+                self.model.sgen_inverter_s2 = pyo.Constraint(
+                    self.model.sGinv, rule=sgen_inverter_s2_rule
+                )
+
+                # cos(φ) cone: |qsG[g]| ≤ psG[g] · tan(arccos(cos_phi_min))
+                # Per-sgen "cos_phi_min" column takes precedence over scalar.
+                pf_data = {}
+                if "cos_phi_min" in self.net.sgen:
+                    for g in inv_idx:
+                        val = self.net.sgen.at[g, "cos_phi_min"]
+                        if pd.notna(val) and 0 < float(val) <= 1:
+                            pf_data[g] = float(np.tan(np.arccos(float(val))))
+                elif cos_phi_min is not None:
+                    tan_val = float(np.tan(np.arccos(cos_phi_min)))
+                    pf_data = {g: tan_val for g in inv_idx}
+
+                if pf_data:
+                    self.model.sGpf = pyo.Set(
+                        within=self.model.sGinv,
+                        initialize=list(pf_data.keys()),
+                    )
+                    self.model.tan_phi = pyo.Param(
+                        self.model.sGpf, initialize=pf_data
+                    )
+
+                    def sgen_cos_phi_upper(model, g):
+                        return model.qsG[g] <= model.tan_phi[g] * model.psG[g]
+
+                    def sgen_cos_phi_lower(model, g):
+                        return model.qsG[g] >= -model.tan_phi[g] * model.psG[g]
+
+                    self.model.sgen_cos_phi_upper = pyo.Constraint(
+                        self.model.sGpf, rule=sgen_cos_phi_upper
+                    )
+                    self.model.sgen_cos_phi_lower = pyo.Constraint(
+                        self.model.sGpf, rule=sgen_cos_phi_lower
+                    )
+
+        # --- P(U) active-power curtailment (VDE-AR-N 4105 §8.5) ---
+        if pu_curtail and "p_inst_mw" in self.net.sgen:
+            pv_mask = (self.static_generation_data["type"] == "PV") & (
+                self.static_generation_data.in_service
+            )
+            pu_idx = [
+                g
+                for g in self.model.sGc
+                if g in pv_mask.index and pv_mask.loc[g]
+            ]
+            if pu_idx:
+                p_inst_pu = (
+                    self.net.sgen["p_inst_mw"].fillna(
+                        self.net.sgen["p_mw"].abs()
+                    )
+                    / self.baseMVA
+                )
+
+                def _v_curtail(g):
+                    if "v_curtail_pu" in self.net.sgen:
+                        v = self.net.sgen.at[g, "v_curtail_pu"]
+                        return float(v) if pd.notna(v) else VPU_V_CURTAIL
+                    return VPU_V_CURTAIL
+
+                def _v_max_curtail(g):
+                    if "v_max_curtail_pu" in self.net.sgen:
+                        v = self.net.sgen.at[g, "v_max_curtail_pu"]
+                        return float(v) if pd.notna(v) else VPU_V_MAX
+                    return VPU_V_MAX
+
+                self.model.sGpu = pyo.Set(
+                    within=self.model.sGc, initialize=pu_idx
+                )
+                self.model.P_inst_pu = pyo.Param(
+                    self.model.sGpu,
+                    initialize={g: float(p_inst_pu.at[g]) for g in pu_idx},
+                )
+                self.model.V_curtail = pyo.Param(
+                    self.model.sGpu,
+                    initialize={g: _v_curtail(g) for g in pu_idx},
+                )
+                self.model.V_max_curtail = pyo.Param(
+                    self.model.sGpu,
+                    initialize={g: _v_max_curtail(g) for g in pu_idx},
+                )
+                sGbs_lookup_pu = {g: b for (g, b) in self.model.sGbs}
+
+                def sgen_pu_curtail_rule(model, g):
+                    if g not in sGbs_lookup_pu:
+                        return pyo.Constraint.Skip
+                    b = sGbs_lookup_pu[g]
+                    dv = model.V_max_curtail[g] - model.V_curtail[g]
+                    return model.psG[g] * dv <= model.P_inst_pu[g] * (
+                        model.V_max_curtail[g] - model.v[b]
+                    )
+
+                self.model.sgen_pu_curtail = pyo.Constraint(
+                    self.model.sGpu, rule=sgen_pu_curtail_rule
+                )
+
+        # --- fixed cos(φ) equality ---
+        # Per-sgen column takes precedence over scalar kwarg.
+        _fcf_data: dict = {}
+        if "fixed_cos_phi" in self.net.sgen:
+            for g in self.model.sGc:
+                val = self.net.sgen.at[g, "fixed_cos_phi"]
+                if pd.notna(val) and 0 < float(val) <= 1:
+                    _fcf_data[g] = float(np.tan(np.arccos(float(val))))
+        elif fixed_cos_phi is not None:
+            tan_val = float(np.tan(np.arccos(fixed_cos_phi)))
+            _fcf_data = {g: tan_val for g in self.model.sGc}
+
+        if _fcf_data:
+            self.model.sGfcf = pyo.Set(
+                within=self.model.sGc, initialize=list(_fcf_data.keys())
+            )
+            self.model.fixed_tan_phi = pyo.Param(
+                self.model.sGfcf, initialize=_fcf_data
+            )
+
+            def sgen_fixed_cos_phi_rule(model, g):
+                return model.qsG[g] == model.fixed_tan_phi[g] * model.psG[g]
+
+            self.model.sgen_fixed_cos_phi = pyo.Constraint(
+                self.model.sGfcf, rule=sgen_fixed_cos_phi_rule
+            )
+
+        # --- cos(φ)(P) profile ---
+        if cos_phi_p_profile and "cos_phi_min" in self.net.sgen:
+            p_inst_arr = (
+                self.net.sgen["p_inst_mw"]
+                .fillna(self.net.sgen["p_mw"].abs())
+                .values
+                if "p_inst_mw" in self.net.sgen
+                else self.net.sgen["p_mw"].abs().values
+            ) / self.baseMVA
+
+            cpp_thresh_pu_arr = (
+                self.net.sgen["cpp_p_threshold_pu"]
+                .fillna(CPP_P_THRESHOLD_PU)
+                .values
+                if "cpp_p_threshold_pu" in self.net.sgen
+                else None
+            )
+
+            cpp_data: dict = {}
+            for g in self.model.sGc:
+                cos_v = self.net.sgen.at[g, "cos_phi_min"]
+                if not (pd.notna(cos_v) and 0 < float(cos_v) <= 1):
+                    continue
+                pn = float(p_inst_arr[g])
+                thresh_pu = (
+                    float(cpp_thresh_pu_arr[g])
+                    if cpp_thresh_pu_arr is not None
+                    else CPP_P_THRESHOLD_PU
+                )
+                pt = thresh_pu * pn
+                if pn <= pt:
+                    continue
+                cpp_data[g] = {
+                    "tan_phi": float(np.tan(np.arccos(float(cos_v)))),
+                    "pn": pn,
+                    "pt": pt,
+                }
+
+            if cpp_data:
+                self.model.sGcpp = pyo.Set(
+                    within=self.model.sGc, initialize=list(cpp_data.keys())
+                )
+                self.model.cpp_tan_phi = pyo.Param(
+                    self.model.sGcpp,
+                    initialize={g: cpp_data[g]["tan_phi"] for g in cpp_data},
+                )
+                self.model.cpp_Pn = pyo.Param(
+                    self.model.sGcpp,
+                    initialize={g: cpp_data[g]["pn"] for g in cpp_data},
+                )
+                self.model.cpp_P_thresh = pyo.Param(
+                    self.model.sGcpp,
+                    initialize={g: cpp_data[g]["pt"] for g in cpp_data},
+                )
+
+                def sgen_cpp_rule(model, g):
+                    dPn = model.cpp_Pn[g] - model.cpp_P_thresh[g]
+                    return model.qsG[g] * dPn == model.cpp_tan_phi[g] * (
+                        model.psG[g] * (model.psG[g] - model.cpp_P_thresh[g])
+                    )
+
+                self.model.sgen_cpp = pyo.Constraint(
+                    self.model.sGcpp, rule=sgen_cpp_rule
+                )
 
     def _add_branch_angle_limits(self):
         """Attach branch phase-angle-difference constraints to ``self.model``.

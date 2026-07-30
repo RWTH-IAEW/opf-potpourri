@@ -4,6 +4,7 @@ power-bound constraints to a multi-period model."""
 import numpy as np
 import pyomo.environ as pyo
 from potpourri.technologies.flexibility import Flexibility_multi_period
+from potpourri.technologies.q_control import compute_q_curves
 
 
 class PV_multi_period(Flexibility_multi_period):
@@ -63,7 +64,31 @@ class PV_multi_period(Flexibility_multi_period):
         penetration: float | None = None,
         profile_column: str = "PV5",
         pv_pmin: float = 0.0,
+        q_control: str | None = None,
+        var_q: int = 0,
+        p_inst_mw: float | None = None,
     ):
+        """
+        Args:
+            q_control: Reactive-power control mode.  One of:
+
+                * ``None``   — no Q-control (default)
+                * ``"qp"``   — Q(P) characteristic only
+                * ``"qu"``   — Q(U) droop only (requires AC model with ``v``)
+                * ``"both"`` — Q(P) and Q(U) combined
+
+            var_q: VDE-AR-N 4105 operating variant (0–2).  Selects the
+                Q/P envelope column from the grid-code table.
+            p_inst_mw: Installed PV capacity per unit (MW).  Used as Pn in
+                the Q-control characteristic.  Defaults to the peak of the
+                generation profile.
+
+        Note:
+            ``qPV`` is a reactive compliance variable.  It is **not**
+            automatically wired into the nodal reactive power balance.
+            For full AC-OPF coupling, model PV units as sgens in
+            ``net.sgen`` with ``var_q`` set.
+        """
         super().__init__(net, T, scenario)
         self.net = net
 
@@ -98,6 +123,17 @@ class PV_multi_period(Flexibility_multi_period):
             self.buses_excl_extGrids, num_indexes, replace=False
         )
 
+        self.pv_q_control = q_control
+        self.pv_var_q = int(var_q)
+        if q_control is not None:
+            self.q_limit_parameter = compute_q_curves()
+            if p_inst_mw is not None:
+                self.pv_p_inst = float(p_inst_mw) / self.baseMVA
+            else:
+                self.pv_p_inst = (
+                    float(self.pv_load_profile.abs().max()) / self.baseMVA
+                )
+
     def get_all(self, model):
         """Attach PV sets, parameters, variables, constraints, and unfix
         variables."""
@@ -108,10 +144,12 @@ class PV_multi_period(Flexibility_multi_period):
         self.unfix_variables(model)
 
     def unfix_variables(self, model):
-        """Unfix pPV variables for all PV units over the full time horizon."""
+        """Unfix pPV (and qPV when Q-control is active) for all PV units."""
         for t in model.T:
             for pv in model.PV:
                 model.pPV[pv, t].unfix()
+                if self.pv_q_control is not None and hasattr(model, "qPV"):
+                    model.qPV[pv, t].unfix()
 
     def get_sets(self, model):
         """Define PV and PV_bus sets from randomly placed PV units."""
@@ -137,13 +175,18 @@ class PV_multi_period(Flexibility_multi_period):
         )
 
     def get_variables(self, model):
-        """Create pPV variable initialised from the load profile."""
+        """Create pPV variable and, when Q-control is active, qPV."""
         self.pPV_data_dict, self.pPV_tuple = self.make_to_dict(
             model.PV, model.T, self.pv_load_profile
         )
         model.pPV = pyo.Var(
             self.pPV_tuple, within=pyo.Reals, initialize=self.pPV_data_dict
         )
+        if self.pv_q_control is not None:
+            self.qPV_tuple = [(pv, t) for pv in model.PV for t in model.T]
+            model.qPV = pyo.Var(
+                self.qPV_tuple, within=pyo.Reals, initialize=0.0
+            )
 
     def get_all_constraints(self, model):
         """Add real-power bound constraints for all PV units over all time
@@ -154,7 +197,60 @@ class PV_multi_period(Flexibility_multi_period):
             return model.PV_Pmax[pv, t], model.pPV[pv, t], model.PV_Pmin[pv, t]
 
     def get_all_acopf(self, model):
-        """No additional ACOPF components needed for PV."""
+        """Add Q(P) and/or Q(U) constraints for PV units when q_control is set.
+
+        Constraint names: ``PV_QP_pos``, ``PV_QP_neg`` (Q(P)) and
+        ``PV_QU_min``, ``PV_QU_max`` (Q(U)).  Q(U) constraints require
+        ``model.v[bus, t]`` (AC model); they are skipped automatically when
+        the model has no voltage variable.
+        """
+        if self.pv_q_control is None:
+            return
+
+        qc = self.q_limit_parameter
+        v = self.pv_var_q
+        p_inst = self.pv_p_inst
+        pv_bus_lookup = dict(model.PV_bus)
+
+        if self.pv_q_control in ("qp", "both"):
+
+            @model.Constraint(model.PV, model.T)
+            def PV_QP_pos(model, pv, t):
+                return (
+                    model.qPV[pv, t]
+                    <= qc.b_qp_max[v] * p_inst
+                    + qc.m_qp_max[v] * model.pPV[pv, t]
+                )
+
+            @model.Constraint(model.PV, model.T)
+            def PV_QP_neg(model, pv, t):
+                return (
+                    model.qPV[pv, t]
+                    >= qc.b_qp_min[v] * p_inst
+                    + qc.m_qp_min[v] * model.pPV[pv, t]
+                )
+
+        if self.pv_q_control in ("qu", "both") and hasattr(model, "v"):
+
+            @model.Constraint(model.PV, model.T)
+            def PV_QU_min(model, pv, t):
+                b = pv_bus_lookup.get(pv)
+                if b is None:
+                    return pyo.Constraint.Skip
+                return (
+                    model.qPV[pv, t]
+                    >= (qc.m_qv[v] * model.v[b, t] + qc.b_qv_min[v]) * p_inst
+                )
+
+            @model.Constraint(model.PV, model.T)
+            def PV_QU_max(model, pv, t):
+                b = pv_bus_lookup.get(pv)
+                if b is None:
+                    return pyo.Constraint.Skip
+                return (
+                    model.qPV[pv, t]
+                    <= (qc.m_qv[v] * model.v[b, t] + qc.b_qv_max[v]) * p_inst
+                )
 
     def get_all_ac(self, model):
         """No additional AC components needed for PV."""

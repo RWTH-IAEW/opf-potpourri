@@ -40,6 +40,27 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
             self.model
         )  # gives the model now instead of the net
 
+        # Populate Q(P)/Q(U) characteristic data for sgens with var_q set.
+        # This covers both wind and PV sgens annotated with grid-code variants.
+        if "var_q" in self.net.sgen:
+            sgens_object.static_generation_q_ctrl_data(self.net)
+
+        # Populate inverter S² rating data when sn_mva is present.
+        if "sn_mva" in self.net.sgen:
+            sgens_object.static_generation_inverter_data(self.net)
+
+        # P(U) active-power curtailment (VDE-AR-N 4105 §8.5).
+        if "pu_curtail" in self.net.sgen:
+            sgens_object.static_generation_pu_curtail_data(self.net)
+
+        # Fixed cos(φ) equality mode.
+        if "fixed_cos_phi" in self.net.sgen:
+            sgens_object.static_generation_fixed_cos_phi_data(self.net)
+
+        # cos(φ)(P) profile (quadratic P-Q curve).
+        if "cos_phi_p_profile" in self.net.sgen:
+            sgens_object.static_generation_cpp_data(self.net)
+
         # get the object of class 'Windpower' from the 'flexibilities' list
         if "windpot_p_mw" in self.net.bus:
             windpower_object = next(

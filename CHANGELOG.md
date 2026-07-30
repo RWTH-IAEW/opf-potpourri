@@ -5,6 +5,75 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **VDE-AR-N 4105 / BDEW reactive-power control for PV and wind sgens**
+  (`src/potpourri/technologies/q_control.py`,
+  `src/potpourri/technologies/pv.py`,
+  `src/potpourri/technologies/sgens.py`):
+  - `compute_q_curves()` returns the slope/intercept coefficients for all
+    three Q-control variants (`var_q` 0–2).
+  - `ACOPF.add_OPF(pv_q_control=…)` accepts `None` (off), `"qp"` (Q(P)
+    only), `"qu"` (Q(U) only), or `"both"`. Adds `PV_QP_pos/neg` and
+    `PV_QU_min/max` on set `PVc`.
+  - `ACOPF_multi_period` detects `var_q` in `net.sgen` automatically and
+    adds the time-indexed `sG_QP_pos/neg` / `sG_QU_min/max` constraints.
+- **Inverter S² apparent-power circle**: `ACOPF.add_OPF(inverter_s2=True)`
+  (opt-in; defaults to `False`) reads `net.sgen.sn_mva` and
+  `net.sgen.converter_sizing_pu` and adds
+  `psG[g]² + qsG[g]² ≤ S_inv[g]²`. The multi-period model enables the
+  time-indexed form automatically when `sn_mva` is present.
+- **cos(φ) cone** completing the PV operating region (P ≥ 0 ∩ S² circle ∩
+  cone): `|qsG[g]| ≤ psG[g] · tan(arccos(cos_phi_min))`, from
+  `net.sgen["cos_phi_min"]` or the `cos_phi_min` keyword. In the
+  single-period model the cone sits inside the S² block, so it also
+  requires `inverter_s2=True` and a usable `sn_mva`.
+- **P(U) active-power curtailment** (VDE-AR-N 4105 §8.5): above a voltage
+  threshold the allowed active output falls linearly to zero.
+  `add_OPF(pu_curtail=True)`, thresholds from `net.sgen.v_curtail_pu` /
+  `v_max_curtail_pu` (defaults 1.06 / 1.10 p.u.). Bilinear — needs an NLP
+  solver.
+- **Fixed cos(φ) mode**: `qsG[g] = psG[g] · tan(arccos(cos_phi))` as an
+  equality, via `add_OPF(fixed_cos_phi=…)` or `net.sgen["fixed_cos_phi"]`.
+- **cos(φ)(P) profile**: quadratic equality
+  `qsG · (Pn − Pt) = tan_phi · psG · (psG − Pt)`, via
+  `add_OPF(cos_phi_p_profile=True)`.
+- **Multi-period OLTC tap optimisation**: `add_tap_changer_linear()` and
+  `add_tap_changer_discrete()` now use the time-indexed `Tap[tr, t]`
+  variable, and `add_tap_changer_linear()` accepts an optional
+  `max_tap_change_per_step` rate limit.
+- **`scripts/q_control_opf.py`** — compares the Q-control modes in the
+  single-period case, then the PV inverter controller modes, then runs a
+  24-step multi-period AC OPF with automatic Q-control detection.
+- **`docs/user-guide/reactive-power-control.md`** — user-guide page for all
+  of the above, including an activation-reference table giving the exact
+  precondition for each constraint group in both the single- and
+  multi-period model, since a missing precondition is silent (the
+  constraint is simply not added, with no warning).
+- **Docs CI**: `.github/workflows/ci.yml` gained a `docs` job running
+  `mkdocs build --strict`, so broken internal links and invalid navigation
+  now fail the build.
+
+### Fixed
+
+- `Basemodel` no longer deletes buses aggressively during network
+  preparation, which raised `KeyError` on HV/MV grids.
+- `mkdocs.yml` now enables the `admonition` markdown extension. It was
+  missing, so every `!!! note` block in the documentation rendered as
+  literal text.
+- `mkdocs.yml` disables `mkdocs-bibtex` inline citations. Inline (bare)
+  `@key` parsing runs on the raw markdown before code fences are handled, so
+  the Pyomo decorator `@model.Constraint(...)` in the device-development
+  example was read as a citation key and failed a strict docs build.
+  Bracketed `[@key]` citations are unaffected.
+
+### Changed
+
+- Example scripts in `scripts/` use a uniform style: tunable parameters sit
+  in a configuration block of module-level constants instead of
+  command-line arguments. Some previously infeasible example setups were
+  corrected.
+
 ## [0.3.1] — 2026-05-23
 
 ### Added

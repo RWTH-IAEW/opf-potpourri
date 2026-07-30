@@ -416,6 +416,7 @@ class Basemodel_multi_period:
                 )
         except AttributeError as err:
             logger.error("Could not check termination condition: {}", err)
+        return self.results
 
     def change_vals(self, key, value):
         """Set all indices of a named Pyomo component to value."""

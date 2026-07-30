@@ -2,8 +2,15 @@
 a multi-period model."""
 
 import numpy as np
+import pandas as pd
 import pyomo.environ as pyo
 from potpourri.technologies.flexibility import Flexibility_multi_period
+from potpourri.technologies.q_control import (
+    CPP_P_THRESHOLD_PU,
+    VPU_V_CURTAIL,
+    VPU_V_MAX,
+    compute_q_curves,
+)
 
 
 class Sgens_multi_period(Flexibility_multi_period):
@@ -46,9 +53,28 @@ class Sgens_multi_period(Flexibility_multi_period):
         """Attach AC-specific OPF parameters (reactive-power limits) and the
         corresponding range constraints. Separated from ``get_all_opf`` so
         that the DC OPF path can ignore Q entirely.
+
+        Also adds the following optional constraint blocks when the matching
+        data-population method was called beforehand:
+
+        * Q(P) / Q(U) grid-code constraints (``var_q`` column)
+        * Inverter S² circle (``sn_mva`` column)
+        * P(U) active-power curtailment (``pu_curtail`` column)
+        * Fixed cos(φ) equality (``fixed_cos_phi`` column)
+        * cos(φ)(P) profile equality (``cos_phi_p_profile`` column)
         """
         self.get_acopf_parameters(model)
         self.get_all_Constraints_acopf(model)
+        if getattr(self, "sgen_qc_indices", []):
+            self._add_sgen_q_ctrl_mp(model)
+        if getattr(self, "sgen_inv_indices", []):
+            self._add_sgen_inverter_s2_mp(model)
+        if getattr(self, "sgen_pu_indices", []):
+            self._add_sgen_pu_curtail_mp(model)
+        if getattr(self, "sgen_fcf_indices", []):
+            self._add_sgen_fixed_cos_phi_mp(model)
+        if getattr(self, "sgen_cpp_indices", []):
+            self._add_sgen_cpp_mp(model)
 
     def get_sets(self, model):
         super().get_sets(model)
@@ -124,6 +150,201 @@ class Sgens_multi_period(Flexibility_multi_period):
             initialize=self.QsGmin_data_dict,
             mutable=True,
         )
+
+    def static_generation_q_ctrl_data(self, net):
+        """Compute Q(P)/Q(U) characteristic data for sgens with ``var_q`` set.
+
+        Populates ``self.q_limit_parameter``, ``self.sgen_var_q``,
+        ``self.sgen_p_inst``, and ``self.sgen_qc_indices``.  Call this from
+        :meth:`ACOPF_multi_period._calc_opf_parameters` before
+        :meth:`get_all_acopf`.
+
+        Args:
+            net: pandapower network.  Only processed when ``net.sgen`` has a
+                ``var_q`` column.
+        """
+        if "var_q" not in net.sgen:
+            self.sgen_qc_indices = []
+            return
+
+        self.q_limit_parameter = compute_q_curves()
+        self.sgen_var_q = (
+            net.sgen.var_q.values
+        )  # object array; may contain None
+
+        if "p_inst_mw" in net.sgen:
+            p_inst = (
+                net.sgen.p_inst_mw.fillna(net.sgen.p_mw).values / self.baseMVA
+            )
+        else:
+            p_inst = net.sgen.p_mw.values / self.baseMVA
+        self.sgen_p_inst = p_inst
+
+        self.sgen_qc_indices = [
+            g
+            for g in self.sgens_in_service_list
+            if pd.notna(self.sgen_var_q[g])
+        ]
+
+    def _add_sgen_q_ctrl_mp(self, model):
+        """Add time-indexed Q(P) and Q(U) constraints for controllable sgens.
+
+        Requires :meth:`static_generation_q_ctrl_data` to have been called.
+        Creates ``model.sGqc`` and four constraint blocks per (sgen, time):
+        ``sG_QP_pos``, ``sG_QP_neg``, ``sG_QU_min``, ``sG_QU_max``.
+
+        Q(U) constraints require a voltage variable ``model.v[bus, t]``;
+        they are skipped silently when the model has no such variable (e.g.
+        in a linearised or DC formulation).
+        """
+        qc = self.q_limit_parameter
+        qc_list = [g for g in self.sgen_qc_indices if g in set(model.sGc)]
+        if not qc_list:
+            return
+
+        model.sGqc = pyo.Set(within=model.sGc, initialize=qc_list)
+        sGbs_lookup = {g: b for (g, b) in model.sGbs}
+        var_q = {g: int(self.sgen_var_q[g]) for g in qc_list}
+        p_inst = {g: float(self.sgen_p_inst[g]) for g in qc_list}
+
+        @model.Constraint(model.sGqc, model.T)
+        def sG_QP_pos(model, g, t):
+            v = var_q[g]
+            return (
+                model.qsG[g, t]
+                <= qc.b_qp_max[v] * p_inst[g]
+                + qc.m_qp_max[v] * model.psG[g, t]
+            )
+
+        @model.Constraint(model.sGqc, model.T)
+        def sG_QP_neg(model, g, t):
+            v = var_q[g]
+            return (
+                model.qsG[g, t]
+                >= qc.b_qp_min[v] * p_inst[g]
+                + qc.m_qp_min[v] * model.psG[g, t]
+            )
+
+        if not hasattr(model, "v"):
+            return
+
+        @model.Constraint(model.sGqc, model.T)
+        def sG_QU_min(model, g, t):
+            if g not in sGbs_lookup:
+                return pyo.Constraint.Skip
+            b = sGbs_lookup[g]
+            v = var_q[g]
+            return (
+                model.qsG[g, t]
+                >= (qc.m_qv[v] * model.v[b, t] + qc.b_qv_min[v]) * p_inst[g]
+            )
+
+        @model.Constraint(model.sGqc, model.T)
+        def sG_QU_max(model, g, t):
+            if g not in sGbs_lookup:
+                return pyo.Constraint.Skip
+            b = sGbs_lookup[g]
+            v = var_q[g]
+            return (
+                model.qsG[g, t]
+                <= (qc.m_qv[v] * model.v[b, t] + qc.b_qv_max[v]) * p_inst[g]
+            )
+
+    def static_generation_inverter_data(self, net):
+        """Compute inverter apparent-power ratings for the S² constraint.
+
+        Populates ``self.sgen_s_inv`` (per-unit rating array) and
+        ``self.sgen_inv_indices`` (in-service sgen indices with finite
+        ``sn_mva``).  Call from
+        :meth:`ACOPF_multi_period._calc_opf_parameters` before
+        :meth:`get_all_acopf`.
+
+        The apparent-power rating is
+        ``S_inv = sn_mva * converter_sizing_pu / baseMVA``.
+        ``converter_sizing_pu`` defaults to 1.0 when the column is absent.
+
+        Args:
+            net: pandapower network with ``net.sgen.sn_mva`` present.
+        """
+        if "sn_mva" not in net.sgen:
+            self.sgen_inv_indices = []
+            return
+
+        conv_sz = (
+            net.sgen["converter_sizing_pu"].fillna(1.0)
+            if "converter_sizing_pu" in net.sgen
+            else pd.Series(1.0, index=net.sgen.index)
+        )
+        self.sgen_s_inv = (net.sgen["sn_mva"] * conv_sz).fillna(
+            0.0
+        ).values / self.baseMVA
+        self.sgen_inv_indices = [
+            g
+            for g in self.sgens_in_service_list
+            if pd.notna(net.sgen.at[g, "sn_mva"])
+            and float(net.sgen.at[g, "sn_mva"]) > 0
+        ]
+
+        # cos(φ) cone: tan_phi per sgen if net.sgen["cos_phi_min"] present
+        if "cos_phi_min" in net.sgen:
+            self.sgen_tan_phi = {
+                g: float(
+                    np.tan(np.arccos(float(net.sgen.at[g, "cos_phi_min"])))
+                )
+                for g in self.sgen_inv_indices
+                if pd.notna(net.sgen.at[g, "cos_phi_min"])
+                and 0 < float(net.sgen.at[g, "cos_phi_min"]) <= 1
+            }
+        else:
+            self.sgen_tan_phi = {}
+
+    def _add_sgen_inverter_s2_mp(self, model):
+        """Add time-indexed inverter S² circle and optional cos(φ) cone.
+
+        Requires :meth:`static_generation_inverter_data` to have been called.
+
+        Creates:
+
+        * ``model.sGinv`` — controllable sgens with finite ``sn_mva``
+        * ``model.S_inv`` — per-unit apparent-power rating
+        * ``model.sgen_inverter_s2`` — ``psG² + qsG² ≤ S_inv²``
+        * ``model.sGpf``, ``model.tan_phi``, ``model.sgen_cos_phi_upper/lower``
+          — cos(φ) cone constraints, present only when ``cos_phi_min`` data
+          was found in ``net.sgen["cos_phi_min"]``.
+        """
+        inv_list = [g for g in self.sgen_inv_indices if g in set(model.sGc)]
+        if not inv_list:
+            return
+
+        model.sGinv = pyo.Set(within=model.sGc, initialize=inv_list)
+        model.S_inv = pyo.Param(
+            model.sGinv,
+            initialize={g: float(self.sgen_s_inv[g]) for g in inv_list},
+        )
+
+        @model.Constraint(model.sGinv, model.T)
+        def sgen_inverter_s2(model, g, t):
+            return (
+                model.psG[g, t] ** 2 + model.qsG[g, t] ** 2
+                <= model.S_inv[g] ** 2
+            )
+
+        # cos(φ) cone — only when cos_phi_min data is available
+        pf_list = [g for g in inv_list if g in self.sgen_tan_phi]
+        if pf_list:
+            model.sGpf = pyo.Set(within=model.sGinv, initialize=pf_list)
+            model.tan_phi = pyo.Param(
+                model.sGpf,
+                initialize={g: self.sgen_tan_phi[g] for g in pf_list},
+            )
+
+            @model.Constraint(model.sGpf, model.T)
+            def sgen_cos_phi_upper(model, g, t):
+                return model.qsG[g, t] <= model.tan_phi[g] * model.psG[g, t]
+
+            @model.Constraint(model.sGpf, model.T)
+            def sgen_cos_phi_lower(model, g, t):
+                return model.qsG[g, t] >= -model.tan_phi[g] * model.psG[g, t]
 
     def get_all_Constraints_opf(self, model):
         # psG Constraint
@@ -211,3 +432,258 @@ class Sgens_multi_period(Flexibility_multi_period):
                 model.qsG[(g, t)],
                 model.QsGmax[(g, t)],
             )
+
+    # ------------------------------------------------------------------
+    # P(U) active-power curtailment  (VDE-AR-N 4105 §8.5)
+    # ------------------------------------------------------------------
+
+    def static_generation_pu_curtail_data(self, net):
+        """Compute P(U) curtailment data for sgens with ``pu_curtail`` set.
+
+        Populates ``self.sgen_pu_indices``, ``self.sgen_p_inst_pu_curtail``,
+        ``self.sgen_v_curtail``, and ``self.sgen_v_max_curtail``.  Call from
+        :meth:`ACOPF_multi_period._calc_opf_parameters`.
+
+        Args:
+            net: pandapower network.  ``net.sgen`` must have a ``pu_curtail``
+                boolean column.  Per-sgen voltage thresholds are read from
+                ``v_curtail_pu`` (default :data:`VPU_V_CURTAIL`) and
+                ``v_max_curtail_pu`` (default :data:`VPU_V_MAX`).  Installed
+                capacity is read from ``p_inst_mw``, falling back to ``p_mw``.
+        """
+        if "pu_curtail" not in net.sgen:
+            self.sgen_pu_indices = []
+            return
+
+        p_inst = (
+            net.sgen.p_inst_mw.fillna(net.sgen.p_mw.abs()).values
+            if "p_inst_mw" in net.sgen
+            else net.sgen.p_mw.abs().values
+        ) / self.baseMVA
+
+        v_curtail = (
+            net.sgen.v_curtail_pu.fillna(VPU_V_CURTAIL).values
+            if "v_curtail_pu" in net.sgen
+            else np.full(len(net.sgen), VPU_V_CURTAIL)
+        )
+        v_max_curtail = (
+            net.sgen.v_max_curtail_pu.fillna(VPU_V_MAX).values
+            if "v_max_curtail_pu" in net.sgen
+            else np.full(len(net.sgen), VPU_V_MAX)
+        )
+
+        self.sgen_p_inst_pu_curtail = p_inst
+        self.sgen_v_curtail = v_curtail
+        self.sgen_v_max_curtail = v_max_curtail
+        self.sgen_pu_indices = [
+            g
+            for g in self.sgens_in_service_list
+            if pd.notna(net.sgen.at[g, "pu_curtail"])
+            and bool(net.sgen.at[g, "pu_curtail"])
+        ]
+
+    def _add_sgen_pu_curtail_mp(self, model):
+        """Add time-indexed P(U) curtailment constraints.
+
+        Requires :meth:`static_generation_pu_curtail_data`.
+
+        Adds ``model.sGpu``, ``model.P_inst_pu``, ``model.V_curtail``,
+        ``model.V_max_curtail``, and the bilinear constraint
+        ``model.sgen_pu_curtail``:
+
+            psG[g,t] * (V_max - V_curtail) ≤ P_inst[g] * (V_max - v[bus,t])
+
+        Requires an AC model with ``model.v`` voltage variable; silently
+        skipped otherwise.
+        """
+        if not hasattr(model, "v"):
+            return
+        pu_list = [g for g in self.sgen_pu_indices if g in set(model.sGc)]
+        if not pu_list:
+            return
+
+        model.sGpu = pyo.Set(within=model.sGc, initialize=pu_list)
+        model.P_inst_pu = pyo.Param(
+            model.sGpu,
+            initialize={
+                g: float(self.sgen_p_inst_pu_curtail[g]) for g in pu_list
+            },
+        )
+        model.V_curtail = pyo.Param(
+            model.sGpu,
+            initialize={g: float(self.sgen_v_curtail[g]) for g in pu_list},
+        )
+        model.V_max_curtail = pyo.Param(
+            model.sGpu,
+            initialize={g: float(self.sgen_v_max_curtail[g]) for g in pu_list},
+        )
+        sGbs_lookup = {g: b for (g, b) in model.sGbs}
+
+        @model.Constraint(model.sGpu, model.T)
+        def sgen_pu_curtail(model, g, t):
+            if g not in sGbs_lookup:
+                return pyo.Constraint.Skip
+            b = sGbs_lookup[g]
+            dv = model.V_max_curtail[g] - model.V_curtail[g]
+            return model.psG[g, t] * dv <= model.P_inst_pu[g] * (
+                model.V_max_curtail[g] - model.v[b, t]
+            )
+
+    # ------------------------------------------------------------------
+    # Fixed cos(φ) mode
+    # ------------------------------------------------------------------
+
+    def static_generation_fixed_cos_phi_data(self, net):
+        """Compute fixed-cos(φ) data for sgens with ``fixed_cos_phi`` set.
+
+        Populates ``self.sgen_fcf_indices`` and ``self.sgen_fcf_tan_phi``.
+        Call from :meth:`ACOPF_multi_period._calc_opf_parameters`.
+
+        Args:
+            net: pandapower network.  ``net.sgen`` must have a
+                ``fixed_cos_phi`` column containing per-sgen power factors
+                (0 < cos_phi ≤ 1); NaN or missing rows are skipped.
+        """
+        if "fixed_cos_phi" not in net.sgen:
+            self.sgen_fcf_indices = []
+            return
+
+        self.sgen_fcf_tan_phi = {
+            g: float(np.tan(np.arccos(float(net.sgen.at[g, "fixed_cos_phi"]))))
+            for g in self.sgens_in_service_list
+            if pd.notna(net.sgen.at[g, "fixed_cos_phi"])
+            and 0 < float(net.sgen.at[g, "fixed_cos_phi"]) <= 1
+        }
+        self.sgen_fcf_indices = list(self.sgen_fcf_tan_phi.keys())
+
+    def _add_sgen_fixed_cos_phi_mp(self, model):
+        """Add time-indexed fixed-cos(φ) equality constraints.
+
+        Requires :meth:`static_generation_fixed_cos_phi_data`.
+
+        Adds ``model.sGfcf``, ``model.fixed_tan_phi``, and the equality
+        ``model.sgen_fixed_cos_phi``:
+
+            qsG[g, t] == fixed_tan_phi[g] * psG[g, t]
+        """
+        fcf_list = [g for g in self.sgen_fcf_indices if g in set(model.sGc)]
+        if not fcf_list:
+            return
+
+        model.sGfcf = pyo.Set(within=model.sGc, initialize=fcf_list)
+        model.fixed_tan_phi = pyo.Param(
+            model.sGfcf,
+            initialize={g: self.sgen_fcf_tan_phi[g] for g in fcf_list},
+        )
+
+        @model.Constraint(model.sGfcf, model.T)
+        def sgen_fixed_cos_phi(model, g, t):
+            return model.qsG[g, t] == model.fixed_tan_phi[g] * model.psG[g, t]
+
+    # ------------------------------------------------------------------
+    # cos(φ)(P) profile  (VDE-AR-N 4105 piecewise P-Q curve)
+    # ------------------------------------------------------------------
+
+    def static_generation_cpp_data(self, net):
+        """Compute cos(φ)(P) profile data for sgens with ``cos_phi_p_profile``.
+
+        Populates ``self.sgen_cpp_indices``, ``self.sgen_cpp_tan_phi``,
+        ``self.sgen_cpp_pn``, and ``self.sgen_cpp_p_thresh``.  Call from
+        :meth:`ACOPF_multi_period._calc_opf_parameters`.
+
+        The cos(φ)(P) characteristic defines Q = 0 for P ≤ P_thresh and
+        Q = P · tan_phi · (P − P_thresh) / (Pn − P_thresh) for P > P_thresh.
+        This is implemented as a quadratic equality in the NLP.
+
+        Args:
+            net: pandapower network.  ``net.sgen`` must have a truthy
+                ``cos_phi_p_profile`` column.  ``cos_phi_min`` sets the
+                power factor at full output; ``p_inst_mw`` gives Pn;
+                ``cpp_p_threshold_pu`` (optional, default
+                :data:`CPP_P_THRESHOLD_PU`) sets P_thresh / Pn.
+        """
+        if "cos_phi_p_profile" not in net.sgen:
+            self.sgen_cpp_indices = []
+            return
+
+        p_inst = (
+            net.sgen.p_inst_mw.fillna(net.sgen.p_mw.abs()).values
+            if "p_inst_mw" in net.sgen
+            else net.sgen.p_mw.abs().values
+        ) / self.baseMVA
+
+        cpp_thresh_pu = (
+            net.sgen.cpp_p_threshold_pu.fillna(CPP_P_THRESHOLD_PU).values
+            if "cpp_p_threshold_pu" in net.sgen
+            else np.full(len(net.sgen), CPP_P_THRESHOLD_PU)
+        )
+
+        self.sgen_cpp_indices = []
+        self.sgen_cpp_tan_phi = {}
+        self.sgen_cpp_pn = {}
+        self.sgen_cpp_p_thresh = {}
+
+        for g in self.sgens_in_service_list:
+            if not (
+                pd.notna(net.sgen.at[g, "cos_phi_p_profile"])
+                and bool(net.sgen.at[g, "cos_phi_p_profile"])
+            ):
+                continue
+            cos_phi_val = (
+                net.sgen.at[g, "cos_phi_min"]
+                if "cos_phi_min" in net.sgen
+                and pd.notna(net.sgen.at[g, "cos_phi_min"])
+                else None
+            )
+            if cos_phi_val is None or not (0 < float(cos_phi_val) <= 1):
+                continue
+            pn = float(p_inst[g])
+            pt = float(cpp_thresh_pu[g]) * pn
+            if pn <= pt:
+                continue
+            self.sgen_cpp_indices.append(g)
+            self.sgen_cpp_tan_phi[g] = float(
+                np.tan(np.arccos(float(cos_phi_val)))
+            )
+            self.sgen_cpp_pn[g] = pn
+            self.sgen_cpp_p_thresh[g] = pt
+
+    def _add_sgen_cpp_mp(self, model):
+        """Add time-indexed cos(φ)(P) profile equality constraints.
+
+        Requires :meth:`static_generation_cpp_data`.
+
+        Adds ``model.sGcpp``, ``model.cpp_tan_phi``, ``model.cpp_Pn``,
+        ``model.cpp_P_thresh``, and the quadratic equality
+        ``model.sgen_cpp``:
+
+            qsG[g,t] * (Pn - P_thresh) == cpp_tan_phi * psG[g,t]
+                                            * (psG[g,t] - P_thresh)
+
+        This is a smooth quadratic equality tractable by IPOPT.  Q → 0
+        as P → 0 or P → P_thresh; Q → Pn·tan_phi at P = Pn.
+        """
+        cpp_list = [g for g in self.sgen_cpp_indices if g in set(model.sGc)]
+        if not cpp_list:
+            return
+
+        model.sGcpp = pyo.Set(within=model.sGc, initialize=cpp_list)
+        model.cpp_tan_phi = pyo.Param(
+            model.sGcpp,
+            initialize={g: self.sgen_cpp_tan_phi[g] for g in cpp_list},
+        )
+        model.cpp_Pn = pyo.Param(
+            model.sGcpp,
+            initialize={g: self.sgen_cpp_pn[g] for g in cpp_list},
+        )
+        model.cpp_P_thresh = pyo.Param(
+            model.sGcpp,
+            initialize={g: self.sgen_cpp_p_thresh[g] for g in cpp_list},
+        )
+
+        @model.Constraint(model.sGcpp, model.T)
+        def sgen_cpp(model, g, t):
+            dPn = model.cpp_Pn[g] - model.cpp_P_thresh[g]
+            return model.qsG[g, t] * dPn == model.cpp_tan_phi[g] * model.psG[
+                g, t
+            ] * (model.psG[g, t] - model.cpp_P_thresh[g])
