@@ -781,19 +781,6 @@ def preprocess_grid(grid):
         ]
         grid.trafo.drop(self_loop_t, inplace=True)
 
-    # Collect every bus id still referenced by any element table.
-    referenced_buses = set()
-    for name, cols in _ELEMENT_BUS_COLUMNS.items():
-        if not _present(name):
-            continue
-        for col in cols:
-            if col in grid[name].columns:
-                referenced_buses.update(grid[name][col].astype(int).tolist())
-
-    unused_buses = [
-        bus for bus in grid.bus.index if int(bus) not in referenced_buses
-    ]
-    grid.bus.drop(unused_buses, inplace=True)
     for key in list(grid.keys()):
         if key.startswith("res_") and hasattr(grid[key], "drop"):
             grid[key].drop(grid[key].index, inplace=True)
@@ -801,6 +788,12 @@ def preprocess_grid(grid):
         grid["bus_geodata"] = grid["bus_geodata"].loc[
             grid["bus_geodata"].index.intersection(grid.bus.index)
         ]
+    # Drop remaining bus-bus switches before reindexing — open bus-bus switches
+    # can reference buses that no longer exist in the topology after merging
+    # closed ones, causing a KeyError in create_continuous_bus_index.
+    if _present("switch"):
+        bb = grid.switch.index[grid.switch["et"] == "b"]
+        grid.switch.drop(bb, inplace=True)
     pp.create_continuous_bus_index(grid, start=0)
 
     return grid
