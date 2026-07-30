@@ -31,6 +31,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Not yet covered: the hosting-capacity wind path in `windpower.py` keeps a
     private copy of the 4105 table and is not registry-driven, so `grid_code`
     does not affect `HC_ACOPF` runs.
+- **`tests/unit_tests/test_q_control.py`** — 64 solver-free unit tests for the
+  Q-control code, which previously had no automated coverage at all. Covers
+  the grid-code registry (capability curves against the VDE-AR-N 4105 table,
+  variant ordering, alias resolution, unknown-code `ValueError`, the
+  provisional-value warning contract), single-period activation for every
+  `add_OPF` argument, and multi-period column-driven activation. Includes
+  regression tests for the two failure modes that are otherwise silent: the
+  cos(φ) cone quietly not being added without `inverter_s2=True`, and the
+  `var_q` reactive-bound path, which a refactor once broke while the whole
+  suite still passed.
 - **`scripts/grid_code_q_strategies.py`** — worked example of both selection
   mechanisms: one snapshot solved under each registered grid code (surfacing
   the provisional-values warning rather than silencing it), then Q(P)/Q(U),
