@@ -195,14 +195,15 @@ MY_TAR = GridCode(
 GRID_CODES[MY_TAR.name] = MY_TAR
 ```
 
-!!! note "One grid code per model, and one path not yet covered"
+!!! note "One grid code per model"
     The capability curves are computed once into a single table, so the
     grid code applies model-wide; per-sgen grid codes are not supported.
 
-    The hosting-capacity wind path in
-    `potpourri/technologies/windpower.py` keeps its own private copy of the
-    VDE-AR-N 4105 table and is **not** driven by the registry, so
-    `grid_code` does not affect `HC_ACOPF` runs.
+    Every path now reads the registry, including the hosting-capacity wind
+    path in `potpourri/technologies/windpower.py`, which previously kept a
+    private copy of the VDE-AR-N 4105 table. Its simplified HC check uses the
+    widest envelope the selected code offers — the largest capacitive and most
+    negative inductive entry, +0.48 / −0.41 for VDE-AR-N 4105.
 
 ---
 

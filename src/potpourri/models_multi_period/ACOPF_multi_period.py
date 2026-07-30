@@ -75,7 +75,9 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
                 ),
                 None,
             )
-            windpower_object.static_generation_wind_var_q(self.net)
+            windpower_object.static_generation_wind_var_q(
+                self.net, grid_code=getattr(self, "_grid_code", None)
+            )
 
         # create generator instance
         generator_object = next(

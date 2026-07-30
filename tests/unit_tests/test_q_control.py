@@ -17,6 +17,7 @@ otherwise leak into unrelated tests.
 """
 
 import copy
+import pathlib
 import warnings
 
 import numpy as np
@@ -27,6 +28,7 @@ from potpourri.models_multi_period.ACOPF_multi_period import (
     ACOPF_multi_period,
 )
 from potpourri.technologies import q_control as qc
+from potpourri.technologies import windpower
 
 MP_STEPS = 3  # keep multi-period construction cheap
 
@@ -455,6 +457,98 @@ def test_no_overlap_warning_with_default_types(lv_rural_net):
     with warnings.catch_warnings():
         warnings.simplefilter("error", qc.SgenTypeOverlapWarning)
         _build_sp(_retype(lv_rural_net, "Wind_MV"), pv_q_control="both")
+
+
+# ── hosting-capacity path uses the registry ───────────────────────────────
+
+
+def test_windpower_has_no_private_capability_table():
+    """windpower must read the registry, not its own copy of the table.
+
+    It previously carried a private VDE-AR-N 4105 table and a third
+    byte-identical copy of the Q-curve maths, so ``grid_code`` never reached
+    the wind or hosting-capacity paths and the numbers could drift from the
+    registry unnoticed.
+    """
+    src = pathlib.Path(windpower.__file__).read_text()
+    for name in (
+        "_VQU_V_POINTS",
+        "_VQU_Q_MAX",
+        "_QP_P_BREAK_HIGH",
+        "_QP_HC_MAX",
+        "_QP_HC_MIN",
+    ):
+        assert name not in src, f"{name} still defined in windpower"
+
+
+def test_hc_q_bounds_are_the_widest_envelope():
+    """The simplified HC check uses the widest band the code offers."""
+    hc_max, hc_min = windpower._hc_q_bounds(qc.VDE_AR_N_4105)
+    assert hc_max == pytest.approx(0.48)
+    assert hc_min == pytest.approx(-0.41)
+
+
+def test_hc_defaults_match_the_previous_hard_coded_values():
+    """The public HC keyword defaults must not have shifted.
+
+    ``qp_max`` / ``qp_min`` on ``Windpower_multi_period.__init__`` were
+    literals; they are now derived from the default grid code and must still
+    resolve to the same numbers.
+    """
+    assert windpower._DEFAULT_HC_Q_MAX == pytest.approx(0.48)
+    assert windpower._DEFAULT_HC_Q_MIN == pytest.approx(-0.41)
+
+
+def test_hc_slopes_match_the_pre_refactor_values():
+    """Regression: the Q(U) hosting-capacity slopes are unchanged.
+
+    Values captured from the hard-coded constants before they were replaced
+    by the registry lookup.
+    """
+    code = qc.DEFAULT_GRID_CODE
+    x, y = code.vqu_v_points, code.vqu_q_max
+    hc_max, _ = windpower._hc_q_bounds(code)
+    last = y.shape[1] - 1
+
+    m_qu_max = (hc_max + abs(y[1, 0])) / (x[0, 0] - x[1, 0])
+    qu_max = -m_qu_max * x[1, 0] + hc_max
+    m_qu_min = (abs(y[0, last]) + abs(y[1, last])) / (x[0, 0] - x[1, 0])
+    qu_min = -m_qu_min * x[0, 0] + y[0, last]
+
+    assert m_qu_max == pytest.approx(-3.254166666666667, abs=1e-12)
+    assert qu_max == pytest.approx(4.029999999999999, abs=1e-12)
+    assert m_qu_min == pytest.approx(-3.391666666666667, abs=1e-12)
+    assert qu_min == pytest.approx(3.2900000000000005, abs=1e-12)
+
+
+def test_windpower_q_curves_come_from_the_registry():
+    """The removed inline maths must equal compute_q_curves exactly."""
+    code = qc.VDE_AR_N_4105
+    x, y = code.vqu_v_points, code.vqu_q_max
+    m = (y[1] - y[0]) / (x[0, 1] - x[0, 0])
+    expected_m_qv = m
+    curves = qc.compute_q_curves(code)
+    assert np.allclose(curves.m_qv.values, expected_m_qv)
+
+
+def test_hc_bounds_track_the_selected_grid_code():
+    """A different code yields its own HC envelope, not 4105's."""
+    custom = qc.GridCode(
+        name="test-tar",
+        title="Test TAR",
+        voltage_level="medium voltage",
+        vqu_v_points=qc.VDE_AR_N_4105.vqu_v_points,
+        vqu_q_max=np.array([[0.30, 0.20], [-0.10, -0.25]]),
+        qp_p_high=0.1,
+        qp_p_low=0.2,
+        vpu_v_curtail=1.06,
+        vpu_v_max=1.10,
+        cpp_p_threshold_pu=0.2,
+    )
+    hc_max, hc_min = windpower._hc_q_bounds(custom)
+    assert hc_max == pytest.approx(0.30)
+    assert hc_min == pytest.approx(-0.25)
+    assert custom.n_variants == 2  # the derivation must not assume three
 
 
 # ── bus numbering: ppc space vs pandapower space ──────────────────────────

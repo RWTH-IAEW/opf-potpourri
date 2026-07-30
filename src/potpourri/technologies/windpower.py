@@ -5,36 +5,40 @@ import numpy as np
 import pandas as pd
 import pyomo.environ as pyo
 from loguru import logger
-from potpourri.technologies.q_control import DEFAULT_WIND_SGEN_TYPES
+from potpourri.technologies.q_control import (
+    DEFAULT_GRID_CODE,
+    DEFAULT_WIND_SGEN_TYPES,
+    compute_q_curves,
+    resolve_grid_code,
+)
 from potpourri.technologies.sgens import Sgens_multi_period
 
 
 # ---------------------------------------------------------------------------
-# VDE-AR-N 4105 / BDEW grid-code Q-curve constants (medium-voltage, 110 kV)
+# Grid-code Q-curve parameters come from the registry in
+# potpourri.technologies.q_control, not from a private copy.  This module used
+# to carry its own VDE-AR-N 4105 table and its own reimplementation of the
+# Q-curve maths, which meant `grid_code` never reached the wind or
+# hosting-capacity paths and the numbers could drift from the registry
+# silently.
 #
-# Voltage operating points [p.u. on 110 kV base]:
-#   V1 = 96/110,  V2 = 103/110,  V3 = 120/110,  V4 = 127/110
-#
-# Q/P limits at V1 and V3 for three operating variants:
-#   variant 0: Q/P_max = 0.48 @ V1,  Q/P_max = 0.33 @ V2,
-#             Q/P_min = -0.41 @ V1
-#   variant 1: Q/P_max = 0.41 @ V1,  etc.
-#   variant 2: Q/P_max = 0.33 @ V1,  etc.
+# The simplified hosting-capacity check uses the widest envelope the selected
+# code offers: the largest capacitive entry and the most negative inductive
+# one.  For VDE-AR-N 4105 that is +0.48 / -0.41, matching the values this
+# module previously hard-coded.
 # ---------------------------------------------------------------------------
 
-# Normalised voltage points [p.u.]: [[V1, V2], [V3, V4]]
-_VQU_V_POINTS = np.array([[96, 103], [120, 127]]) / 110.0
 
-# Q/P table: rows = voltage level (low, high), cols = variant (0, 1, 2)
-_VQU_Q_MAX = np.array([[0.48, 0.41, 0.33], [-0.23, -0.33, -0.41]])
+def _hc_q_bounds(code):
+    """Return (max, min) Q/P for the simplified HC check of ``code``."""
+    q = code.vqu_q_max
+    return float(q[0].max()), float(q[1].min())
 
-# Q/P boundaries at the P-axis breakpoints (0.1 Pn and 0.2 Pn)
-_QP_P_BREAK_HIGH = 0.1  # upper P/Pn at which Q/P characteristic changes
-_QP_P_BREAK_LOW = 0.2  # lower P/Pn at which Q/P characteristic changes (abs)
 
-# Default Q/P ratio bounds for the simplified HC grid-code check
-_QP_HC_MAX = 0.48  # maximum Q/P (capacitive) – variant 0 at low voltage
-_QP_HC_MIN = -0.41  # minimum Q/P (inductive) – variant 0 at low voltage
+# Defaults for the HC keyword arguments below.  Derived from the default
+# grid code so they track the registry; +0.48 / -0.41 for VDE-AR-N 4105,
+# the values this module previously hard-coded.
+_DEFAULT_HC_Q_MAX, _DEFAULT_HC_Q_MIN = _hc_q_bounds(DEFAULT_GRID_CODE)
 
 
 class Windpower_multi_period(Sgens_multi_period):
@@ -73,8 +77,8 @@ class Windpower_multi_period(Sgens_multi_period):
         *,
         sw_max_mva: float = 10_000.0,
         sw_min_mva: float = 0.0,
-        qp_max: float = _QP_HC_MAX,
-        qp_min: float = _QP_HC_MIN,
+        qp_max: float = _DEFAULT_HC_Q_MAX,
+        qp_min: float = _DEFAULT_HC_Q_MIN,
     ):
         super().__init__(net, T, scenario)
         self._sw_max_mva = sw_max_mva
@@ -165,18 +169,20 @@ class Windpower_multi_period(Sgens_multi_period):
             model.WIND_HC, model.T, self.SWmin_data
         )
 
-        # Q(U) slopes from VDE-AR-N 4105 grid-code characteristic (variant 1)
+        # Q(U) slopes from the selected grid code's characteristic.
         # Slope from low-voltage to high-voltage point; intercepts at V3 and V1
-        self.m_qu_max = (
-            (_QP_HC_MAX + abs(_VQU_Q_MAX[1, 0]))
-            / (_VQU_V_POINTS[0, 0] - _VQU_V_POINTS[1, 0])
-            * 1.0  # already normalised
+        code = resolve_grid_code(getattr(self, "grid_code", None))
+        x = code.vqu_v_points
+        y = code.vqu_q_max
+        hc_max, _hc_min = _hc_q_bounds(code)
+        # Narrowest capacitive / widest inductive variant is the last column.
+        last = y.shape[1] - 1
+        self.m_qu_max = (hc_max + abs(y[1, 0])) / (x[0, 0] - x[1, 0])
+        self.qu_max = -self.m_qu_max * x[1, 0] + hc_max
+        self.m_qu_min = (abs(y[0, last]) + abs(y[1, last])) / (
+            x[0, 0] - x[1, 0]
         )
-        self.qu_max = -self.m_qu_max * _VQU_V_POINTS[1, 0] + _QP_HC_MAX
-        self.m_qu_min = (abs(_VQU_Q_MAX[0, 2]) + abs(_VQU_Q_MAX[1, 2])) / (
-            _VQU_V_POINTS[0, 0] - _VQU_V_POINTS[1, 0]
-        )
-        self.qu_min = -self.m_qu_min * _VQU_V_POINTS[0, 0] + _VQU_Q_MAX[0, 2]
+        self.qu_min = -self.m_qu_min * x[0, 0] + y[0, last]
         return True
 
     def get_hc_acopf_parameters(self, model, net):
@@ -221,37 +227,20 @@ class Windpower_multi_period(Sgens_multi_period):
         )
         return True
 
-    def static_generation_wind_var_q(self, net):
+    def static_generation_wind_var_q(self, net, grid_code=None):
         """Compute Q(P) and Q(U) characteristic slopes from VDE-AR-N 4105
         and populate ``static_generation_data`` Q limits.
 
         The characteristic is parameterised by three operating variants
         (``var_q`` column in ``net.sgen``).  Each variant selects a different
-        Q/P intercept from the ``_VQU_Q_MAX`` table.
+        Q/P intercept from the selected grid code's capability table.
         """
-        x = _VQU_V_POINTS  # shape (2, 2): [[V1, V2], [V3, V4]]
-        y = _VQU_Q_MAX  # shape (2, 3): rows = voltage level, cols = variant
-
-        m = (y[1] - y[0]) / (x[0, 1] - x[0, 0])
-        b = np.array([y[0] - m * x[i, 0] for i in range(len(x))]).T
-
-        p_range = _QP_P_BREAK_HIGH - _QP_P_BREAK_LOW
-        m_qp_max = (_QP_P_BREAK_HIGH - y[0]) / p_range
-        m_qp_min = (-_QP_P_BREAK_HIGH - y[1]) / p_range
-        b_qp_max = _QP_P_BREAK_HIGH - m_qp_max * _QP_P_BREAK_HIGH
-        b_qp_min = -_QP_P_BREAK_HIGH - m_qp_min * _QP_P_BREAK_HIGH
-
-        self.q_limit_parameter = pd.DataFrame(
-            {
-                "m_qv": m,
-                "b_qv_min": b[:, 0],
-                "b_qv_max": b[:, 1],
-                "m_qp_max": m_qp_max,
-                "m_qp_min": m_qp_min,
-                "b_qp_max": b_qp_max,
-                "b_qp_min": b_qp_min,
-            },
-        )
+        code = resolve_grid_code(grid_code)
+        self.grid_code = code
+        self.q_limit_parameter = compute_q_curves(code)
+        # Q/Pn capability table: row 0 capacitive, row 1 inductive;
+        # columns are the var_q variants.
+        y = code.vqu_q_max
 
         if "var_q" in self.net.sgen:
             self.static_generation_data["var_q"] = self.net.sgen.var_q.values
@@ -285,7 +274,7 @@ class Windpower_multi_period(Sgens_multi_period):
                 sgens_var_q
             ]
             self.static_generation_data["min_p"][sgens_var_q] = (
-                p_inst[sgens_var_q] * _QP_P_BREAK_HIGH
+                p_inst[sgens_var_q] * code.qp_p_high
             )
 
         else:

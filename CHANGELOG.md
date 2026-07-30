@@ -28,9 +28,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - The module-level constants (`VQU_Q_MAX`, `QP_P_HIGH`, `VPU_V_CURTAIL`, …)
     are retained as aliases of the default grid code, so existing imports
     keep working.
-  - Not yet covered: the hosting-capacity wind path in `windpower.py` keeps a
-    private copy of the 4105 table and is not registry-driven, so `grid_code`
-    does not affect `HC_ACOPF` runs.
+  - `windpower.py` no longer keeps a private copy of the VDE-AR-N 4105 table,
+    nor its own reimplementation of the Q-curve maths -- the third
+    byte-identical copy in the codebase. Both now come from the registry, so
+    `grid_code` reaches the wind and hosting-capacity paths too. The
+    simplified HC check derives its Q/P bounds from the selected code (widest
+    capacitive and most negative inductive entry), and the public `qp_max` /
+    `qp_min` keyword defaults on `Windpower_multi_period` follow the default
+    code. Verified bit-identical for VDE-AR-N 4105: all four Q(U)
+    hosting-capacity slopes match the previous hard-coded values to 1e-12, and
+    the defaults still resolve to +0.48 / -0.41.
 - **`ACOPF.add_OPF(sgen_types=…)`** — the sgen `type` values that
   `pv_q_control` treats as PV, defaulting to `DEFAULT_PV_SGEN_TYPES`
   (`("PV", "PV_MV", "pv")`). Previously the filter matched `type == "PV"` exactly,
