@@ -92,8 +92,18 @@ where = ["src"]
 
 [tool.ruff]
 line-length = 79
+# Ruff 0.16 began formatting Python code blocks inside Markdown files. Keep the
+# prose, the examples and paper.md as authored; ruff's remit here is the Python
+# sources.
+extend-exclude = ["*.md"]
 
 [tool.ruff.lint]
+# Pin the rule set explicitly. Ruff's default `select` widened substantially in
+# 0.16 and `extend-select` builds on that default, so leaving it implicit made
+# the enforced rules change with every ruff release (0.16 silently enabled ~27
+# new rule families, including N999, which would demand renaming public modules
+# such as ACOPF_base). Widen this list deliberately, not by upgrade.
+select = ["E4", "E7", "E9", "F"]
 extend-select = ["E501"]
 # F403/F405: `from pyomo.environ import *` is standard Pyomo convention.
 # E741: single-letter `l` is the standard line-index variable in power systems math.
