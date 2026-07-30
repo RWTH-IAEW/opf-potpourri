@@ -4,8 +4,8 @@ message: >-
   If you use this software, please cite it using the metadata in this file.
 type: software
 license: MIT
-version: "0.3.1"
-date-released: "2026-05-23"
+version: "0.4.0"
+date-released: "2026-07-30"
 repository-code: "https://github.com/RWTH-IAEW/opf-potpourri"
 url: "https://github.com/RWTH-IAEW/opf-potpourri"
 identifiers:
@@ -84,6 +84,3 @@ authors:
       Institute for High Voltage Equipment and Grids, Digitalization and
       Energy Economics (IAEW), RWTH Aachen University
     orcid: "0000-0001-5834-1842"
-identifiers:
-  - type: doi
-    value: "10.5281/zenodo.20357012"
