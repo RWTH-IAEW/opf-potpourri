@@ -61,10 +61,15 @@ from pyomo.environ import (
 
 from potpourri.models.ACOPF_base import ACOPF
 
-os.environ["NEOS_EMAIL"] = os.environ.get(
-    "NEOS_EMAIL", "steffen.kortmann@fit.fraunhofer.de"
-)
+os.environ.setdefault("NEOS_EMAIL", "your@email.com")
 warnings.filterwarnings("ignore")
+
+# ── Configuration ─────────────────────────────────────────────────────────────
+SOLVER = "ipopt"
+NET_NAME = "1-LV-rural1--0-sw"
+LOAD_CASE = "lW"  # simbench load-case key: "lW", "hW", "hL", etc.
+STEPSIZE = 100  # number of angle/direction samples for the FOR boundary
+# ──────────────────────────────────────────────────────────────────────────────
 
 
 def run_feasible_operation_region(opf):
@@ -911,10 +916,9 @@ if __name__ == "__main__":
     # PV is set controllable so the OPF can curtail active power and vary
     # reactive power to reach FOR boundary points.
 
-    net = sb.get_simbench_net("1-LV-rural1--0-sw")
+    net = sb.get_simbench_net(NET_NAME)
 
-    case = "lW"
-    factors = net.loadcases.loc[case]
+    factors = net.loadcases.loc[LOAD_CASE]
     net.load.p_mw *= factors["pload"]
     net.load.q_mvar *= factors["qload"]
     net.sgen.loc[net.sgen.type == "PV", "scaling"] = factors["PV_p"]
@@ -930,7 +934,9 @@ if __name__ == "__main__":
     acopf.add_OPF()
     acopf.add_tap_changer_linear()
 
-    p, q, u, nets = for_setpoint_based_with_directions(acopf, stepsize=40)
+    p, q, u, nets = for_setpoint_based_with_directions(
+        acopf, stepsize=STEPSIZE, solver=SOLVER
+    )
 
     # ---- Plot and save the FOR ---- #
     os.makedirs("results", exist_ok=True)

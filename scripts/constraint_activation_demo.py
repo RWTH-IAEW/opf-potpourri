@@ -44,14 +44,15 @@ from potpourri.models.ACOPF_base import ACOPF
 
 warnings.filterwarnings("ignore")
 
+# ── Configuration ─────────────────────────────────────────────────────────────
 NET_NAME = "1-LV-rural1--0-sw"
 SOLVER = "ipopt"
 RESULTS_DIR = "results"
-
 PV_SCALE = 3.0  # multiply rated PV to create genuine over-generation
 PF_MIN = 0.95  # PV inverter minimum power factor
 VM_MAX = 1.06  # upper voltage limit [p.u.]
 VM_MIN = 0.95  # lower voltage limit [p.u.]
+# ──────────────────────────────────────────────────────────────────────────────
 
 # ── variant catalogue ──────────────────────────────────────────────────────
 _VARIANTS = [

@@ -8,8 +8,8 @@ rural1 network:
 **Step 1 – reactive power optimisation (single snapshot)**
 
 1. Load the network and select a specific time-step profile
-   (``select_profile_idx = 1190``).
-2. Derive reactive power limits for all PV generators from a 0.95
+   (``PROFILE_IDX``).
+2. Derive reactive power limits for all PV generators from the configured
    power-factor envelope.
 3. Fix active power dispatch and run a reference pandapower power flow.
 4. Constrain the external grid active power to the pandapower result (so the
@@ -20,8 +20,7 @@ rural1 network:
 
 **Step 2 – voltage-deviation minimisation per load case**
 
-For each standard simbench load case (``"lW"`` – low wind, ``"hL"`` – high
-load):
+For each standard simbench load case in ``CASE_KEYS``:
 
 1. Scale loads and renewable generation according to the case factors.
 2. Set the slack bus voltage to the case-specific value.
@@ -45,27 +44,33 @@ from potpourri.models.ACOPF_base import ACOPF
 
 warnings.filterwarnings("ignore")
 
+# ── Configuration ─────────────────────────────────────────────────────────────
+SOLVER = "ipopt"
+NET_NAME = "1-LV-rural1--0-sw"
+PROFILE_IDX = 1190  # time-step index from the simbench time series
+POWER_FACTOR = 0.95  # reactive-power envelope for PV generators
+CASE_KEYS = ["lW", "hL"]  # simbench load cases for Step 2
+# ──────────────────────────────────────────────────────────────────────────────
+
 
 if __name__ == "__main__":
     # ------------------------------------------------------------------ #
     # Network setup                                                        #
     # ------------------------------------------------------------------ #
-    net = sb.get_simbench_net("1-LV-rural1--0-sw")
+    net = sb.get_simbench_net(NET_NAME)
 
     # Select a single time-step snapshot from the simbench time-series.
     profiles = sb.get_absolute_values(
         net, profiles_instead_of_study_cases=True
     )
-    select_profile_idx = 1190
 
-    net.sgen["p_mw"] = profiles[("sgen", "p_mw")].iloc[select_profile_idx]
-    net.load["p_mw"] = profiles[("load", "p_mw")].iloc[select_profile_idx]
-    net.load["q_mvar"] = profiles[("load", "q_mvar")].iloc[select_profile_idx]
+    net.sgen["p_mw"] = profiles[("sgen", "p_mw")].iloc[PROFILE_IDX]
+    net.load["p_mw"] = profiles[("load", "p_mw")].iloc[PROFILE_IDX]
+    net.load["q_mvar"] = profiles[("load", "q_mvar")].iloc[PROFILE_IDX]
 
-    # Reactive power envelope for PV: Q-limit derived from 0.95 power factor.
-    power_factor = 0.95
+    # Reactive power envelope for PV: Q-limit derived from configured power factor.
     q_max = np.sqrt(
-        (net.sgen["p_mw"] / power_factor) ** 2 - net.sgen["p_mw"] ** 2
+        (net.sgen["p_mw"] / POWER_FACTOR) ** 2 - net.sgen["p_mw"] ** 2
     )
     net.sgen["max_q_mvar"] = q_max
     net.sgen["min_q_mvar"] = -q_max
@@ -106,8 +111,7 @@ if __name__ == "__main__":
     for g in hc.model.sG:
         print(f"    sgen {g}: {pyo.value(hc.model.QsG[g]):.4f}")
 
-    # hc.solve(solver="neos", print_solver_output=True)
-    hc.solve(solver="ipopt", print_solver_output=True)
+    hc.solve(solver=SOLVER, print_solver_output=True)
 
     print("Pyomo optimised set-points (psG var, qsG var):")
     print("  SGEN P [pu]:")
@@ -120,12 +124,10 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------ #
     # Step 2: voltage-deviation minimisation per load case                #
     # ------------------------------------------------------------------ #
-    case_keys = ["lW", "hL"]
-
     hcs = []  # solved ACOPF objects, one per load case
     obj = []  # objective values per load case
 
-    for case in case_keys:
+    for case in CASE_KEYS:
         net_case = copy.deepcopy(net)
 
         factors = net_case.loadcases.loc[case]
@@ -152,8 +154,7 @@ if __name__ == "__main__":
         # imposing generator capacity or line loading limits.
         hc = ACOPF(net_case)
         hc.add_voltage_deviation_objective()
-        # hc.solve(solver="neos")
-        hc.solve(solver="ipopt")
+        hc.solve(solver=SOLVER)
 
         hcs.append(copy.deepcopy(hc))
         obj.append(pyo.value(hc.model.obj_v_deviation))

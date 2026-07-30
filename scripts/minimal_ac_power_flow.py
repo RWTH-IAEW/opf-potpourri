@@ -14,12 +14,8 @@ Key mappings
 ------------
 Basemodel.__init__   extracts buses/lines/loads into Pyomo sets and params
 AC.__init__          adds line/trafo admittances and reactive-power variables
-solve(solver="ipopt")  calls SolverFactory("ipopt"), then pyo_to_net writes
+solve(solver=SOLVER)   calls SolverFactory(SOLVER), then pyo_to_net writes
                        results back to ac.net.res_bus and ac.net.res_line
-
-Institut für Elektrische Anlagen und Netze, Digitalisierung und
-Energiewirtschaft (IAEW)
-(c) 2023, Steffen Kortmann
 """
 
 import warnings
@@ -32,10 +28,15 @@ from potpourri.models.AC import AC
 
 warnings.filterwarnings("ignore")
 
+# ── Configuration ─────────────────────────────────────────────────────────────
+SOLVER = "ipopt"
+NET_NAME = "1-LV-rural1--0-sw"
+# ──────────────────────────────────────────────────────────────────────────────
+
 
 def _bus_comparison(pp_net, ac_net):
     """Side-by-side bus voltage table with absolute deviations."""
-    df = pd.DataFrame(
+    return pd.DataFrame(
         {
             "pp_vm_pu": pp_net.res_bus.vm_pu,
             "ac_vm_pu": ac_net.res_bus.vm_pu,
@@ -47,16 +48,11 @@ def _bus_comparison(pp_net, ac_net):
             ).abs(),
         }
     )
-    return df
 
 
 def _line_comparison(pp_net, ac_net):
-    """Side-by-side line flow table with absolute deviations.
-
-    pl_mw  = total active power loss  (p_from_mw + p_to_mw)
-    ql_mvar = total reactive loss       (q_from_mvar + q_to_mvar)
-    """
-    df = pd.DataFrame(
+    """Side-by-side line flow table with absolute deviations."""
+    return pd.DataFrame(
         {
             "pp_pl_mw": pp_net.res_line.pl_mw,
             "ac_pl_mw": ac_net.res_line.pl_mw,
@@ -68,17 +64,12 @@ def _line_comparison(pp_net, ac_net):
             ).abs(),
         }
     )
-    return df
 
 
 def _summary(bus_df, line_df):
     """Compact MAE / max absolute error for each compared quantity."""
     rows = [
-        {
-            "quantity": col,
-            "MAE": df[col].mean(),
-            "max_AE": df[col].max(),
-        }
+        {"quantity": col, "MAE": df[col].mean(), "max_AE": df[col].max()}
         for df, col in [
             (bus_df, "Δvm_pu"),
             (bus_df, "Δva_deg"),
@@ -90,8 +81,6 @@ def _summary(bus_df, line_df):
 
 
 if __name__ == "__main__":
-    NET_NAME = "1-LV-rural1--0-sw"
-
     # --- load network ---
     # AC.__init__ deep-copies the net internally, so the original `net` stays
     # unmodified and can be used for the pandapower reference solve below.
@@ -118,7 +107,7 @@ if __name__ == "__main__":
     for g in ac.model.sG:
         ac.model.qsG[g].fix(ac.static_generation_data["q"].get(g, 0.0))
 
-    result = ac.solve(solver="ipopt", print_solver_output=False)
+    result = ac.solve(solver=SOLVER, print_solver_output=False)
 
     converged = (
         result is not None

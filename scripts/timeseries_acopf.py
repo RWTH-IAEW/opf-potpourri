@@ -38,15 +38,16 @@ from potpourri.models.ACOPF_base import ACOPF
 
 warnings.filterwarnings("ignore")
 
+# ── Configuration ─────────────────────────────────────────────────────────────
 NET_NAME = "1-LV-rural1--0-sw"
 SOLVER = "ipopt"
 RESULTS_DIR = "results"
-
 N_TS = 96  # one full day: 96 × 15 min = 24 h
 PV_SCALE = 3.0  # scale PV output to create realistic voltage stress
 PF_MIN = 0.95  # PV inverter minimum power factor (sets Q capability)
 VM_MAX = 1.06  # upper voltage bound [p.u.]
 VM_MIN = 0.95  # lower voltage bound [p.u.]
+# ──────────────────────────────────────────────────────────────────────────────
 
 _TAN_PHI = np.sqrt(1 - PF_MIN**2) / PF_MIN
 

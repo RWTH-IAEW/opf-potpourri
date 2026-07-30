@@ -72,29 +72,66 @@ if __name__ == "__main__":
     # ── 2. Solve HC-OPF ──────────────────────────────────────────────────
     hc = HC_ACOPF(net)
     hc.add_OPF()
-    hc.solve(solver=SOLVER, print_solver_output=False)
+    result = hc.solve(solver=SOLVER, print_solver_output=False)
+
+    term = (
+        result.solver.termination_condition.value
+        if result is not None
+        else "no_result"
+    )
+    solved = term in {"optimal", "feasible"}
+    print(f"Termination: {term}")
 
     baseMVA = hc.model.baseMVA
-    print(f"Objective (wind − losses): {pe.value(hc.model.obj):.4f} p.u.")
+    if solved:
+        try:
+            print(
+                f"Objective (wind − losses): {pe.value(hc.model.obj):.4f} p.u."
+            )
+        except Exception:
+            print(
+                "  (objective value not available — MindtPy partial solution)"
+            )
+            solved = False
 
-    active, inactive = [], []
-    for w in hc.model.WIND_HC:
-        y = pe.value(hc.model.y[w])
-        bus = hc.net.sgen.bus.iloc[w]
-        p_mw = pe.value(hc.model.psG[w]) * baseMVA
-        q_mvar = pe.value(hc.model.qsG[w]) * baseMVA
-        if y and y > 0.5:
-            active.append((w, bus, p_mw, q_mvar))
-        else:
-            inactive.append((w, bus))
+    if solved:
+        try:
+            active = []
+            for w in hc.model.WIND_HC:
+                y = pe.value(hc.model.y[w])
+                bus = hc.net.sgen.bus.iloc[w]
+                p_mw = pe.value(hc.model.psG[w]) * baseMVA
+                q_mvar = pe.value(hc.model.qsG[w]) * baseMVA
+                if y and y > 0.5:
+                    active.append((w, bus, p_mw, q_mvar))
+            print(f"\nActive wind sites ({len(active)}):")
+            print(
+                f"  {'sgen':>5}  {'bus':>5}  {'P (MW)':>8}  {'Q (Mvar)':>10}"
+            )
+            for w, bus, p, q in active:
+                print(f"  {w:>5}  {bus:>5}  {p:>8.3f}  {q:>10.3f}")
+            print(
+                f"\nTotal hosted wind capacity: {sum(p for _, _, p, _ in active):.2f} MW"
+            )
+        except Exception:
+            print(
+                "  (variable values unavailable — MindtPy partial solution; use Gurobi for full results)"
+            )
 
-    print(f"\nActive wind sites ({len(active)}):")
-    print(f"  {'sgen':>5}  {'bus':>5}  {'P (MW)':>8}  {'Q (Mvar)':>10}")
-    for w, bus, p, q in active:
-        print(f"  {w:>5}  {bus:>5}  {p:>8.3f}  {q:>10.3f}")
-    print(
-        f"\nTotal hosted wind capacity: {sum(p for _, _, p, _ in active):.2f} MW"
-    )
+    def _read_wind_results(m):
+        """Return (n_active, total_mw) or (None, None) if vars not initialized."""
+        try:
+            n = sum(
+                1 for w in m.WIND_HC if (v := pe.value(m.y[w])) and v > 0.5
+            )
+            tot = sum(
+                pe.value(m.psG[w]) * baseMVA
+                for w in m.WIND_HC
+                if (v := pe.value(m.y[w])) and v > 0.5
+            )
+            return n, tot
+        except Exception:
+            return None, None
 
     # ── 3. Minimum turbine size sweep (SWmin) ─────────────────────────────
     print("\nSWmin sweep (minimum generator size):")
@@ -103,19 +140,15 @@ if __name__ == "__main__":
         hc_s = HC_ACOPF(copy.deepcopy(net))
         hc_s._calc_opf_parameters(SWmin=swmin_pu * baseMVA)
         hc_s.add_OPF()
-        hc_s.solve(solver=SOLVER, print_solver_output=False)
-
-        n = sum(
-            1
-            for w in hc_s.model.WIND_HC
-            if (v := pe.value(hc_s.model.y[w])) and v > 0.5
-        )
-        tot = sum(
-            pe.value(hc_s.model.psG[w]) * baseMVA
-            for w in hc_s.model.WIND_HC
-            if (v := pe.value(hc_s.model.y[w])) and v > 0.5
-        )
-        print(f"  {swmin_pu * baseMVA:>12.2f}  {n:>14}  {tot:>12.2f}")
+        r_s = hc_s.solve(solver=SOLVER, print_solver_output=False)
+        t_s = r_s.solver.termination_condition.value if r_s else "no_result"
+        n, tot = _read_wind_results(hc_s.model)
+        if n is None:
+            print(
+                f"  {swmin_pu * baseMVA:>12.2f}  {'—':>14}  {'—':>12}  ({t_s})"
+            )
+        else:
+            print(f"  {swmin_pu * baseMVA:>12.2f}  {n:>14}  {tot:>12.2f}")
 
     # ── 4. Wind-vs-loss trade-off sweep (eps) ─────────────────────────────
     print("\neps sweep (wind−loss trade-off):")
@@ -128,23 +161,20 @@ if __name__ == "__main__":
         hc_w.add_OPF()
         hc_w.add_loss_obj()
         hc_w.model.eps.set_value(eps)
-        hc_w.solve(solver=SOLVER, print_solver_output=False)
-
-        n = sum(
-            1
-            for w in hc_w.model.WIND_HC
-            if (v := pe.value(hc_w.model.y[w])) and v > 0.5
-        )
-        tot = sum(
-            pe.value(hc_w.model.psG[w]) * baseMVA
-            for w in hc_w.model.WIND_HC
-            if (v := pe.value(hc_w.model.y[w])) and v > 0.5
-        )
-        losses = sum(
-            (pe.value(hc_w.model.pLfrom[l]) + pe.value(hc_w.model.pLto[l]))
-            * baseMVA
-            for l in hc_w.model.L
-        )
+        r_w = hc_w.solve(solver=SOLVER, print_solver_output=False)
+        t_w = r_w.solver.termination_condition.value if r_w else "no_result"
+        n, tot = _read_wind_results(hc_w.model)
+        if n is None:
+            print(f"  {eps:>6.1f}  {'—':>14}  {'—':>12}  {'—':>13}  ({t_w})")
+            continue
+        try:
+            losses = sum(
+                (pe.value(hc_w.model.pLfrom[l]) + pe.value(hc_w.model.pLto[l]))
+                * baseMVA
+                for l in hc_w.model.L
+            )
+        except Exception:
+            losses = float("nan")
         print(f"  {eps:>6.1f}  {n:>14}  {tot:>12.2f}  {losses:>13.4f}")
 
     print(

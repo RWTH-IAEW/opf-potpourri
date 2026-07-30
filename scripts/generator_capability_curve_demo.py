@@ -41,6 +41,7 @@ Energiewirtschaft (IAEW)
 
 import copy
 import math
+import os
 import warnings
 
 import pandas as pd
@@ -51,12 +52,12 @@ from potpourri.models.ACOPF_base import ACOPF
 
 warnings.filterwarnings("ignore")
 
+# ── Configuration ─────────────────────────────────────────────────────────────
 SOLVER = "ipopt"
-
-# ── power-factor scenario parameters ─────────────────────────────────────────
 PF_WIDE = 0.70  # Scenario A: loose limit  (cos φ ≥ 0.70)
 PF_PV = 0.90  # Scenario B: VDE-AR-N 4105 / EN 50549 for PV
 PF_WIND = 0.95  # Scenario B: stricter for wind generators
+# ──────────────────────────────────────────────────────────────────────────────
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -416,7 +417,8 @@ if __name__ == "__main__":
         ax.set_aspect("equal")
 
         plt.tight_layout()
-        out = "generator_capability_curve_demo.png"
+        os.makedirs("results", exist_ok=True)
+        out = os.path.join("results", "generator_capability_curve_demo.png")
         plt.savefig(out, dpi=120)
         print(f"\nPlot saved to {out}")
         plt.show()

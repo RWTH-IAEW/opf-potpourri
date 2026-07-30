@@ -43,16 +43,17 @@ from potpourri.models.ACOPF_base import ACOPF
 
 warnings.filterwarnings("ignore")
 
+# ── Configuration ─────────────────────────────────────────────────────────────
 NET_NAME = "1-LV-rural1--0-sw"
 SOLVER = "ipopt"
 RESULTS_DIR = "results"
-
-# ── scenario ─────────────────────────────────────────────────────────────────
-
 PV_SCALE = 5.0  # multiply PV output to create voltage pressure
 VM_MAX = 1.06  # tightened upper voltage bound (p.u.)
 VM_MIN = 0.95  # lower voltage bound (p.u.)
 PF_MIN = 0.95  # minimum power factor → Q capability of PV inverter
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ── scenario ─────────────────────────────────────────────────────────────────
 
 
 def _build_scenario():

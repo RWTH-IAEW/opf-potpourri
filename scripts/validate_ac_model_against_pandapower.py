@@ -37,6 +37,8 @@ DELTA_KEYS = {
     "res_line": ["pl_mw", "ql_mvar"],
 }
 
+# ── Configuration ─────────────────────────────────────────────────────────────
+SOLVER = "ipopt"
 NETS = [
     "1-HV-mixed--0-sw",
     "1-HV-urban--0-sw",
@@ -45,6 +47,7 @@ NETS = [
     "1-LV-urban6--0-sw",
     "1-LV-rural1--0-sw",
 ]
+# ──────────────────────────────────────────────────────────────────────────────
 
 
 def calculate_error_metrics(
@@ -125,10 +128,8 @@ if __name__ == "__main__":
     for net_name in tqdm(NETS, desc="Comparing networks"):
         net = sb.get_simbench_net(net_name)
 
-        # Solve with POTPOURRI AC model via NEOS cloud solver or ipopt.
         ac = AC(net)
-        # results = ac.solve(solver="neos")
-        results = ac.solve(solver="ipopt")
+        results = ac.solve(solver=SOLVER)
         converged = (
             results is not None
             and results.solver.termination_condition.value == "optimal"

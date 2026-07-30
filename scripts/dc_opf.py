@@ -33,9 +33,11 @@ from potpourri.models.DCOPF import DCOPF
 
 warnings.filterwarnings("ignore")
 
+# ── Configuration ─────────────────────────────────────────────────────────────
 SOLVER = "glpk"
 NET_NAME = "1-LV-rural1--0-sw"
 PROFILE_IDX = 672  # midday in summer (~slot 7 × 96)
+# ──────────────────────────────────────────────────────────────────────────────
 
 
 if __name__ == "__main__":

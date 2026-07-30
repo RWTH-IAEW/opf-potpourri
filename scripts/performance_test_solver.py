@@ -28,8 +28,8 @@ from potpourri.models.AC import AC
 
 warnings.filterwarnings("ignore")
 
+# ── Configuration ─────────────────────────────────────────────────────────────
 SOLVERS = ["ipopt", "knitro", "bonmin", "couenne", "conopt", "snopt"]
-
 NETS = [
     "1-HV-mixed--2-sw",
     "1-HV-urban--2-sw",
@@ -38,8 +38,8 @@ NETS = [
     "1-LV-urban6--2-sw",
     "1-LV-rural1--2-sw",
 ]
-
 RESULTS_DIR = pathlib.Path("results")
+# ──────────────────────────────────────────────────────────────────────────────
 
 
 def _load_networks():

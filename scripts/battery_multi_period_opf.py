@@ -20,7 +20,7 @@ Battery constructor parameters:
   - ``soc_min``:           minimum SOC fraction
   - ``initial_soc_fraction``: SOC at t=0 as fraction of soc_max
 
-Network: 1-LV-urban6--0-sw  (96 time steps = 1 day at 15-min resolution).
+Network: 1-LV-rural1--0-sw  (96 time steps = 1 day at 15-min resolution).
 
 Institut für Elektrische Anlagen und Netze, Digitalisierung und
 Energiewirtschaft (IAEW)
@@ -37,10 +37,12 @@ from potpourri.technologies.battery import Battery_multi_period
 
 warnings.filterwarnings("ignore")
 
+# ── Configuration ─────────────────────────────────────────────────────────────
 SOLVER = "ipopt"
-NET_NAME = "1-LV-urban6--0-sw"
+NET_NAME = "1-LV-rural1--0-sw"
 FROM_T = 0
 TO_T = 96  # 96 × 15 min = 1 day
+# ──────────────────────────────────────────────────────────────────────────────
 
 
 if __name__ == "__main__":

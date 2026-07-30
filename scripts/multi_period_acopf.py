@@ -16,7 +16,7 @@ Key difference from snapshot OPF: all time steps are optimised jointly.
 There is no temporal coupling of energy (no storage here), but the shared
 network constraints make the problem a single large NLP.
 
-Network: 1-LV-urban6--0-sw (urban low-voltage, diverse load/PV mix).
+Network: 1-LV-rural1--0-sw (rural low-voltage, 15 buses, 4 PV sgens).
 
 Institut für Elektrische Anlagen und Netze, Digitalisierung und
 Energiewirtschaft (IAEW)
@@ -33,7 +33,7 @@ from potpourri.models_multi_period.ACOPF_multi_period import ACOPF_multi_period
 warnings.filterwarnings("ignore")
 
 SOLVER = "ipopt"
-NET_NAME = "1-LV-urban6--0-sw"
+NET_NAME = "1-LV-rural1--0-sw"
 FROM_T = 0
 TO_T = 96  # 96 × 15 min = 24 hours
 

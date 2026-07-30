@@ -26,11 +26,12 @@ from potpourri.models.DCOPF import DCOPF
 
 warnings.filterwarnings("ignore")
 
+# ── Configuration ─────────────────────────────────────────────────────────────
 NET_NAME = "1-EHVHV-mixed-all-0-no_sw"
 PROFILE_IDX = 672
-
 DC_SOLVER = "glpk"
 AC_SOLVER = "ipopt"
+# ──────────────────────────────────────────────────────────────────────────────
 
 
 def configure_for_opf(net) -> None:
@@ -168,7 +169,7 @@ def run_acopf(net_template) -> dict:
 
 def main() -> None:
     print(f"Network: {NET_NAME}")
-    print(f"Snapshot: profile index {PROFILE_IDX}\n")
+    print(f"Snapshot: profile index {PROFILE_IDX}  (summer midday)\n")
 
     # ── Load and configure ────────────────────────────────────────────────
     net_template = sb.get_simbench_net(NET_NAME)

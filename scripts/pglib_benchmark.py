@@ -19,28 +19,14 @@ This script:
 3. Wires the polynomial generator cost from ``net.poly_cost`` as the
    objective via :func:`add_poly_cost_objective`.
 4. Reports the objective vs. the PGLib reference.
-
-The in-script monkeypatches that used to live here (line-limit swap,
-slack-v unfix, degenerate-gen pinning) have been folded into the core
-library — :meth:`ACOPF.add_OPF` and :meth:`OPF.add_OPF`'s
-degenerate-range handling now do the right thing without per-benchmark
-hacks.
-
-Usage
------
-::
-
-    python scripts/pglib_benchmark.py                  # small + medium cases
-    python scripts/pglib_benchmark.py --max-buses 1500 # adds 1000-2000 bus
-    python scripts/pglib_benchmark.py --cases case5_pjm case14_ieee
-    python scripts/pglib_benchmark.py --no-dc          # AC only
 """
 
 from __future__ import annotations
 
-import argparse
+import os
 import time
 import warnings
+from pathlib import Path
 from typing import Iterable
 
 import pandas as pd
@@ -56,16 +42,18 @@ from potpourri.models.cost_objective import add_poly_cost_objective
 
 warnings.filterwarnings("ignore")
 
+# ── Configuration ─────────────────────────────────────────────────────────────
+SOLVER = "ipopt"
+MAX_BUSES = 300  # skip cases with more buses than this
+RUN_DC = True  # include DC-OPF column
+RUN_AC = True  # include AC-OPF column
+CASES = None  # None → all cases within MAX_BUSES; list of names to override
+RESULTS_DIR = Path(__file__).parent / "results"
+# ──────────────────────────────────────────────────────────────────────────────
+
 
 # Cases to skip even when within the size budget, with a short reason.
 SKIP_CASES: dict[str, str] = {}
-
-
-# The in-script monkeypatches that used to live here (line-limit swap,
-# slack-v unfix, degenerate-gen pinning) have been folded into the core
-# library: ACOPF.add_OPF(thermal_limit="mva", free_slack_vm=True,
-# angle_limits=True) and OPF.add_OPF's degenerate-range handling now do the
-# right thing without per-benchmark hacks.
 
 
 def _select_cases(
@@ -139,7 +127,7 @@ def run_dcopf(case_name: str) -> dict:
     add_poly_cost_objective(dcopf, allow_quadratic=True)
 
     t0 = time.perf_counter()
-    res = dcopf.solve(solver="ipopt", print_solver_output=False)
+    res = dcopf.solve(solver=SOLVER, print_solver_output=False)
     elapsed = time.perf_counter() - t0
 
     ok = res is not None and pyo.check_optimal_termination(res)
@@ -172,7 +160,7 @@ def run_acopf(case_name: str) -> dict:
     add_poly_cost_objective(acopf, allow_quadratic=True)
 
     t0 = time.perf_counter()
-    res = acopf.solve(solver="ipopt", print_solver_output=False)
+    res = acopf.solve(solver=SOLVER, print_solver_output=False)
     elapsed = time.perf_counter() - t0
 
     ok = res is not None and pyo.check_optimal_termination(res)
@@ -185,34 +173,13 @@ def run_acopf(case_name: str) -> dict:
     }
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--max-buses",
-        type=int,
-        default=300,
-        help="Skip cases with more than this many buses (default: 300).",
-    )
-    parser.add_argument(
-        "--cases",
-        nargs="+",
-        help="Explicit case list (e.g. --cases case5_pjm case14_ieee). "
-        "Overrides --max-buses.",
-    )
-    parser.add_argument(
-        "--no-ac", action="store_true", help="Skip AC-OPF runs."
-    )
-    parser.add_argument(
-        "--no-dc", action="store_true", help="Skip DC-OPF runs."
-    )
-    args = parser.parse_args()
-
-    cases = _select_cases(args.cases, args.max_buses)
+def main():
+    cases = _select_cases(CASES, MAX_BUSES)
     if not cases:
         print("No cases selected.")
-        return 1
+        return
 
-    print(f"Running {len(cases)} case(s):")
+    print(f"Running {len(cases)} case(s) with solver={SOLVER!r}:")
     for c, n in cases:
         print(f"  - {c}  ({n} buses)")
     print()
@@ -230,7 +197,7 @@ def main() -> int:
             "ref_ac": ref_ac,
         }
 
-        if not args.no_dc:
+        if RUN_DC:
             try:
                 dc = run_dcopf(case)
                 row["dc_obj"] = dc["obj"]
@@ -244,7 +211,7 @@ def main() -> int:
                 row["dc_ok"] = False
                 row["dc_err"] = str(e)[:60]
 
-        if not args.no_ac:
+        if RUN_AC:
             try:
                 ac = run_acopf(case)
                 row["ac_obj"] = ac["obj"]
@@ -282,18 +249,14 @@ def main() -> int:
     print("Summary (sorted by node count):")
     print(df.to_string(index=False, float_format=lambda v: f"{v:.3f}"))
 
-    import os
-
-    os.makedirs("results", exist_ok=True)
-    out_csv = "results/pglib_benchmark.csv"
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    out_csv = RESULTS_DIR / "pglib_benchmark.csv"
     df.to_csv(out_csv, index=False)
     print(f"\nWrote {out_csv}")
 
-    out_md = "results/pglib_benchmark.md"
-    _write_markdown_table(df, out_md, ac=not args.no_ac, dc=not args.no_dc)
+    out_md = RESULTS_DIR / "pglib_benchmark.md"
+    _write_markdown_table(df, out_md, ac=RUN_AC, dc=RUN_DC)
     print(f"Wrote {out_md}")
-
-    return 0
 
 
 def _fmt_obj(val: float) -> str:
@@ -318,13 +281,9 @@ def _fmt_gap(g: float) -> str:
 
 
 def _write_markdown_table(
-    df: pd.DataFrame, path: str, ac: bool, dc: bool
+    df: pd.DataFrame, path: os.PathLike, ac: bool, dc: bool
 ) -> None:
-    """Write a results table in the same shape as PGLib's BASELINE.md.
-
-    Columns: Case Name | Nodes | DC ($/h) | AC ($/h) | DC gap (%) | AC gap (%)
-             | DC Time (s) | AC Time (s)
-    """
+    """Write a results table in the same shape as PGLib's BASELINE.md."""
     headers = ["**Case Name**", "**Nodes**"]
     if dc:
         headers += ["**DC ($/h)**", "**DC gap (%)**", "**DC Time (s)**"]
@@ -360,4 +319,4 @@ def _write_markdown_table(
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

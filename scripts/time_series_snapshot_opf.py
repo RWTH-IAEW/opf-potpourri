@@ -40,16 +40,16 @@ from potpourri.models.ACOPF_base import ACOPF
 
 warnings.filterwarnings("ignore")
 
+# ── Configuration ─────────────────────────────────────────────────────────────
 NET_NAME = "1-LV-rural1--0-sw"
 SOLVER = "ipopt"
 RESULTS_DIR = "results"
-
 PV_SCALE = 3.0  # multiply profile PV to create realistic voltage pressure
 PF_MIN = 0.95  # PV inverter minimum power factor
 VM_MAX = 1.06  # upper voltage bound [p.u.]
 VM_MIN = 0.95  # lower voltage bound [p.u.]
-
 SLOTS_PER_DAY = 96  # 15-min resolution: 4 slots/hour × 24 h
+# ──────────────────────────────────────────────────────────────────────────────
 
 
 def _slot(day: int, hour: int) -> int:

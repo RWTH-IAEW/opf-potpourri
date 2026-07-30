@@ -36,8 +36,8 @@ from potpourri.models.AC import AC
 
 warnings.filterwarnings("ignore")
 
+# ── Configuration ─────────────────────────────────────────────────────────────
 SOLVERS = ["ipopt", "knitro", "bonmin", "couenne", "conopt", "snopt"]
-
 NETS = [
     "1-HV-mixed--0-sw",
     "1-HV-urban--0-sw",
@@ -46,13 +46,13 @@ NETS = [
     "1-LV-urban6--0-sw",
     "1-LV-rural1--0-sw",
 ]
+RESULTS_DIR = pathlib.Path("results")
+# ──────────────────────────────────────────────────────────────────────────────
 
 RESULT_KEYS = {
     "res_bus": ["vm_pu", "va_degree"],
     "res_line": ["pl_mw", "ql_mvar"],
 }
-
-RESULTS_DIR = pathlib.Path("results")
 
 
 if __name__ == "__main__":
