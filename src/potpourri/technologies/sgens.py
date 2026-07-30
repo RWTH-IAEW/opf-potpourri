@@ -6,10 +6,9 @@ import pandas as pd
 import pyomo.environ as pyo
 from potpourri.technologies.flexibility import Flexibility_multi_period
 from potpourri.technologies.q_control import (
-    CPP_P_THRESHOLD_PU,
-    VPU_V_CURTAIL,
-    VPU_V_MAX,
+    DEFAULT_GRID_CODE,
     compute_q_curves,
+    resolve_grid_code,
 )
 
 
@@ -151,7 +150,7 @@ class Sgens_multi_period(Flexibility_multi_period):
             mutable=True,
         )
 
-    def static_generation_q_ctrl_data(self, net):
+    def static_generation_q_ctrl_data(self, net, grid_code=None):
         """Compute Q(P)/Q(U) characteristic data for sgens with ``var_q`` set.
 
         Populates ``self.q_limit_parameter``, ``self.sgen_var_q``,
@@ -162,12 +161,18 @@ class Sgens_multi_period(Flexibility_multi_period):
         Args:
             net: pandapower network.  Only processed when ``net.sgen`` has a
                 ``var_q`` column.
+            grid_code: Technical connection rule supplying the capability
+                envelope, as accepted by
+                :func:`~potpourri.technologies.q_control.resolve_grid_code`.
+                Defaults to VDE-AR-N 4105.
         """
         if "var_q" not in net.sgen:
             self.sgen_qc_indices = []
             return
 
-        self.q_limit_parameter = compute_q_curves()
+        code = resolve_grid_code(grid_code)
+        self.grid_code = code
+        self.q_limit_parameter = compute_q_curves(code)
         self.sgen_var_q = (
             net.sgen.var_q.values
         )  # object array; may contain None
@@ -447,13 +452,16 @@ class Sgens_multi_period(Flexibility_multi_period):
         Args:
             net: pandapower network.  ``net.sgen`` must have a ``pu_curtail``
                 boolean column.  Per-sgen voltage thresholds are read from
-                ``v_curtail_pu`` (default :data:`VPU_V_CURTAIL`) and
-                ``v_max_curtail_pu`` (default :data:`VPU_V_MAX`).  Installed
-                capacity is read from ``p_inst_mw``, falling back to ``p_mw``.
+                ``v_curtail_pu`` and ``v_max_curtail_pu``, defaulting to the
+                thresholds of the grid code selected in
+                :meth:`static_generation_q_ctrl_data`.  Installed capacity is
+                read from ``p_inst_mw``, falling back to ``p_mw``.
         """
         if "pu_curtail" not in net.sgen:
             self.sgen_pu_indices = []
             return
+
+        code = getattr(self, "grid_code", DEFAULT_GRID_CODE)
 
         p_inst = (
             net.sgen.p_inst_mw.fillna(net.sgen.p_mw.abs()).values
@@ -462,14 +470,14 @@ class Sgens_multi_period(Flexibility_multi_period):
         ) / self.baseMVA
 
         v_curtail = (
-            net.sgen.v_curtail_pu.fillna(VPU_V_CURTAIL).values
+            net.sgen.v_curtail_pu.fillna(code.vpu_v_curtail).values
             if "v_curtail_pu" in net.sgen
-            else np.full(len(net.sgen), VPU_V_CURTAIL)
+            else np.full(len(net.sgen), code.vpu_v_curtail)
         )
         v_max_curtail = (
-            net.sgen.v_max_curtail_pu.fillna(VPU_V_MAX).values
+            net.sgen.v_max_curtail_pu.fillna(code.vpu_v_max).values
             if "v_max_curtail_pu" in net.sgen
-            else np.full(len(net.sgen), VPU_V_MAX)
+            else np.full(len(net.sgen), code.vpu_v_max)
         )
 
         self.sgen_p_inst_pu_curtail = p_inst
@@ -599,12 +607,15 @@ class Sgens_multi_period(Flexibility_multi_period):
             net: pandapower network.  ``net.sgen`` must have a truthy
                 ``cos_phi_p_profile`` column.  ``cos_phi_min`` sets the
                 power factor at full output; ``p_inst_mw`` gives Pn;
-                ``cpp_p_threshold_pu`` (optional, default
-                :data:`CPP_P_THRESHOLD_PU`) sets P_thresh / Pn.
+                ``cpp_p_threshold_pu`` (optional) sets P_thresh / Pn,
+                defaulting to the threshold of the grid code selected in
+                :meth:`static_generation_q_ctrl_data`.
         """
         if "cos_phi_p_profile" not in net.sgen:
             self.sgen_cpp_indices = []
             return
+
+        code = getattr(self, "grid_code", DEFAULT_GRID_CODE)
 
         p_inst = (
             net.sgen.p_inst_mw.fillna(net.sgen.p_mw.abs()).values
@@ -613,9 +624,9 @@ class Sgens_multi_period(Flexibility_multi_period):
         ) / self.baseMVA
 
         cpp_thresh_pu = (
-            net.sgen.cpp_p_threshold_pu.fillna(CPP_P_THRESHOLD_PU).values
+            net.sgen.cpp_p_threshold_pu.fillna(code.cpp_p_threshold_pu).values
             if "cpp_p_threshold_pu" in net.sgen
-            else np.full(len(net.sgen), CPP_P_THRESHOLD_PU)
+            else np.full(len(net.sgen), code.cpp_p_threshold_pu)
         )
 
         self.sgen_cpp_indices = []

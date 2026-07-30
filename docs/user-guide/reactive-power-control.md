@@ -45,6 +45,77 @@ Two consequences worth calling out:
 
 ---
 
+## Selecting a grid code
+
+The technical connection rules (TAR) are represented as selectable
+`GridCode` parameter sets in `potpourri.technologies.q_control`, so a study
+can target the rule that applies to its voltage level:
+
+| Grid code | Short name | Voltage level | Status |
+|---|---|---|---|
+| VDE-AR-N 4105 | `"4105"` | low voltage | normative values |
+| VDE-AR-N 4110 | `"4110"` | medium voltage | **provisional — placeholder values** |
+
+A `GridCode` carries the Q(U) voltage breakpoints, the Q/Pn capability
+table and its variants, the Q(P) breakpoints, and the P(U) and cos(φ)(P)
+thresholds.  Select one model-wide:
+
+```python
+# Single-period
+opf.add_OPF(pv_q_control="both", grid_code="4110")
+
+# Multi-period (applies to every Q-controlled sgen in the model)
+mpopf.add_OPF(grid_code="4110")
+```
+
+`grid_code` accepts `None` (VDE-AR-N 4105, the default, so existing models
+are unaffected), a short name (`"4105"`, `"4110"`, or the full
+`"VDE-AR-N 4110"`), or a `GridCode` instance.  An unknown name raises
+`ValueError`.
+
+!!! danger "VDE-AR-N 4110 currently holds placeholder values"
+    `VDE_AR_N_4110` is wired into the registry but **reuses the VDE-AR-N
+    4105 (low-voltage) parameters as a placeholder**.  Its normative
+    medium-voltage figures have not been entered yet, so results obtained
+    with `grid_code="4110"` are **not** 4110-compliant.
+
+    Selecting it emits a `ProvisionalGridCodeWarning` rather than failing,
+    so exploratory runs work, but do not report such results as
+    medium-voltage grid-code compliant.  To complete it, replace the
+    `vqu_v_points`, `vqu_q_max` and `qp_*` fields of `VDE_AR_N_4110` in
+    `potpourri/technologies/q_control.py` and clear its `provisional` flag.
+
+To add a further rule, construct a `GridCode` and register it:
+
+```python
+from potpourri.technologies.q_control import GRID_CODES, GridCode
+
+MY_TAR = GridCode(
+    name="my-tar",
+    title="Operator TAR",
+    voltage_level="medium voltage",
+    vqu_v_points=...,   # [[V1, V2], [V3, V4]] in p.u.
+    vqu_q_max=...,      # shape (2, n_variants), Q/Pn
+    qp_p_high=0.1,
+    qp_p_low=0.2,
+    vpu_v_curtail=1.06,
+    vpu_v_max=1.10,
+    cpp_p_threshold_pu=0.2,
+)
+GRID_CODES[MY_TAR.name] = MY_TAR
+```
+
+!!! note "One grid code per model, and one path not yet covered"
+    The capability curves are computed once into a single table, so the
+    grid code applies model-wide; per-sgen grid codes are not supported.
+
+    The hosting-capacity wind path in
+    `potpourri/technologies/windpower.py` keeps its own private copy of the
+    VDE-AR-N 4105 table and is **not** driven by the registry, so
+    `grid_code` does not affect `HC_ACOPF` runs.
+
+---
+
 ## Background: VDE-AR-N 4105 Q-control modes
 
 ### Q(P) characteristic
@@ -430,7 +501,68 @@ The time-indexed variants use `[g, t]` indices:
 
 ---
 
-## Example script
+## Assigning a different strategy per sgen
+
+The grid code applies model-wide, but *which controller each sgen follows* is
+per-row.  In the multi-period model every strategy is driven by a `net.sgen`
+column, so units on the same feeder can follow different rules:
+
+```python
+net.sgen["var_q"] = None
+net.sgen["fixed_cos_phi"] = float("nan")
+net.sgen["cos_phi_p_profile"] = False
+net.sgen["cos_phi_min"] = float("nan")
+net.sgen["pu_curtail"] = False
+
+net.sgen.at[0, "var_q"] = 0                  # Q(P) + Q(U) envelope
+net.sgen.at[1, "fixed_cos_phi"] = 0.95       # fixed power factor
+net.sgen.at[2, "cos_phi_p_profile"] = True   # cos(φ)(P) profile
+net.sgen.at[2, "cos_phi_min"] = 0.90
+net.sgen.at[3, "pu_curtail"] = True          # P(U) curtailment
+net.sgen.at[3, "var_q"] = 0                  # …may combine with a Q rule
+
+mpopf = ACOPF_multi_period(net, toT=24)
+mpopf.add_OPF(grid_code="4105")
+```
+
+Two rules for combining strategies on one sgen:
+
+* **Fixed cos(φ) and the cos(φ)(P) profile must not share an sgen.** Both are
+  equality constraints on the same `qsG`, so together they over-determine
+  reactive power and the model is typically infeasible or degenerate. Keep
+  them on disjoint sets.
+* **P(U) curtailment may be combined with a Q rule**, because it constrains
+  active rather than reactive power.
+
+!!! note "Per-row assignment is a multi-period feature"
+    In the single-period model `pu_curtail` and `cos_phi_p_profile` are
+    model-wide switches on `add_OPF()`, so only `fixed_cos_phi` and `var_q`
+    can vary per row there. Use the multi-period model when the study needs
+    genuinely mixed controllers.
+
+### What a mixed assignment looks like
+
+A fixed power factor couples Q rigidly to P. When the feeder already sits
+above 1.0 p.u. and the objective penalises voltage deviation, the only way
+for such a unit to shed reactive power is to shed active power — so it
+curtails, while its Q(P)/Q(U) neighbours keep producing. That coupling is the
+practical cost of a fixed power factor, and it is the usual reason to prefer
+the bound-type rules when active yield matters.
+
+---
+
+## Example scripts
+
+`scripts/grid_code_q_strategies.py` covers this page's two selection
+mechanisms:
+
+1. **Grid-code selection** — solves one snapshot under every registered grid
+   code and reports the capability envelope, objective and voltage band for
+   each, surfacing the `ProvisionalGridCodeWarning` for VDE-AR-N 4110 rather
+   than silencing it.
+2. **One strategy per sgen** — assigns Q(P)/Q(U), fixed cos(φ), cos(φ)(P) and
+   P(U) curtailment to different PV units, reports which constraint blocks
+   were built, and prints the resulting per-sgen dispatch.
 
 `scripts/q_control_opf.py` demonstrates both use cases:
 

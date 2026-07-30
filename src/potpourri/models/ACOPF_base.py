@@ -8,9 +8,8 @@ from loguru import logger
 from potpourri.models.AC import AC
 from potpourri.models.OPF import OPF
 from potpourri.technologies.q_control import (
-    CPP_P_THRESHOLD_PU,
-    VPU_V_CURTAIL,
-    VPU_V_MAX,
+    compute_q_curves,
+    resolve_grid_code,
 )
 
 
@@ -244,27 +243,16 @@ class ACOPF(AC, OPF):
         Reads sgen.var_q (variant 0–2) and assigns grid-code-compliant reactive
         power bounds. Populates self.q_limit_parameter with slope/intercept
         parameters for the Q-P and Q-U curves used in add_OPF() constraints.
-        """
-        x = np.array([[96, 103], [120, 127]]) / 110
-        y = np.array([[0.48, 0.41, 0.33], [-0.23, -0.33, -0.41]])
-        m = (y[1] - y[0]) / (x[0, 1] - x[0, 0])
-        b = np.array([y[0] - m * x[i, 0] for i in range(len(x))]).T
-        m_qp_max = (0.1 - y[0]) / (0.1 - 0.2)
-        m_qp_min = (-0.1 - y[1]) / (0.1 - 0.2)
-        b_qp_max = 0.1 - m_qp_max * 0.1
-        b_qp_min = -0.1 - m_qp_min * 0.1
 
-        self.q_limit_parameter = pd.DataFrame(
-            {
-                "m_qv": m,
-                "b_qv_min": b[:, 0],
-                "b_qv_max": b[:, 1],
-                "m_qp_max": m_qp_max,
-                "m_qp_min": m_qp_min,
-                "b_qp_max": b_qp_max,
-                "b_qp_min": b_qp_min,
-            }
-        )
+        The curves come from the grid code selected via
+        :meth:`add_OPF`'s ``grid_code`` argument (default VDE-AR-N 4105).
+        """
+        code = resolve_grid_code(getattr(self, "_grid_code", None))
+        self.q_limit_parameter = compute_q_curves(code)
+
+        # Q/Pn capability table: row 0 capacitive, row 1 inductive;
+        # columns are the var_q variants.
+        q_max_table = code.vqu_q_max
 
         if "var_q" in self.net.sgen:
             self.static_generation_data["var_q"] = self.net.sgen.var_q.values
@@ -284,12 +272,12 @@ class ACOPF(AC, OPF):
             self.static_generation_data["p_inst"] = p_inst
 
             self.static_generation_data["max_q"][sgens_var_q] = [
-                y[0, int(self.static_generation_data.var_q[g])]
+                q_max_table[0, int(self.static_generation_data.var_q[g])]
                 * self.static_generation_data["p_inst"][g]
                 for g in sgens_var_q
             ]
             self.static_generation_data["min_q"][sgens_var_q] = [
-                y[1, int(self.static_generation_data.var_q[g])]
+                q_max_table[1, int(self.static_generation_data.var_q[g])]
                 * self.static_generation_data["p_inst"][g]
                 for g in sgens_var_q
             ]
@@ -325,6 +313,7 @@ class ACOPF(AC, OPF):
         pu_curtail: bool = False,
         fixed_cos_phi: "float | None" = None,
         cos_phi_p_profile: bool = False,
+        grid_code=None,
         **kwargs,
     ):
         """Attach AC-OPF sets, parameters, and constraints to ``self.model``.
@@ -402,8 +391,21 @@ class ACOPF(AC, OPF):
                 ``net.line.angmin_degree`` / ``net.line.angmax_degree`` (and
                 the transformer equivalent if present). Defaults disabled to
                 preserve previous behaviour.
+            grid_code: Technical connection rule supplying the Q(P)/Q(U)
+                capability envelope and the P(U) / cos(phi)(P) thresholds.
+                Accepts ``None`` (VDE-AR-N 4105, the default), a short name
+                such as ``"4105"`` or ``"4110"``, or a
+                :class:`~potpourri.technologies.q_control.GridCode`.
+                Selecting a grid code whose parameters are still
+                placeholders emits a
+                :class:`~potpourri.technologies.q_control.ProvisionalGridCodeWarning`.
             **kwargs: Forwarded to :meth:`_calc_opf_parameters`.
         """
+        # Resolve before super(), which reaches static_generation_wind_var_q
+        # via _calc_opf_parameters and needs the selected code.
+        code = resolve_grid_code(grid_code)
+        self._grid_code = code
+
         super().add_OPF(**kwargs)
 
         self.model.name = "ACOPF"
@@ -868,14 +870,16 @@ class ACOPF(AC, OPF):
                 def _v_curtail(g):
                     if "v_curtail_pu" in self.net.sgen:
                         v = self.net.sgen.at[g, "v_curtail_pu"]
-                        return float(v) if pd.notna(v) else VPU_V_CURTAIL
-                    return VPU_V_CURTAIL
+                        if pd.notna(v):
+                            return float(v)
+                    return code.vpu_v_curtail
 
                 def _v_max_curtail(g):
                     if "v_max_curtail_pu" in self.net.sgen:
                         v = self.net.sgen.at[g, "v_max_curtail_pu"]
-                        return float(v) if pd.notna(v) else VPU_V_MAX
-                    return VPU_V_MAX
+                        if pd.notna(v):
+                            return float(v)
+                    return code.vpu_v_max
 
                 self.model.sGpu = pyo.Set(
                     within=self.model.sGc, initialize=pu_idx
@@ -946,7 +950,7 @@ class ACOPF(AC, OPF):
 
             cpp_thresh_pu_arr = (
                 self.net.sgen["cpp_p_threshold_pu"]
-                .fillna(CPP_P_THRESHOLD_PU)
+                .fillna(code.cpp_p_threshold_pu)
                 .values
                 if "cpp_p_threshold_pu" in self.net.sgen
                 else None
@@ -961,7 +965,7 @@ class ACOPF(AC, OPF):
                 thresh_pu = (
                     float(cpp_thresh_pu_arr[g])
                     if cpp_thresh_pu_arr is not None
-                    else CPP_P_THRESHOLD_PU
+                    else code.cpp_p_threshold_pu
                 )
                 pt = thresh_pu * pn
                 if pn <= pt:

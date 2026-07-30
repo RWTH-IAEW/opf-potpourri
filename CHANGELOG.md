@@ -7,6 +7,42 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Selectable grid codes** (`src/potpourri/technologies/q_control.py`): the
+  connection rules are now `GridCode` parameter sets in a `GRID_CODES`
+  registry instead of module-level constants, selected model-wide via
+  `ACOPF.add_OPF(grid_code=…)` or `ACOPF_multi_period.add_OPF(grid_code=…)`.
+  Accepts `None` (VDE-AR-N 4105, the default, so existing models are
+  unaffected), a short name (`"4105"`, `"4110"`), or a `GridCode`; unknown
+  names raise `ValueError`. A `GridCode` carries the Q(U) breakpoints, the
+  Q/Pn capability table and its variants, the Q(P) breakpoints, and the P(U)
+  and cos(φ)(P) thresholds.
+  - **`VDE_AR_N_4110` (medium voltage) is provisional**: it is registered but
+    reuses the VDE-AR-N 4105 values as a placeholder, because its normative
+    medium-voltage figures have not been entered yet. Results obtained with
+    `grid_code="4110"` are **not** 4110-compliant. Selecting it emits a
+    `ProvisionalGridCodeWarning` instead of failing.
+  - `ACOPF.static_generation_wind_var_q()` previously reimplemented the
+    Q-curve maths inline with hard-coded constants, so the single-period path
+    would have ignored the selected code; it now routes through
+    `compute_q_curves()`. Numerically identical for VDE-AR-N 4105.
+  - The module-level constants (`VQU_Q_MAX`, `QP_P_HIGH`, `VPU_V_CURTAIL`, …)
+    are retained as aliases of the default grid code, so existing imports
+    keep working.
+  - Not yet covered: the hosting-capacity wind path in `windpower.py` keeps a
+    private copy of the 4105 table and is not registry-driven, so `grid_code`
+    does not affect `HC_ACOPF` runs.
+- **`scripts/grid_code_q_strategies.py`** — worked example of both selection
+  mechanisms: one snapshot solved under each registered grid code (surfacing
+  the provisional-values warning rather than silencing it), then Q(P)/Q(U),
+  fixed cos(φ), cos(φ)(P) and P(U) curtailment assigned to different PV units
+  within a single multi-period model.
+- **Documentation** for per-sgen strategy assignment in
+  `docs/user-guide/reactive-power-control.md`, including which strategies may
+  share an sgen: fixed cos(φ) and the cos(φ)(P) profile must not (both are
+  equalities on the same reactive power), while P(U) curtailment may be
+  combined with a Q rule since it constrains active power. Per-row assignment
+  is a multi-period feature; in the single-period model `pu_curtail` and
+  `cos_phi_p_profile` are model-wide switches.
 - **VDE-AR-N 4105 / BDEW reactive-power control for PV and wind sgens**
   (`src/potpourri/technologies/q_control.py`,
   `src/potpourri/technologies/pv.py`,

@@ -42,8 +42,11 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
 
         # Populate Q(P)/Q(U) characteristic data for sgens with var_q set.
         # This covers both wind and PV sgens annotated with grid-code variants.
+        # The grid code applies model-wide; set it via add_OPF(grid_code=...).
         if "var_q" in self.net.sgen:
-            sgens_object.static_generation_q_ctrl_data(self.net)
+            sgens_object.static_generation_q_ctrl_data(
+                self.net, grid_code=getattr(self, "_grid_code", None)
+            )
 
         # Populate inverter S² rating data when sn_mva is present.
         if "sn_mva" in self.net.sgen:
@@ -173,9 +176,21 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
 
         return max_vm_pu, min_vm_pu
 
-    def add_OPF(self, **kwargs):
+    def add_OPF(self, grid_code=None, **kwargs):
         """Extend OPF.add_OPF() with voltage bounds, AC thermal limits, and
-        reactive power constraints."""
+        reactive power constraints.
+
+        Args:
+            grid_code: Technical connection rule supplying the Q(P)/Q(U)
+                capability envelope and the P(U) / cos(phi)(P) thresholds,
+                as accepted by
+                :func:`~potpourri.technologies.q_control.resolve_grid_code`.
+                Applies model-wide and defaults to VDE-AR-N 4105.
+            **kwargs: Forwarded to the base implementation.
+        """
+        # Consumed by _calc_opf_parameters, which super().add_OPF() reaches.
+        self._grid_code = grid_code
+
         super().add_OPF(**kwargs)
 
         self.model.name = "ACOPF"

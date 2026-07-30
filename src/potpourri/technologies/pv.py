@@ -4,7 +4,10 @@ power-bound constraints to a multi-period model."""
 import numpy as np
 import pyomo.environ as pyo
 from potpourri.technologies.flexibility import Flexibility_multi_period
-from potpourri.technologies.q_control import compute_q_curves
+from potpourri.technologies.q_control import (
+    compute_q_curves,
+    resolve_grid_code,
+)
 
 
 class PV_multi_period(Flexibility_multi_period):
@@ -67,6 +70,7 @@ class PV_multi_period(Flexibility_multi_period):
         q_control: str | None = None,
         var_q: int = 0,
         p_inst_mw: float | None = None,
+        grid_code=None,
     ):
         """
         Args:
@@ -126,7 +130,8 @@ class PV_multi_period(Flexibility_multi_period):
         self.pv_q_control = q_control
         self.pv_var_q = int(var_q)
         if q_control is not None:
-            self.q_limit_parameter = compute_q_curves()
+            self.grid_code = resolve_grid_code(grid_code)
+            self.q_limit_parameter = compute_q_curves(self.grid_code)
             if p_inst_mw is not None:
                 self.pv_p_inst = float(p_inst_mw) / self.baseMVA
             else:
