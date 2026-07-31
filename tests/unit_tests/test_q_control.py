@@ -19,8 +19,10 @@ otherwise leak into unrelated tests.
 import copy
 import pathlib
 import warnings
+from dataclasses import replace
 
 import numpy as np
+import pyomo.environ as pyo
 import pytest
 
 from potpourri.models.ACOPF_base import DEFAULT_PV_SGEN_TYPES, ACOPF
@@ -133,20 +135,21 @@ def test_compute_q_curves_columns():
 def test_compute_q_curves_one_row_per_variant():
     """The frame is indexed by var_q variant."""
     curves = qc.compute_q_curves()
-    assert len(curves) == qc.VDE_AR_N_4105.n_variants == 3
+    assert len(curves) == qc.DEFAULT_GRID_CODE.n_variants == 3
 
 
 @pytest.mark.parametrize(
     ("variant", "q_max", "q_min"),
-    [(0, 0.48, -0.23), (1, 0.41, -0.33), (2, 0.33, -0.41)],
+    [
+        (0, 0.484322, -0.227902),
+        (1, 0.410775, -0.328684),
+        (2, 0.328684, -0.410775),
+    ],
 )
 def test_q_envelope_at_reference_point(variant, q_max, q_min):
-    """At P = 0.2 Pn the envelope must hit the VDE-AR-N 4105 table values."""
-    code = qc.VDE_AR_N_4105
-    curves = qc.compute_q_curves(code)
-    p = code.qp_p_low
-    upper = curves.b_qp_max[variant] + curves.m_qp_max[variant] * p
-    lower = curves.b_qp_min[variant] + curves.m_qp_min[variant] * p
+    """At P = 0.2 Pn the envelope hits the VDE-AR-N 4120 table values."""
+    code = qc.VDE_AR_N_4120
+    lower, upper = code.pq_area.q_flexibility(code.qp_p_low, variant)
     assert upper == pytest.approx(q_max, abs=1e-9)
     assert lower == pytest.approx(q_min, abs=1e-9)
 
@@ -154,45 +157,60 @@ def test_q_envelope_at_reference_point(variant, q_max, q_min):
 @pytest.mark.parametrize("variant", [0, 1, 2])
 def test_q_envelope_narrows_at_lower_breakpoint(variant):
     """At P = 0.1 Pn the envelope collapses to ±0.1 Pn for every variant."""
-    code = qc.VDE_AR_N_4105
-    curves = qc.compute_q_curves(code)
-    p = code.qp_p_high
-    upper = curves.b_qp_max[variant] + curves.m_qp_max[variant] * p
-    lower = curves.b_qp_min[variant] + curves.m_qp_min[variant] * p
+    code = qc.VDE_AR_N_4120
+    lower, upper = code.pq_area.q_flexibility(code.qp_p_high, variant)
     assert upper == pytest.approx(code.qp_p_high, abs=1e-9)
     assert lower == pytest.approx(-code.qp_p_high, abs=1e-9)
 
 
-def test_qp_bound_is_not_clipped_above_reference_point():
-    """The Q(P) bound is one unclipped linear segment.
+def test_qp_bound_saturates_above_the_reference_point():
+    """The Q(P) bound holds its limit above P = 0.2 Pn instead of climbing.
 
-    It keeps widening beyond P = 0.2 Pn rather than holding at the table
-    value, which is why Q(P) alone does not limit reactive power at high
-    active output — the S² circle and cos(phi) cone do.  Documented in the
-    user guide; pinned here so the behaviour cannot change silently.
+    Before 0.4.1 this bound was a single unclipped line that reached
+    +3.52 Pn at full output against a grid-code limit of +0.484 — the
+    saturation shelf was missing.  Pinned so it cannot regress.
     """
-    curves = qc.compute_q_curves(qc.VDE_AR_N_4105)
-    at_ref = curves.b_qp_max[0] + curves.m_qp_max[0] * 0.2
-    at_full = curves.b_qp_max[0] + curves.m_qp_max[0] * 1.0
-    assert at_full > at_ref
-    assert at_full > 1.0  # far beyond any physical inverter rating
+    code = qc.VDE_AR_N_4120
+    _, at_ref = code.pq_area.q_flexibility(0.2, 0)
+    _, at_full = code.pq_area.q_flexibility(1.0, 0)
+    assert at_full == pytest.approx(at_ref, abs=1e-12)
+    assert at_full == pytest.approx(0.484322, abs=1e-9)
+
+
+def test_qu_bound_saturates_at_nominal_voltage():
+    """At v = 1.0 the Q(U) band is the plateau, not an extrapolated line.
+
+    Before 0.4.1 the two bounds were unclipped parallel lines, giving
+    [-0.940, +1.494] at nominal voltage — 3.2x the grid-code range.
+    """
+    lower, upper = qc.VDE_AR_N_4120.qv_area.q_flexibility(1.0, 0)
+    assert lower == pytest.approx(-0.227902, abs=1e-9)
+    assert upper == pytest.approx(0.484322, abs=1e-9)
 
 
 def test_q_curves_monotonic_in_variant():
     """Variant 0 is the widest capacitive envelope, variant 2 the narrowest."""
-    curves = qc.compute_q_curves(qc.VDE_AR_N_4105)
-    p = qc.VDE_AR_N_4105.qp_p_low
-    upper = [curves.b_qp_max[v] + curves.m_qp_max[v] * p for v in curves.index]
+    code = qc.VDE_AR_N_4120
+    upper = [
+        code.pq_area.q_flexibility(code.qp_p_low, v)[1]
+        for v in range(code.n_variants)
+    ]
     assert upper[0] > upper[1] > upper[2]
 
 
 # ── registry: grid-code resolution ────────────────────────────────────────
 
 
-def test_resolve_default_is_4105():
-    """No selector means VDE-AR-N 4105."""
-    assert qc.resolve_grid_code(None) is qc.VDE_AR_N_4105
-    assert qc.DEFAULT_GRID_CODE is qc.VDE_AR_N_4105
+def test_resolve_default_is_4120():
+    """No selector means VDE-AR-N 4120.
+
+    The pre-0.4.1 constants were labelled 4105 but carried the 110 kV
+    breakpoints (96/103/120/127 kV) and the three 4120 variants, so 4120 is
+    the code those defaults actually described.  Keeping it as the default
+    also keeps existing nets working, whose var_q spans 0..2.
+    """
+    assert qc.resolve_grid_code(None) is qc.VDE_AR_N_4120
+    assert qc.DEFAULT_GRID_CODE is qc.VDE_AR_N_4120
 
 
 def test_resolve_accepts_grid_code_instance():
@@ -205,9 +223,7 @@ def test_resolve_accepts_grid_code_instance():
 )
 def test_resolve_accepts_aliases(selector):
     """Short name, full designation and punctuation variants all resolve."""
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", qc.ProvisionalGridCodeWarning)
-        assert qc.resolve_grid_code(selector) is qc.VDE_AR_N_4110
+    assert qc.resolve_grid_code(selector) is qc.VDE_AR_N_4110
 
 
 def test_resolve_unknown_raises_value_error():
@@ -216,47 +232,58 @@ def test_resolve_unknown_raises_value_error():
         qc.resolve_grid_code("9999")
 
 
-def test_registry_contains_both_codes():
-    """Both shipped grid codes are registered under their short names."""
-    assert set(qc.GRID_CODES) == {"4105", "4110"}
+def test_registry_contains_every_shipped_code():
+    """All three shipped grid codes are registered under their short names."""
+    assert set(qc.GRID_CODES) == {"4105", "4110", "4120"}
+
+
+@pytest.mark.parametrize(
+    ("name", "n_variants", "level"),
+    [
+        ("4105", 2, "low voltage"),
+        ("4110", 1, "medium voltage"),
+        ("4120", 3, "high voltage"),
+    ],
+)
+def test_variant_count_per_code(name, n_variants, level):
+    """Each code exposes exactly the variants the standard defines."""
+    code = qc.GRID_CODES[name]
+    assert code.n_variants == n_variants
+    assert code.voltage_level == level
 
 
 # ── registry: provisional-value contract ──────────────────────────────────
 
 
-def test_provisional_code_warns():
-    """Selecting a placeholder grid code must warn, not fail silently."""
-    with pytest.warns(qc.ProvisionalGridCodeWarning):
-        qc.resolve_grid_code("4110")
+def test_no_shipped_code_is_provisional():
+    """Every shipped code now carries values sourced from pandapower.
+
+    4110 was a placeholder copy of the (mislabelled) 4105 entry until
+    0.4.1.  If a future code ships provisional again, flip this and restore
+    a tripwire like the one this replaced.
+    """
+    assert not any(c.provisional for c in qc.GRID_CODES.values())
 
 
-def test_provisional_warning_names_the_code():
-    """The warning has to say which code is provisional and why."""
-    with pytest.warns(qc.ProvisionalGridCodeWarning) as record:
-        qc.resolve_grid_code("4110")
-    message = str(record[0].message)
-    assert "4110" in message
-    assert "placeholder" in message.lower()
-    assert "not" in message.lower()
-
-
-def test_normative_code_does_not_warn():
-    """VDE-AR-N 4105 carries real values and must stay quiet."""
+def test_no_shipped_code_warns_on_resolve():
+    """Resolving any registered code must stay quiet."""
     with warnings.catch_warnings():
         warnings.simplefilter("error", qc.ProvisionalGridCodeWarning)
-        qc.resolve_grid_code("4105")  # must not raise
+        for name in qc.GRID_CODES:
+            qc.resolve_grid_code(name)  # must not raise
 
 
-def test_4110_is_still_flagged_provisional():
-    """Tripwire: VDE-AR-N 4110 currently holds placeholder values.
-
-    When its normative medium-voltage parameters are entered and the
-    ``provisional`` flag is cleared, this test fails on purpose — that is
-    the reminder to update the user guide and the CHANGELOG, which both
-    state that 4110 results are not compliant.
-    """
-    assert qc.VDE_AR_N_4110.provisional is True
-    assert qc.VDE_AR_N_4105.provisional is False
+def test_provisional_mechanism_still_warns():
+    """The provisional machinery works, even with nothing shipped using it."""
+    stub = replace(
+        qc.VDE_AR_N_4105,
+        name="stub",
+        provisional=True,
+        provisional_note="stub carries placeholder values, not normative.",
+    )
+    with pytest.warns(qc.ProvisionalGridCodeWarning) as record:
+        qc.resolve_grid_code(stub)
+    assert "placeholder" in str(record[0].message).lower()
 
 
 def test_backcompat_constants_mirror_default_code():
@@ -483,27 +510,32 @@ def test_windpower_has_no_private_capability_table():
 
 def test_hc_q_bounds_are_the_widest_envelope():
     """The simplified HC check uses the widest band the code offers."""
-    hc_max, hc_min = windpower._hc_q_bounds(qc.VDE_AR_N_4105)
-    assert hc_max == pytest.approx(0.48)
-    assert hc_min == pytest.approx(-0.41)
+    hc_max, hc_min = windpower._hc_q_bounds(qc.VDE_AR_N_4120)
+    assert hc_max == pytest.approx(0.484322)
+    assert hc_min == pytest.approx(-0.410775)
 
 
-def test_hc_defaults_match_the_previous_hard_coded_values():
-    """The public HC keyword defaults must not have shifted.
+def test_hc_defaults_track_the_default_grid_code():
+    """The public HC keyword defaults are derived, not literals.
 
     ``qp_max`` / ``qp_min`` on ``Windpower_multi_period.__init__`` were
-    literals; they are now derived from the default grid code and must still
-    resolve to the same numbers.
+    hard-coded 0.48 / -0.41; they now come from the default grid code, which
+    supplies the same limits at the standard's own precision.
     """
-    assert windpower._DEFAULT_HC_Q_MAX == pytest.approx(0.48)
-    assert windpower._DEFAULT_HC_Q_MIN == pytest.approx(-0.41)
+    expected_max, expected_min = windpower._hc_q_bounds(qc.DEFAULT_GRID_CODE)
+    assert windpower._DEFAULT_HC_Q_MAX == expected_max
+    assert windpower._DEFAULT_HC_Q_MIN == expected_min
+    # Same limits the literals approximated, to two decimals.
+    assert windpower._DEFAULT_HC_Q_MAX == pytest.approx(0.48, abs=5e-3)
+    assert windpower._DEFAULT_HC_Q_MIN == pytest.approx(-0.41, abs=5e-3)
 
 
-def test_hc_slopes_match_the_pre_refactor_values():
-    """Regression: the Q(U) hosting-capacity slopes are unchanged.
+def test_hc_slopes_are_pinned():
+    """Regression: the Q(U) hosting-capacity slopes.
 
-    Values captured from the hard-coded constants before they were replaced
-    by the registry lookup.
+    These shifted in 0.4.1 only because the capability table moved from
+    two-decimal literals to the standard's own values (0.48 -> 0.484322);
+    the derivation is unchanged.
     """
     code = qc.DEFAULT_GRID_CODE
     x, y = code.vqu_v_points, code.vqu_q_max
@@ -515,32 +547,44 @@ def test_hc_slopes_match_the_pre_refactor_values():
     m_qu_min = (abs(y[0, last]) + abs(y[1, last])) / (x[0, 0] - x[1, 0])
     qu_min = -m_qu_min * x[0, 0] + y[0, last]
 
-    assert m_qu_max == pytest.approx(-3.254166666666667, abs=1e-12)
-    assert qu_max == pytest.approx(4.029999999999999, abs=1e-12)
-    assert m_qu_min == pytest.approx(-3.391666666666667, abs=1e-12)
-    assert qu_min == pytest.approx(3.2900000000000005, abs=1e-12)
+    assert m_qu_max == pytest.approx(-3.2643600000000004, abs=1e-12)
+    assert qu_max == pytest.approx(4.045442, abs=1e-12)
+    assert m_qu_min == pytest.approx(-3.3891870833333337, abs=1e-12)
+    assert qu_min == pytest.approx(3.2865200000000003, abs=1e-12)
 
 
 def test_windpower_q_curves_come_from_the_registry():
-    """The removed inline maths must equal compute_q_curves exactly."""
-    code = qc.VDE_AR_N_4105
-    x, y = code.vqu_v_points, code.vqu_q_max
-    m = (y[1] - y[0]) / (x[0, 1] - x[0, 0])
-    expected_m_qv = m
+    """compute_q_curves must report the envelope's own ramp segment."""
+    code = qc.VDE_AR_N_4120
     curves = qc.compute_q_curves(code)
-    assert np.allclose(curves.m_qv.values, expected_m_qv)
+    for v in range(code.n_variants):
+        ramp_m, ramp_b = min(
+            code.qv_area.lower_pieces(v), key=lambda mb: mb[0]
+        )
+        assert curves.m_qv[v] == pytest.approx(ramp_m, abs=1e-12)
+        assert curves.b_qv_min[v] == pytest.approx(ramp_b, abs=1e-12)
 
 
 def test_hc_bounds_track_the_selected_grid_code():
-    """A different code yields its own HC envelope, not 4105's."""
+    """A different code yields its own HC envelope, not the default's."""
     custom = qc.GridCode(
         name="test-tar",
         title="Test TAR",
         voltage_level="medium voltage",
-        vqu_v_points=qc.VDE_AR_N_4105.vqu_v_points,
-        vqu_q_max=np.array([[0.30, 0.20], [-0.10, -0.25]]),
-        qp_p_high=0.1,
-        qp_p_low=0.2,
+        pq_area=qc.Envelope(
+            x_points=np.array([0.1, 0.2, 1.0]),
+            q_min=np.array([[-0.1, -0.10, -0.10], [-0.1, -0.25, -0.25]]),
+            q_max=np.array([[0.1, 0.30, 0.30], [0.1, 0.20, 0.20]]),
+        ),
+        qv_area=qc.Envelope(
+            x_points=qc.VDE_AR_N_4120.qv_area.x_points,
+            q_min=np.array(
+                [[0.30, -0.10, -0.10, -0.10], [0.20, -0.25, -0.25, -0.25]]
+            ),
+            q_max=np.array(
+                [[0.30, 0.30, 0.30, -0.10], [0.20, 0.20, 0.20, -0.25]]
+            ),
+        ),
         vpu_v_curtail=1.06,
         vpu_v_max=1.10,
         cpp_p_threshold_pu=0.2,
@@ -774,7 +818,7 @@ def test_equality_modes_are_mutually_exclusive_in_practice(lv_rural_net):
 def test_grid_code_resolved_onto_model(lv_rural_net):
     """add_OPF stores the resolved code so later steps can read it."""
     opf = _build_sp(_annotate(lv_rural_net), pv_q_control="both")
-    assert opf._grid_code is qc.VDE_AR_N_4105
+    assert opf._grid_code is qc.VDE_AR_N_4120
 
 
 def test_grid_code_selection_reaches_single_period(lv_rural_net):
@@ -788,7 +832,7 @@ def test_grid_code_selection_reaches_single_period(lv_rural_net):
 def test_grid_code_curves_match_selected_code(lv_rural_net):
     """q_limit_parameter must come from the selected grid code."""
     opf = _build_sp(_annotate(lv_rural_net), pv_q_control="both")
-    expected = qc.compute_q_curves(qc.VDE_AR_N_4105)
+    expected = qc.compute_q_curves(qc.VDE_AR_N_4120)
     assert np.allclose(opf.q_limit_parameter.values, expected.values)
 
 
@@ -821,7 +865,7 @@ def test_wind_var_q_bounds_scale_with_capability_table(lv_rural_net):
     opf = _build_sp(_annotate(lv_rural_net, var_q=0), pv_q_control="both")
     data = opf.static_generation_data
     idx = data.index[data.var_q.notna()]
-    table = qc.VDE_AR_N_4105.vqu_q_max
+    table = qc.DEFAULT_GRID_CODE.vqu_q_max
     for g in idx:
         pn = float(data["p_inst"][g])
         assert float(data["max_q"][g]) == pytest.approx(table[0, 0] * pn)
@@ -893,13 +937,20 @@ def test_mp_cpp_auto_detected(lv_rural_net):
 
 
 def test_mp_time_indexed_constraints(lv_rural_net):
-    """Multi-period Q-control constraints are indexed by (sgen, time)."""
+    """Multi-period Q-control constraints are (sgen, time, piece)-indexed.
+
+    The trailing piece index arrived in 0.4.1: a capability bound is a
+    piecewise-linear envelope, so it needs one inequality per affine piece
+    rather than one per element.
+    """
     mp = _build_mp(_annotate(lv_rural_net))
     keys = list(mp.model.sG_QP_pos)
     assert keys, "expected at least one Q-controlled sgen"
-    assert len(keys[0]) == 2
+    assert len(keys[0]) == 3
     times = {k[1] for k in keys}
     assert times == set(mp.model.T)
+    pieces = {k[2] for k in keys}
+    assert pieces == set(mp.model.sG_QP_PIECE)
 
 
 def test_mp_grid_code_selection_threaded(lv_rural_net):
@@ -947,3 +998,511 @@ def test_mp_per_sgen_strategies_are_independent(lv_rural_net):
     # each equality applies to exactly the sgen it was assigned to
     assert {k[0] for k in mp.model.sgen_fixed_cos_phi} == {pv[1]}
     assert {k[0] for k in mp.model.sgen_cpp} == {pv[2]}
+
+
+# ── parity with pandapower's own capability areas ─────────────────────────
+# Every area here should reproduce the matching class in
+# pandapower.control.controller.DERController.  4105 and 4110 are shapely
+# polygons upstream, so those skip without shapely; 4120 is plain branch
+# logic and always runs.
+
+PP_AREAS = "pandapower.control.controller.DERController"
+
+
+def _pp_pair(code_name, variant):
+    """Return pandapower's (pq_area, qv_area) for one variant of a code."""
+    import importlib
+
+    m = importlib.import_module(PP_AREAS)
+    if code_name == "4105":
+        return m.PQArea4105(variant + 1), m.QVArea4105(variant + 1)
+    if code_name == "4110":
+        return m.PQArea4110(), m.QVArea4110()
+    q = [
+        (-0.227902, 0.484322),
+        (-0.328684, 0.410775),
+        (-0.410775, 0.328684),
+    ][variant]
+    # potpourri encodes the 2015 active-power breakpoints (0.1 / 0.2).
+    return m.PQArea4120(*q, version=2015), m.QVArea4120(*q)
+
+
+@pytest.mark.parametrize(
+    ("code_name", "variant"),
+    [
+        ("4105", 0),
+        ("4105", 1),
+        ("4110", 0),
+        ("4120", 0),
+        ("4120", 1),
+        ("4120", 2),
+    ],
+)
+def test_areas_match_pandapower(code_name, variant):
+    """Our envelopes must equal pandapower's q_flexibility to machine eps.
+
+    Sampled strictly inside each breakpoint span: the polygon classes return
+    [0, 0] outside it, where numpy.interp saturates instead, and shapely's
+    ``contains`` excludes the boundary itself.
+    """
+    if code_name in ("4105", "4110"):
+        pytest.importorskip("shapely", reason="pandapower polygon areas")
+    pq_pp, qv_pp = _pp_pair(code_name, variant)
+    code = qc.GRID_CODES[code_name]
+
+    lo, hi = code.pq_area.exact_range()
+    p = np.linspace(lo + 1e-6, hi - 1e-6, 201)
+    ours = np.column_stack(code.pq_area.q_flexibility(p, variant))
+    assert np.allclose(pq_pp.q_flexibility(p), ours, atol=1e-9)
+
+    lo, hi = code.qv_area.exact_range()
+    v = np.linspace(lo + 1e-6, hi - 1e-6, 201)
+    ours = np.column_stack(code.qv_area.q_flexibility(v, variant))
+    assert np.allclose(
+        qv_pp.q_flexibility(np.ones_like(v), v), ours, atol=1e-9
+    )
+
+
+def test_4110_is_no_longer_a_placeholder():
+    """4110 carries its own values, not a copy of another code's.
+
+    This replaces the tripwire that guarded the placeholder: the medium
+    voltage rule now has a 0.05 p.u. active-power threshold that neither
+    other code shares.
+    """
+    code = qc.VDE_AR_N_4110
+    assert code.qp_p_high == pytest.approx(0.05)
+    assert code.n_variants == 1
+    assert not np.array_equal(
+        code.pq_area.x_points, qc.VDE_AR_N_4120.pq_area.x_points
+    )
+
+
+# ── linear pieces: exactness and low-P feasibility ────────────────────────
+
+
+@pytest.mark.parametrize("code_name", ["4105", "4110", "4120"])
+def test_pieces_reproduce_the_envelope_inside_its_span(code_name):
+    """Inside the breakpoints, min/max-of-pieces *is* the envelope."""
+    code = qc.GRID_CODES[code_name]
+    for area in (code.pq_area, code.qv_area):
+        lo, hi = area.exact_range()
+        for v in range(code.n_variants):
+            for x in np.linspace(lo, hi, 51):
+                env_lo, env_hi = area.q_flexibility(x, v)
+                got_hi = min(m * x + b for m, b in area.upper_pieces(v))
+                got_lo = max(m * x + b for m, b in area.lower_pieces(v))
+                assert got_hi == pytest.approx(env_hi, abs=1e-12)
+                assert got_lo == pytest.approx(env_lo, abs=1e-12)
+
+
+@pytest.mark.parametrize("code_name", ["4105", "4110", "4120"])
+def test_q_stays_feasible_down_to_zero_output(code_name):
+    """Regression: the Q(P) bounds must not cross below the first breakpoint.
+
+    Before 0.4.1 they did.  The lower bound extrapolated upward and the
+    upper one downward, so for VDE-AR-N 4120 no Q at all satisfied both
+    below P = 0.061 Pn — any curtailed sgen made the model infeasible.
+    The pieces are now taken over the operating range, which replaces each
+    bound by its hull where the exact area is non-convex.
+    """
+    code = qc.GRID_CODES[code_name]
+    area = code.pq_area
+    rng = qc.DEFAULT_P_RANGE_PU
+    for v in range(code.n_variants):
+        for p in np.linspace(*rng, 101):
+            hi = min(m * p + b for m, b in area.upper_pieces(v, rng))
+            lo = max(m * p + b for m, b in area.lower_pieces(v, rng))
+            assert lo <= hi + 1e-12, f"{code_name} v{v}: empty band at P={p}"
+
+
+@pytest.mark.parametrize("code_name", ["4105", "4110", "4120"])
+def test_hull_only_ever_relaxes(code_name):
+    """The hull may permit more than the grid code, never less.
+
+    Erring toward permissive is the deliberate choice: the exact area is
+    non-convex outside the breakpoints, and the strict alternative makes
+    the model infeasible rather than conservative.
+    """
+    code = qc.GRID_CODES[code_name]
+    area = code.pq_area
+    rng = qc.DEFAULT_P_RANGE_PU
+    for v in range(code.n_variants):
+        for p in np.linspace(*rng, 101):
+            env_lo, env_hi = area.q_flexibility(p, v)
+            hi = min(m * p + b for m, b in area.upper_pieces(v, rng))
+            lo = max(m * p + b for m, b in area.lower_pieces(v, rng))
+            assert hi >= env_hi - 1e-12
+            assert lo <= env_lo + 1e-12
+
+
+def test_hull_is_exact_at_full_output():
+    """Relaxation is confined below the reference point, not at rated P."""
+    rng = qc.DEFAULT_P_RANGE_PU
+    for name in ("4105", "4110", "4120"):
+        code = qc.GRID_CODES[name]
+        area = code.pq_area
+        for v in range(code.n_variants):
+            env_lo, env_hi = area.q_flexibility(1.0, v)
+            hi = min(m + b for m, b in area.upper_pieces(v, rng))
+            lo = max(m + b for m, b in area.lower_pieces(v, rng))
+            assert hi == pytest.approx(env_hi, abs=1e-12)
+            assert lo == pytest.approx(env_lo, abs=1e-12)
+
+
+def test_range_outside_the_envelope_warns():
+    """Leaving the exact span is flagged, not silent."""
+    area = qc.VDE_AR_N_4105.qv_area  # spans 0.90-1.10
+    with pytest.warns(qc.EnvelopeRangeWarning, match="exact range"):
+        qc.warn_if_outside_exact_range(area, 0.85, 1.15)
+
+
+def test_range_inside_the_envelope_is_quiet():
+    """The usual 0.9/1.1 bus limits must not warn against a wider area."""
+    area = qc.VDE_AR_N_4120.qv_area  # spans 0.87-1.15
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", qc.EnvelopeRangeWarning)
+        assert not qc.warn_if_outside_exact_range(area, 0.90, 1.10)
+
+
+# ── dead-band Q(U) characteristic ─────────────────────────────────────────
+
+
+def test_deadband_curve_is_zero_through_the_band():
+    """Q is held at zero across the dead band and ramps outside it."""
+    curve = qc.VDE_AR_N_4110.deadband_curve()
+    assert curve.deadband(0) == (0.95, 1.05)
+    for v in (0.95, 0.98, 1.00, 1.02, 1.05):
+        assert float(curve.step(v, 0)) == pytest.approx(0.0, abs=1e-12)
+    assert float(curve.step(0.90, 0)) == pytest.approx(0.484322, abs=1e-9)
+    assert float(curve.step(1.10, 0)) == pytest.approx(-0.484322, abs=1e-9)
+
+
+def test_deadband_curve_is_monotonic():
+    """More voltage never means more capacitive reactive power."""
+    curve = qc.VDE_AR_N_4120.deadband_curve()
+    q = [float(curve.step(v, 0)) for v in np.linspace(0.85, 1.20, 71)]
+    assert all(b <= a + 1e-12 for a, b in zip(q, q[1:]))
+
+
+def test_deadband_width_is_configurable():
+    """An operator parameterisation overrides the code's own plateau."""
+    curve = qc.VDE_AR_N_4120.deadband_curve(deadband=(0.98, 1.02))
+    assert curve.deadband(0) == (0.98, 1.02)
+    assert float(curve.step(1.00, 0)) == pytest.approx(0.0, abs=1e-12)
+    assert float(curve.step(0.96, 0)) > 0.0  # outside the narrower band
+
+
+def test_deadband_outside_the_curve_range_is_rejected():
+    """A dead band wider than the characteristic is an error."""
+    with pytest.raises(ValueError, match="must lie inside"):
+        qc.VDE_AR_N_4105.deadband_curve(deadband=(0.5, 1.5))
+
+
+def test_deadband_curve_covers_every_variant():
+    """One curve per var_q variant, matching the code."""
+    for name in ("4105", "4110", "4120"):
+        code = qc.GRID_CODES[name]
+        assert code.deadband_curve().n_variants == code.n_variants
+
+
+def test_padding_saturates_rather_than_extrapolating():
+    """A curve narrower than the bus limits holds its end value."""
+    curve = qc.VDE_AR_N_4105.deadband_curve()  # spans 0.90-1.10
+    wide = curve.padded(0.80, 1.20)
+    assert float(wide.step(0.80, 0)) == pytest.approx(
+        float(curve.step(0.90, 0)), abs=1e-12
+    )
+    assert float(wide.step(1.20, 0)) == pytest.approx(
+        float(curve.step(1.10, 0)), abs=1e-12
+    )
+    # Already-covering ranges are returned untouched.
+    assert curve.padded(0.95, 1.05) is curve
+
+
+@pytest.mark.parametrize(
+    ("spec", "expected"),
+    [
+        (None, None),
+        (False, None),
+        (True, (0.95, 1.05)),
+        ((0.98, 1.02), (0.98, 1.02)),
+    ],
+)
+def test_resolve_qu_curve_accepts_each_spelling(spec, expected):
+    """None/False keep the area; True and a pair build a curve."""
+    curve = qc.resolve_qu_curve(spec, "4110")
+    if expected is None:
+        assert curve is None
+    else:
+        assert curve.deadband(0) == expected
+
+
+def test_deadband_replaces_the_area_single_period(lv_rural_net):
+    """With a dead band the Q(U) bounds give way to the characteristic."""
+    opf = _build_sp(
+        _annotate(lv_rural_net), pv_q_control="both", qu_deadband=(0.98, 1.02)
+    )
+    assert hasattr(opf.model, "pv_qu_db_pw")
+    assert not hasattr(opf.model, "PV_QU_min")
+    assert not hasattr(opf.model, "PV_QU_max")
+    # Q(P) is unaffected: it does not depend on voltage.
+    assert hasattr(opf.model, "PV_QP_pos")
+
+
+def test_area_is_kept_without_a_deadband(lv_rural_net):
+    """The default stays the convex area, solvable with IPOPT alone."""
+    opf = _build_sp(_annotate(lv_rural_net), pv_q_control="both")
+    assert hasattr(opf.model, "PV_QU_min")
+    assert not hasattr(opf.model, "pv_qu_db_pw")
+
+
+def test_deadband_introduces_integrality(lv_rural_net):
+    """The dead band is genuinely non-convex, so it needs binaries."""
+    import pyomo.environ as pyo
+
+    opf = _build_sp(
+        _annotate(lv_rural_net), pv_q_control="both", qu_deadband=True
+    )
+    binaries = [
+        v for v in opf.model.component_data_objects(pyo.Var) if v.is_binary()
+    ]
+    assert binaries, "expected binary variables from the piecewise block"
+
+
+def test_deadband_multi_period_is_time_indexed(lv_rural_net):
+    """Every (sgen, time) pair gets its own point on the characteristic."""
+    mp = _build_mp(_annotate(lv_rural_net), qu_deadband=(0.98, 1.02))
+    assert hasattr(mp.model, "sG_qu_db_pw")
+    assert not hasattr(mp.model, "sG_QU_min")
+    keys = list(mp.model.sG_qu_db_IDX)
+    assert keys and len(keys[0]) == 2
+    assert {k[1] for k in keys} == set(mp.model.T)
+
+
+# ── var_q validated against the selected code ─────────────────────────────
+
+
+def test_var_q_beyond_the_codes_variants_is_rejected():
+    """4110 defines one variant, so var_q=1 is an error, not a silent clamp."""
+    with pytest.raises(ValueError, match="not valid for VDE-AR-N 4110"):
+        qc.check_var_q([0, 1], "4110")
+
+
+def test_var_q_within_range_is_accepted():
+    """Valid indices pass, and NaN (no Q-control) is ignored."""
+    qc.check_var_q([0, 1], "4105")
+    qc.check_var_q([0, 1, 2, np.nan], "4120")
+    qc.check_var_q([], "4110")
+
+
+def test_var_q_error_names_the_code_and_the_limit():
+    """The message has to say what to do about it."""
+    with pytest.raises(ValueError) as err:
+        qc.check_var_q([2], "4105", context="net.sgen.var_q")
+    text = str(err.value)
+    assert "net.sgen.var_q" in text
+    assert "VDE-AR-N 4105" in text
+    assert "0..1" in text
+
+
+def test_var_q_is_validated_when_building_a_model(lv_rural_net):
+    """The check fires from the model, not just the helper."""
+    with pytest.raises(ValueError, match="not valid for VDE-AR-N 4110"):
+        _build_sp(
+            _annotate(lv_rural_net, var_q=2),
+            pv_q_control="both",
+            grid_code="4110",
+        )
+
+
+# ── regressions from the independent review ───────────────────────────────
+
+
+@pytest.mark.parametrize("bad", [0.9, 1.7, 2.5, -0.5])
+def test_fractional_var_q_is_rejected_not_rounded(bad):
+    """A fractional var_q must fail, not silently pick a neighbour.
+
+    ``int(0.9)`` is 0, so truncating would quietly select variant 0 and
+    change dispatch with no error anywhere.
+    """
+    with pytest.raises(ValueError, match="whole number"):
+        qc.check_var_q([bad], "4120")
+
+
+def test_integral_float_var_q_is_accepted():
+    """pandas stores var_q as float64 whenever the column holds NaN."""
+    qc.check_var_q([0.0, 1.0, 2.0], "4120")
+    qc.check_var_q(np.array([0.0, 2.0]), "4120")
+
+
+def test_fractional_variant_rejected_at_the_envelope():
+    """The same guard on the lower-level accessor."""
+    with pytest.raises(IndexError, match="whole number"):
+        qc.VDE_AR_N_4120.qv_area.q_flexibility(1.0, 1.5)
+
+
+def test_qu_pieces_never_demand_q_the_code_does_not(lv_rural_net):
+    """Below the code's voltage span the pieces must relax, not extrapolate.
+
+    VDE-AR-N 4105's QV area starts at 0.90 p.u.  Extrapolating its lower
+    ramp to 0.85 requires Q >= +0.329 Pn, where the standard requires
+    nothing at all — the model would forbid a dispatch the grid code
+    permits.  Passing the bus voltage range switches to the hull.
+    """
+    area = qc.VDE_AR_N_4105.qv_area
+    v_span = (0.85, 1.10)
+    for v in np.linspace(*v_span, 51):
+        env_lo, env_hi = area.q_flexibility(v, 0)
+        lo = max(m * v + b for m, b in area.lower_pieces(0, v_span))
+        hi = min(m * v + b for m, b in area.upper_pieces(0, v_span))
+        assert lo <= env_lo + 1e-12, f"over-restrictive lower bound at v={v}"
+        assert hi >= env_hi - 1e-12, f"over-restrictive upper bound at v={v}"
+        assert lo <= hi + 1e-12
+
+
+def test_qu_pieces_unchanged_when_limits_sit_inside_the_span():
+    """Grids inside the code's own voltage range are unaffected by the hull."""
+    for name in ("4105", "4110", "4120"):
+        area = qc.GRID_CODES[name].qv_area
+        span = area.exact_range()
+        for v in range(qc.GRID_CODES[name].n_variants):
+            assert area.lower_pieces(v, span) == area.lower_pieces(v)
+            assert area.upper_pieces(v, span) == area.upper_pieces(v)
+
+
+def test_bus_voltage_range_reads_the_network(lv_rural_net):
+    """The span comes from net.bus, widened past the default when needed."""
+    net = copy.deepcopy(lv_rural_net)
+    net.bus["min_vm_pu"] = 0.85
+    net.bus["max_vm_pu"] = 1.15
+    assert qc.bus_voltage_range(net) == (0.85, 1.15)
+    # Tighter-than-default limits must not narrow the span below the
+    # default, or the pieces would stop covering the code's own range.
+    net.bus["min_vm_pu"] = 0.97
+    net.bus["max_vm_pu"] = 1.03
+    assert qc.bus_voltage_range(net) == (0.9, 1.1)
+
+
+def test_bus_voltage_range_falls_back_without_columns(lv_rural_net):
+    """A network with no limits gets pandapower's own default band."""
+    net = copy.deepcopy(lv_rural_net)
+    net.bus.drop(
+        columns=["min_vm_pu", "max_vm_pu"], errors="ignore", inplace=True
+    )
+    assert qc.bus_voltage_range(net) == qc.DEFAULT_V_RANGE_PU
+
+
+def test_wide_voltage_limits_keep_the_model_feasible(lv_rural_net):
+    """A grid allowing 0.85-1.15 must still build and stay satisfiable."""
+    net = _annotate(lv_rural_net)
+    net.bus["min_vm_pu"] = 0.85
+    net.bus["max_vm_pu"] = 1.15
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", qc.EnvelopeRangeWarning)
+        opf = _build_sp(net, pv_q_control="both", grid_code="4105")
+    code = opf._grid_code
+    v_span = qc.bus_voltage_range(net)
+    for v in np.linspace(*v_span, 41):
+        lo = max(m * v + b for m, b in code.qv_area.lower_pieces(0, v_span))
+        hi = min(m * v + b for m, b in code.qv_area.upper_pieces(0, v_span))
+        assert lo <= hi + 1e-12, f"empty Q band at v={v}"
+
+
+def test_multi_period_stores_the_resolved_grid_code(lv_rural_net):
+    """``_grid_code`` must mean the same on both models.
+
+    The single-period model stored the resolved GridCode while the
+    multi-period one kept the raw selector, so ``mp._grid_code.pq_area``
+    raised AttributeError for anyone who read it.
+    """
+    mp = _build_mp(_annotate(lv_rural_net), grid_code="4110")
+    assert mp._grid_code is qc.VDE_AR_N_4110
+    assert mp._grid_code.pq_area is qc.VDE_AR_N_4110.pq_area
+    opf = _build_sp(_annotate(lv_rural_net), grid_code="4110")
+    assert type(mp._grid_code) is type(opf._grid_code)
+
+
+# ── multi-period Q-control must not be a no-op ────────────────────────────
+
+
+def test_multi_period_reactive_bounds_come_from_the_grid_code(lv_rural_net):
+    """Regression: Q-controlled sgens must not be pinned to Q = 0.
+
+    ``static_generation_reactive_power_limits`` derives QsGmax / QsGmin from
+    the ``q_mvar`` profile, which SimBench ships as zero for PV.  Those
+    bounds pinned ``qsG`` to zero, so every multi-period Q-control
+    constraint — Q(P), Q(U), the inverter circle — was satisfied trivially
+    and no reactive power was ever dispatched.  The model looked
+    Q-controlled and did nothing.
+    """
+    net = _annotate(lv_rural_net)
+    assert (net.sgen["q_mvar"].abs() < 1e-12).all(), (
+        "fixture no longer has zero q_mvar; the regression it guards is gone"
+    )
+    mp = _build_mp(net)
+    qcs = list(mp.model.sGqc)
+    assert qcs, "expected Q-controlled sgens"
+    for g in qcs:
+        hi = float(pyo.value(mp.model.QsGmax[g, 0]))
+        lo = float(pyo.value(mp.model.QsGmin[g, 0]))
+        assert hi > 1e-9, f"sgen {g} cannot inject reactive power at all"
+        assert lo < -1e-9, f"sgen {g} cannot absorb reactive power at all"
+
+
+def test_multi_period_bounds_match_the_single_period_path(lv_rural_net):
+    """The two paths must grant the same capability for the same net.
+
+    They diverged: the single-period model overrode the profile-derived
+    bounds from the capability table, the multi-period one did not.
+    """
+    net = _annotate(lv_rural_net)
+    mp = _build_mp(net)
+    sp = _build_sp(net, pv_q_control="both")
+    sp_data = sp.static_generation_data
+    for g in mp.model.sGqc:
+        assert float(pyo.value(mp.model.QsGmax[g, 0])) == pytest.approx(
+            float(sp_data["max_q"][g]), rel=1e-9
+        )
+        assert float(pyo.value(mp.model.QsGmin[g, 0])) == pytest.approx(
+            float(sp_data["min_q"][g]), rel=1e-9
+        )
+
+
+def test_multi_period_bounds_scale_with_the_capability_table(lv_rural_net):
+    """The bounds are Pn times the grid code's own Q/Pn entries."""
+    net = _annotate(lv_rural_net)
+    mp = _build_mp(net)
+    table = mp._grid_code.vqu_q_max
+    p_inst = net.sgen["p_inst_mw"].values / mp.baseMVA
+    for g in mp.model.sGqc:
+        v = int(net.sgen["var_q"][g])
+        assert float(pyo.value(mp.model.QsGmax[g, 0])) == pytest.approx(
+            table[0, v] * p_inst[g], rel=1e-9
+        )
+        assert float(pyo.value(mp.model.QsGmin[g, 0])) == pytest.approx(
+            table[1, v] * p_inst[g], rel=1e-9
+        )
+
+
+def test_multi_period_bounds_track_the_selected_code(lv_rural_net):
+    """A different grid code gives different reactive bounds."""
+    net = _annotate(lv_rural_net)
+    a = _build_mp(net, grid_code="4110")
+    b = _build_mp(net, grid_code="4120")
+    g = list(a.model.sGqc)[0]
+    assert float(pyo.value(a.model.QsGmin[g, 0])) != pytest.approx(
+        float(pyo.value(b.model.QsGmin[g, 0]))
+    )
+
+
+def test_sgens_without_var_q_keep_their_profile_bounds(lv_rural_net):
+    """The override applies only to Q-controlled sgens."""
+    net = _annotate(lv_rural_net, var_q=None)
+    mp = _build_mp(net)
+    assert not getattr(mp, "sgen_qc_indices", [])
+    # Nothing was overridden, so the profile-derived bounds stand.
+    for g in list(mp.model.sG)[:3]:
+        assert float(pyo.value(mp.model.QsGmax[g, 0])) == pytest.approx(
+            abs(float(net.sgen["q_mvar"][g])) / mp.baseMVA, abs=1e-12
+        )

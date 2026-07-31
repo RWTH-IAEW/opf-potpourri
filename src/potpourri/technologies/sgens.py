@@ -7,8 +7,13 @@ import pyomo.environ as pyo
 from potpourri.technologies.flexibility import Flexibility_multi_period
 from potpourri.technologies.q_control import (
     DEFAULT_GRID_CODE,
+    DEFAULT_P_RANGE_PU,
+    attach_deadband_qu,
+    bus_voltage_range,
+    check_var_q,
     compute_q_curves,
     resolve_grid_code,
+    resolve_qu_curve,
 )
 
 
@@ -150,7 +155,9 @@ class Sgens_multi_period(Flexibility_multi_period):
             mutable=True,
         )
 
-    def static_generation_q_ctrl_data(self, net, grid_code=None):
+    def static_generation_q_ctrl_data(
+        self, net, grid_code=None, qu_deadband=None
+    ):
         """Compute Q(P)/Q(U) characteristic data for sgens with ``var_q`` set.
 
         Populates ``self.q_limit_parameter``, ``self.sgen_var_q``,
@@ -164,7 +171,10 @@ class Sgens_multi_period(Flexibility_multi_period):
             grid_code: Technical connection rule supplying the capability
                 envelope, as accepted by
                 :func:`~potpourri.technologies.q_control.resolve_grid_code`.
-                Defaults to VDE-AR-N 4105.
+                Defaults to VDE-AR-N 4120.
+            qu_deadband: Optional dead-band Q(U) characteristic replacing the
+                Q(U) capability area, as accepted by
+                :func:`~potpourri.technologies.q_control.resolve_qu_curve`.
         """
         if "var_q" not in net.sgen:
             self.sgen_qc_indices = []
@@ -172,6 +182,7 @@ class Sgens_multi_period(Flexibility_multi_period):
 
         code = resolve_grid_code(grid_code)
         self.grid_code = code
+        self.qu_curve = resolve_qu_curve(qu_deadband, code)
         self.q_limit_parameter = compute_q_curves(code)
         self.sgen_var_q = (
             net.sgen.var_q.values
@@ -190,6 +201,12 @@ class Sgens_multi_period(Flexibility_multi_period):
             for g in self.sgens_in_service_list
             if pd.notna(self.sgen_var_q[g])
         ]
+        check_var_q(
+            [self.sgen_var_q[g] for g in self.sgen_qc_indices],
+            code,
+            context="net.sgen.var_q",
+        )
+        self._reactive_bounds_from_grid_code(code)
 
     def _add_sgen_q_ctrl_mp(self, model):
         """Add time-indexed Q(P) and Q(U) constraints for controllable sgens.
@@ -202,7 +219,6 @@ class Sgens_multi_period(Flexibility_multi_period):
         they are skipped silently when the model has no such variable (e.g.
         in a linearised or DC formulation).
         """
-        qc = self.q_limit_parameter
         qc_list = [g for g in self.sgen_qc_indices if g in set(model.sGc)]
         if not qc_list:
             return
@@ -212,48 +228,80 @@ class Sgens_multi_period(Flexibility_multi_period):
         var_q = {g: int(self.sgen_var_q[g]) for g in qc_list}
         p_inst = {g: float(self.sgen_p_inst[g]) for g in qc_list}
 
-        @model.Constraint(model.sGqc, model.T)
-        def sG_QP_pos(model, g, t):
-            v = var_q[g]
-            return (
-                model.qsG[g, t]
-                <= qc.b_qp_max[v] * p_inst[g]
-                + qc.m_qp_max[v] * model.psG[g, t]
-            )
+        # Each grid-code bound is a piecewise-linear envelope, so it becomes
+        # one inequality per affine piece: the upper bound is the pointwise
+        # minimum of its pieces, the lower bound the pointwise maximum.  A
+        # single line cannot express the saturation shelf.
+        pq_area = self.grid_code.pq_area
+        qv_area = self.grid_code.qv_area
+        v_span = bus_voltage_range(self.net)
+        model.sG_QP_PIECE = pyo.RangeSet(
+            0, pq_area.max_pieces(DEFAULT_P_RANGE_PU) - 1
+        )
+        model.sG_QU_PIECE = pyo.RangeSet(0, qv_area.max_pieces(v_span) - 1)
 
-        @model.Constraint(model.sGqc, model.T)
-        def sG_QP_neg(model, g, t):
-            v = var_q[g]
-            return (
-                model.qsG[g, t]
-                >= qc.b_qp_min[v] * p_inst[g]
-                + qc.m_qp_min[v] * model.psG[g, t]
-            )
+        @model.Constraint(model.sGqc, model.T, model.sG_QP_PIECE)
+        def sG_QP_pos(model, g, t, k):
+            pieces = pq_area.upper_pieces(var_q[g], DEFAULT_P_RANGE_PU)
+            if k >= len(pieces):
+                return pyo.Constraint.Skip
+            m, b = pieces[k]
+            return model.qsG[g, t] <= m * model.psG[g, t] + b * p_inst[g]
+
+        @model.Constraint(model.sGqc, model.T, model.sG_QP_PIECE)
+        def sG_QP_neg(model, g, t, k):
+            pieces = pq_area.lower_pieces(var_q[g], DEFAULT_P_RANGE_PU)
+            if k >= len(pieces):
+                return pyo.Constraint.Skip
+            m, b = pieces[k]
+            return model.qsG[g, t] >= m * model.psG[g, t] + b * p_inst[g]
 
         if not hasattr(model, "v"):
             return
 
-        @model.Constraint(model.sGqc, model.T)
-        def sG_QU_min(model, g, t):
-            if g not in sGbs_lookup:
-                return pyo.Constraint.Skip
-            b = sGbs_lookup[g]
-            v = var_q[g]
-            return (
-                model.qsG[g, t]
-                >= (qc.m_qv[v] * model.v[b, t] + qc.b_qv_min[v]) * p_inst[g]
+        # A dead band cannot be expressed as a capability area: the feasible
+        # set pinches to Q = 0 around nominal voltage, which is not convex.
+        # When one is requested, Q is pinned to the characteristic instead.
+        qu_curve = getattr(self, "qu_curve", None)
+        if qu_curve is not None:
+            keys = [
+                (g, t) for g in qc_list for t in model.T if g in sGbs_lookup
+            ]
+            v_lo, v_hi = qv_area.exact_range()
+            attach_deadband_qu(
+                model,
+                "sG_qu_db",
+                keys,
+                q_of=lambda k: model.qsG[k[0], k[1]],
+                v_of=lambda k: model.v[sGbs_lookup[k[0]], k[1]],
+                pn_of=lambda k: p_inst[k[0]],
+                variant_of=lambda k: var_q[k[0]],
+                curve=qu_curve,
+                v_bounds=(v_lo, v_hi),
             )
+            return
 
-        @model.Constraint(model.sGqc, model.T)
-        def sG_QU_max(model, g, t):
+        @model.Constraint(model.sGqc, model.T, model.sG_QU_PIECE)
+        def sG_QU_min(model, g, t, k):
             if g not in sGbs_lookup:
                 return pyo.Constraint.Skip
-            b = sGbs_lookup[g]
-            v = var_q[g]
-            return (
-                model.qsG[g, t]
-                <= (qc.m_qv[v] * model.v[b, t] + qc.b_qv_max[v]) * p_inst[g]
-            )
+            pieces = qv_area.lower_pieces(var_q[g], v_span)
+            if k >= len(pieces):
+                return pyo.Constraint.Skip
+            b_bus = sGbs_lookup[g]
+            m, b = pieces[k]
+            return model.qsG[g, t] >= (m * model.v[b_bus, t] + b) * p_inst[g]
+
+        @model.Constraint(model.sGqc, model.T, model.sG_QU_PIECE)
+        def sG_QU_max(model, g, t, k):
+            if g not in sGbs_lookup:
+                return pyo.Constraint.Skip
+            pieces = qv_area.upper_pieces(var_q[g], v_span)
+            if k >= len(pieces):
+                return pyo.Constraint.Skip
+            b_bus = sGbs_lookup[g]
+            m, b = pieces[k]
+            return model.qsG[g, t] <= (m * model.v[b_bus, t] + b) * p_inst[g]
 
     def static_generation_inverter_data(self, net):
         """Compute inverter apparent-power ratings for the S² constraint.
@@ -426,6 +474,38 @@ class Sgens_multi_period(Flexibility_multi_period):
         )
         # self.static_generation_wind_var_q( self.net)
         self.static_generation_data["type"] = self.net.sgen.type.values
+
+    def _reactive_bounds_from_grid_code(self, code):
+        """Give Q-controlled sgens the capability the grid code grants them.
+
+        :meth:`static_generation_reactive_power_limits` derives ``QsGmax`` /
+        ``QsGmin`` from the ``q_mvar`` profile, which SimBench ships as zero
+        for PV.  Those bounds then pin ``qsG`` to zero, and every Q-control
+        constraint built on top of it — Q(P), Q(U), the inverter circle —
+        becomes vacuous: the model looks Q-controlled and dispatches no
+        reactive power at all.  The single-period path has always overridden
+        these bounds from the capability table
+        (``ACOPF.static_generation_reactive_power_limits``); the
+        multi-period one did not, and the call that would have done it sat
+        commented out next to the profile-derived defaults.
+
+        The override matches the single-period behaviour: for an sgen with
+        ``var_q`` set, the grid code decides the reactive bounds, not the
+        profile.  Set ``var_q`` to NaN on sgens that should keep their
+        profile-derived limits.
+        """
+        table = code.vqu_q_max
+        if not self.sgen_qc_indices or not hasattr(self, "QsGmax_data_dict"):
+            return
+        for g in self.sgen_qc_indices:
+            variant = int(self.sgen_var_q[g])
+            pn = float(self.sgen_p_inst[g])
+            hi = float(table[0, variant]) * pn
+            lo = float(table[1, variant]) * pn
+            for key in self.QsGmax_data_dict:
+                if (key[0] if isinstance(key, tuple) else key) == g:
+                    self.QsGmax_data_dict[key] = hi
+                    self.QsGmin_data_dict[key] = lo
 
     def get_all_Constraints_acopf(self, model):
         # QsG_Constraint

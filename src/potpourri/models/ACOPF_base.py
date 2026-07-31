@@ -10,10 +10,16 @@ from loguru import logger
 from potpourri.models.AC import AC
 from potpourri.models.OPF import OPF
 from potpourri.technologies.q_control import (
+    DEFAULT_P_RANGE_PU,
     DEFAULT_WIND_SGEN_TYPES,
     SgenTypeOverlapWarning,
+    attach_deadband_qu,
+    bus_voltage_range,
+    check_var_q,
     compute_q_curves,
     resolve_grid_code,
+    resolve_qu_curve,
+    warn_if_outside_exact_range,
 )
 
 # sgen ``type`` values treated as PV for ``pv_q_control``.  SimBench spells PV
@@ -285,7 +291,7 @@ class ACOPF(AC, OPF):
         parameters for the Q-P and Q-U curves used in add_OPF() constraints.
 
         The curves come from the grid code selected via
-        :meth:`add_OPF`'s ``grid_code`` argument (default VDE-AR-N 4105).
+        :meth:`add_OPF`'s ``grid_code`` argument (default VDE-AR-N 4120).
         """
         code = resolve_grid_code(getattr(self, "_grid_code", None))
         self.q_limit_parameter = compute_q_curves(code)
@@ -299,6 +305,14 @@ class ACOPF(AC, OPF):
             sgens_var_q = self.static_generation_data.index[
                 self.static_generation_data.var_q.notna()
             ]
+            # Before indexing the table: how many variants exist depends on
+            # the code, so an out-of-range var_q should name the code rather
+            # than surface as an IndexError from the row lookup below.
+            check_var_q(
+                self.static_generation_data.var_q[sgens_var_q],
+                code,
+                context="net.sgen.var_q",
+            )
 
             try:
                 p_inst = self.net.sgen.p_inst_mw.values / self.baseMVA
@@ -354,6 +368,7 @@ class ACOPF(AC, OPF):
         fixed_cos_phi: "float | None" = None,
         cos_phi_p_profile: bool = False,
         grid_code=None,
+        qu_deadband=None,
         sgen_types=None,
         wind_sgen_types=None,
         **kwargs,
@@ -457,9 +472,23 @@ class ACOPF(AC, OPF):
                 included regardless of type.
             grid_code: Technical connection rule supplying the Q(P)/Q(U)
                 capability envelope and the P(U) / cos(phi)(P) thresholds.
-                Accepts ``None`` (VDE-AR-N 4105, the default), a short name
-                such as ``"4105"`` or ``"4110"``, or a
+                Accepts ``None`` (VDE-AR-N 4120, the default), a short name
+                such as ``"4105"``, ``"4110"`` or ``"4120"``, or a
                 :class:`~potpourri.technologies.q_control.GridCode`.
+                Note that ``var_q`` must index a variant the selected code
+                defines: 4105 has two, 4110 one and 4120 three.
+            qu_deadband: Replace the Q(U) capability *area* with a Q(U)
+                *characteristic* that has a dead band, pinning Q to a curve
+                of voltage instead of bounding it.  ``None`` keeps the area;
+                ``True`` uses the grid code's own QV plateau as the dead
+                band; a ``(v_low, v_high)`` pair sets it explicitly; a
+                :class:`~potpourri.technologies.q_control.QVCurve` is used
+                as given.
+
+                The feasible set pinches to Q = 0 inside the dead band and
+                is therefore **not convex**, so this builds an integer
+                piecewise block and needs a MIP-capable solver (MindtPy,
+                CBC, GLPK, Gurobi).  IPOPT alone cannot solve it.
                 Selecting a grid code whose parameters are still
                 placeholders emits a
                 :class:`~potpourri.technologies.q_control.ProvisionalGridCodeWarning`.
@@ -713,59 +742,111 @@ class ACOPF(AC, OPF):
         if angle_limits:
             self._add_branch_angle_limits()
 
-        # --- wind generation q requirements variant 3---
-        def QW_pos(model, w):
-            return (
-                model.qsG[w]
-                <= self.q_limit_parameter.b_qp_max[model.var_q[w]]
-                * model.PsG_inst[w]
-                + self.q_limit_parameter.m_qp_max[model.var_q[w]]
-                * model.psG[w]
+        # --- wind generation reactive-power capability ---
+        # Each grid-code bound is a piecewise-linear envelope, so it becomes
+        # one inequality per affine piece: the upper bound is the pointwise
+        # minimum of its pieces, the lower bound the pointwise maximum.  A
+        # single line cannot express the saturation shelf, which is what let
+        # Q run past the grid-code limit at high P and at nominal voltage
+        # before 0.4.1.
+        pq_area, qv_area = code.pq_area, code.qv_area
+        # How far voltage may travel decides whether the Q(U) pieces need
+        # the hull: extrapolating the end segment below the code's own span
+        # demands reactive power the standard never asks for.
+        v_span = bus_voltage_range(self.net)
+        self.model.QP_PIECE = pyo.RangeSet(
+            0, pq_area.max_pieces(DEFAULT_P_RANGE_PU) - 1
+        )
+        self.model.QU_PIECE = pyo.RangeSet(0, qv_area.max_pieces(v_span) - 1)
+
+        max_vm_pu, min_vm_pu = self.v_limits
+        if len(max_vm_pu) and len(min_vm_pu):
+            warn_if_outside_exact_range(
+                qv_area,
+                float(min_vm_pu.min()),
+                float(max_vm_pu.max()),
+                context=f"{code.title} Q(U)",
             )
 
-        def QW_neg(model, w):
-            return (
-                model.qsG[w]
-                >= self.q_limit_parameter.b_qp_min[model.var_q[w]]
-                * model.PsG_inst[w]
-                + self.q_limit_parameter.m_qp_min[model.var_q[w]]
-                * model.psG[w]
+        def QW_pos(model, w, k):
+            pieces = pq_area.upper_pieces(
+                int(pyo.value(model.var_q[w])), DEFAULT_P_RANGE_PU
             )
+            if k >= len(pieces):
+                return pyo.Constraint.Skip
+            m, b = pieces[k]
+            return model.qsG[w] <= m * model.psG[w] + b * model.PsG_inst[w]
 
-        self.model.QW_pos_pyo = pyo.Constraint(self.model.WINDc, rule=QW_pos)
-        self.model.QW_neg_pyo = pyo.Constraint(self.model.WINDc, rule=QW_neg)
+        def QW_neg(model, w, k):
+            pieces = pq_area.lower_pieces(
+                int(pyo.value(model.var_q[w])), DEFAULT_P_RANGE_PU
+            )
+            if k >= len(pieces):
+                return pyo.Constraint.Skip
+            m, b = pieces[k]
+            return model.qsG[w] >= m * model.psG[w] + b * model.PsG_inst[w]
+
+        self.model.QW_pos_pyo = pyo.Constraint(
+            self.model.WINDc, self.model.QP_PIECE, rule=QW_pos
+        )
+        self.model.QW_neg_pyo = pyo.Constraint(
+            self.model.WINDc, self.model.QP_PIECE, rule=QW_neg
+        )
 
         sGbs_lookup = {g: b for (g, b) in self.model.sGbs}
 
-        def QV_min(model, w):
-            if w not in sGbs_lookup:
-                return pyo.Constraint.Skip
-            b = sGbs_lookup[w]
-            return (
-                model.qsG[w]
-                >= (
-                    self.q_limit_parameter.m_qv[model.var_q[w]] * model.v[b]
-                    + self.q_limit_parameter.b_qv_min[model.var_q[w]]
-                )
-                * model.PsG_inst[w]
+        # A dead band cannot be expressed as a capability area: the feasible
+        # set pinches to Q = 0 around nominal voltage, which is not convex.
+        # When one is requested, Q is pinned to the characteristic instead of
+        # bounded by the area, via an integer piecewise block.
+        qu_curve = resolve_qu_curve(qu_deadband, code)
+        if qu_curve is not None:
+            wind_keys = [w for w in self.model.WINDc if w in sGbs_lookup]
+            attach_deadband_qu(
+                self.model,
+                "wind_qu_db",
+                wind_keys,
+                q_of=lambda w: self.model.qsG[w],
+                v_of=lambda w: self.model.v[sGbs_lookup[w]],
+                pn_of=lambda w: float(pyo.value(self.model.PsG_inst[w])),
+                variant_of=lambda w: int(pyo.value(self.model.var_q[w])),
+                curve=qu_curve,
+                v_bounds=v_span,
             )
 
-        self.model.QU_min_pyo = pyo.Constraint(self.model.WINDc, rule=QV_min)
-
-        def QV_max(model, w):
+        def QV_min(model, w, k):
             if w not in sGbs_lookup:
                 return pyo.Constraint.Skip
-            b = sGbs_lookup[w]
-            return (
-                model.qsG[w]
-                <= (
-                    self.q_limit_parameter.m_qv[model.var_q[w]] * model.v[b]
-                    + self.q_limit_parameter.b_qv_max[model.var_q[w]]
-                )
-                * model.PsG_inst[w]
+            pieces = qv_area.lower_pieces(
+                int(pyo.value(model.var_q[w])), v_span
+            )
+            if k >= len(pieces):
+                return pyo.Constraint.Skip
+            b_bus = sGbs_lookup[w]
+            m, b = pieces[k]
+            return model.qsG[w] >= (m * model.v[b_bus] + b) * model.PsG_inst[w]
+
+        if qu_curve is None:
+            self.model.QU_min_pyo = pyo.Constraint(
+                self.model.WINDc, self.model.QU_PIECE, rule=QV_min
             )
 
-        self.model.QU_max_pyo = pyo.Constraint(self.model.WINDc, rule=QV_max)
+        def QV_max(model, w, k):
+            if w not in sGbs_lookup:
+                return pyo.Constraint.Skip
+            pieces = qv_area.upper_pieces(
+                int(pyo.value(model.var_q[w])), v_span
+            )
+            if k >= len(pieces):
+                return pyo.Constraint.Skip
+            b_bus = sGbs_lookup[w]
+            m, b = pieces[k]
+            return model.qsG[w] <= (m * model.v[b_bus] + b) * model.PsG_inst[w]
+
+        if qu_curve is None:
+            self.model.QU_max_pyo = pyo.Constraint(
+                self.model.WINDc, self.model.QU_PIECE, rule=QV_max
+            )
 
         # --- optional Q(P) / Q(U) for PV-type sgens ---
         # Normalise legacy bool to string mode; False/None → skip entirely.
@@ -823,64 +904,95 @@ class ACOPF(AC, OPF):
                         self.model.PVc
                     ],
                 )
-                qc = self.q_limit_parameter
-
                 if _pv_mode in ("qp", "both"):
 
-                    def PV_QP_pos(model, g):
-                        v = model.PV_var_q[g]
+                    def PV_QP_pos(model, g, k):
+                        v = int(pyo.value(model.PV_var_q[g]))
+                        pieces = pq_area.upper_pieces(v, DEFAULT_P_RANGE_PU)
+                        if k >= len(pieces):
+                            return pyo.Constraint.Skip
+                        m, b = pieces[k]
                         return (
                             model.qsG[g]
-                            <= qc.b_qp_max[v] * model.PV_p_inst[g]
-                            + qc.m_qp_max[v] * model.psG[g]
+                            <= m * model.psG[g] + b * model.PV_p_inst[g]
                         )
 
-                    def PV_QP_neg(model, g):
-                        v = model.PV_var_q[g]
+                    def PV_QP_neg(model, g, k):
+                        v = int(pyo.value(model.PV_var_q[g]))
+                        pieces = pq_area.lower_pieces(v, DEFAULT_P_RANGE_PU)
+                        if k >= len(pieces):
+                            return pyo.Constraint.Skip
+                        m, b = pieces[k]
                         return (
                             model.qsG[g]
-                            >= qc.b_qp_min[v] * model.PV_p_inst[g]
-                            + qc.m_qp_min[v] * model.psG[g]
+                            >= m * model.psG[g] + b * model.PV_p_inst[g]
                         )
 
                     self.model.PV_QP_pos = pyo.Constraint(
-                        self.model.PVc, rule=PV_QP_pos
+                        self.model.PVc, self.model.QP_PIECE, rule=PV_QP_pos
                     )
                     self.model.PV_QP_neg = pyo.Constraint(
-                        self.model.PVc, rule=PV_QP_neg
+                        self.model.PVc, self.model.QP_PIECE, rule=PV_QP_neg
                     )
 
                 if _pv_mode in ("qu", "both"):
                     sGbs_lookup_pv = {g: b for (g, b) in self.model.sGbs}
 
-                    def PV_QU_min(model, g):
+                    def PV_QU_min(model, g, k):
                         if g not in sGbs_lookup_pv:
                             return pyo.Constraint.Skip
-                        b = sGbs_lookup_pv[g]
-                        v = model.PV_var_q[g]
+                        v = int(pyo.value(model.PV_var_q[g]))
+                        pieces = qv_area.lower_pieces(v, v_span)
+                        if k >= len(pieces):
+                            return pyo.Constraint.Skip
+                        b_bus = sGbs_lookup_pv[g]
+                        m, b = pieces[k]
                         return (
                             model.qsG[g]
-                            >= (qc.m_qv[v] * model.v[b] + qc.b_qv_min[v])
-                            * model.PV_p_inst[g]
+                            >= (m * model.v[b_bus] + b) * model.PV_p_inst[g]
                         )
 
-                    def PV_QU_max(model, g):
+                    def PV_QU_max(model, g, k):
                         if g not in sGbs_lookup_pv:
                             return pyo.Constraint.Skip
-                        b = sGbs_lookup_pv[g]
-                        v = model.PV_var_q[g]
+                        v = int(pyo.value(model.PV_var_q[g]))
+                        pieces = qv_area.upper_pieces(v, v_span)
+                        if k >= len(pieces):
+                            return pyo.Constraint.Skip
+                        b_bus = sGbs_lookup_pv[g]
+                        m, b = pieces[k]
                         return (
                             model.qsG[g]
-                            <= (qc.m_qv[v] * model.v[b] + qc.b_qv_max[v])
-                            * model.PV_p_inst[g]
+                            <= (m * model.v[b_bus] + b) * model.PV_p_inst[g]
                         )
 
-                    self.model.PV_QU_min = pyo.Constraint(
-                        self.model.PVc, rule=PV_QU_min
-                    )
-                    self.model.PV_QU_max = pyo.Constraint(
-                        self.model.PVc, rule=PV_QU_max
-                    )
+                    if qu_curve is None:
+                        self.model.PV_QU_min = pyo.Constraint(
+                            self.model.PVc,
+                            self.model.QU_PIECE,
+                            rule=PV_QU_min,
+                        )
+                        self.model.PV_QU_max = pyo.Constraint(
+                            self.model.PVc,
+                            self.model.QU_PIECE,
+                            rule=PV_QU_max,
+                        )
+                    else:
+                        attach_deadband_qu(
+                            self.model,
+                            "pv_qu_db",
+                            [g for g in self.model.PVc if g in sGbs_lookup_pv],
+                            q_of=lambda g: self.model.qsG[g],
+                            v_of=lambda g: self.model.v[sGbs_lookup_pv[g]],
+                            pn_of=lambda g: float(
+                                pyo.value(self.model.PV_p_inst[g])
+                            ),
+                            variant_of=lambda g: int(
+                                pyo.value(self.model.PV_var_q[g])
+                            ),
+                            curve=qu_curve,
+                            v_bounds=v_span,
+                        )
 
         # --- inverter apparent-power circle ---
         if inverter_s2 and "sn_mva" in self.net.sgen:

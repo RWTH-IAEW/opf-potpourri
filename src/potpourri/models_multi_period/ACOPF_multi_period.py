@@ -8,6 +8,7 @@ from potpourri.technologies.generator import Generator_multi_period
 from potpourri.technologies.demand import Demand_multi_period
 from potpourri.technologies.windpower import Windpower_multi_period
 from potpourri.technologies.sgens import Sgens_multi_period
+from potpourri.technologies.q_control import resolve_grid_code
 import numpy as np
 import pandas as pd
 from loguru import logger
@@ -46,7 +47,9 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
         # The grid code applies model-wide; set it via add_OPF(grid_code=...).
         if "var_q" in self.net.sgen:
             sgens_object.static_generation_q_ctrl_data(
-                self.net, grid_code=getattr(self, "_grid_code", None)
+                self.net,
+                grid_code=getattr(self, "_grid_code", None),
+                qu_deadband=getattr(self, "_qu_deadband", None),
             )
 
         # Populate inverter S² rating data when sn_mva is present.
@@ -203,7 +206,7 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
 
         return max_vm_pu, min_vm_pu
 
-    def add_OPF(self, grid_code=None, **kwargs):
+    def add_OPF(self, grid_code=None, qu_deadband=None, **kwargs):
         """Extend OPF.add_OPF() with voltage bounds, AC thermal limits, and
         reactive power constraints.
 
@@ -212,11 +215,27 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
                 capability envelope and the P(U) / cos(phi)(P) thresholds,
                 as accepted by
                 :func:`~potpourri.technologies.q_control.resolve_grid_code`.
-                Applies model-wide and defaults to VDE-AR-N 4105.
+                Applies model-wide and defaults to VDE-AR-N 4120.
+            qu_deadband: Replace the Q(U) capability *area* with a Q(U)
+                *characteristic* that has a dead band, pinning Q to a curve
+                of voltage instead of bounding it.  ``None`` keeps the area;
+                ``True`` uses the grid code's own QV plateau; a
+                ``(v_low, v_high)`` pair sets the dead band explicitly; a
+                :class:`~potpourri.technologies.q_control.QVCurve` is used
+                as given.  Applies model-wide.
+
+                The feasible set pinches to Q = 0 inside the dead band and
+                is therefore **not convex**, so this builds an integer
+                piecewise block per sgen and time step and needs a
+                MIP-capable solver (MindtPy, CBC, GLPK, Gurobi).
             **kwargs: Forwarded to the base implementation.
         """
         # Consumed by _calc_opf_parameters, which super().add_OPF() reaches.
-        self._grid_code = grid_code
+        # Resolved here rather than downstream so that ``self._grid_code``
+        # means the same thing as it does on the single-period model: the
+        # GridCode itself, not whatever selector was passed in.
+        self._grid_code = resolve_grid_code(grid_code)
+        self._qu_deadband = qu_deadband
 
         super().add_OPF(**kwargs)
 

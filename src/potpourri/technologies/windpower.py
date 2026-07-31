@@ -7,7 +7,10 @@ import pyomo.environ as pyo
 from loguru import logger
 from potpourri.technologies.q_control import (
     DEFAULT_GRID_CODE,
+    DEFAULT_P_RANGE_PU,
     DEFAULT_WIND_SGEN_TYPES,
+    bus_voltage_range,
+    check_var_q,
     compute_q_curves,
     resolve_grid_code,
 )
@@ -17,15 +20,14 @@ from potpourri.technologies.sgens import Sgens_multi_period
 # ---------------------------------------------------------------------------
 # Grid-code Q-curve parameters come from the registry in
 # potpourri.technologies.q_control, not from a private copy.  This module used
-# to carry its own VDE-AR-N 4105 table and its own reimplementation of the
+# to carry its own capability table and its own reimplementation of the
 # Q-curve maths, which meant `grid_code` never reached the wind or
 # hosting-capacity paths and the numbers could drift from the registry
 # silently.
 #
 # The simplified hosting-capacity check uses the widest envelope the selected
 # code offers: the largest capacitive entry and the most negative inductive
-# one.  For VDE-AR-N 4105 that is +0.48 / -0.41, matching the values this
-# module previously hard-coded.
+# one.  For the default VDE-AR-N 4120 that is +0.484322 / -0.410775.
 # ---------------------------------------------------------------------------
 
 
@@ -36,8 +38,8 @@ def _hc_q_bounds(code):
 
 
 # Defaults for the HC keyword arguments below.  Derived from the default
-# grid code so they track the registry; +0.48 / -0.41 for VDE-AR-N 4105,
-# the values this module previously hard-coded.
+# grid code so they track the registry: +0.484322 / -0.410775 for VDE-AR-N
+# 4120, the widest capacitive and widest inductive variant it offers.
 _DEFAULT_HC_Q_MAX, _DEFAULT_HC_Q_MIN = _hc_q_bounds(DEFAULT_GRID_CODE)
 
 
@@ -45,8 +47,9 @@ class Windpower_multi_period(Sgens_multi_period):
     """Multi-period wind generator device module, extending sgen with
     Q-control and hosting-capacity (HC) support.
 
-    The Q-control constraints implement the VDE-AR-N 4105 / BDEW grid-code
-    voltage-reactive power characteristic for medium-voltage wind generators.
+    The Q-control constraints implement the capability area of the selected
+    grid code (see :mod:`potpourri.technologies.q_control`), defaulting to
+    VDE-AR-N 4120.
 
     Args:
         net: pandapower network.  If ``net.bus`` contains a ``windpot_p_mw``
@@ -62,11 +65,11 @@ class Windpower_multi_period(Sgens_multi_period):
             (MVA).  A generator with ``y=1`` must carry at least this much
             apparent power.
         qp_max: Maximum Q/P ratio (capacitive, positive) for the simplified
-            HC grid-code Q-P constraint.  Default: 0.48 (VDE-AR-N 4105,
-            variant 0).
+            HC grid-code Q-P constraint.  Default: 0.484322, the widest
+            capacitive variant of VDE-AR-N 4120.
         qp_min: Minimum Q/P ratio (inductive, negative) for the simplified
-            HC grid-code Q-P constraint.  Default: -0.41 (VDE-AR-N 4105,
-            variant 0).
+            HC grid-code Q-P constraint.  Default: -0.410775, the widest
+            inductive variant of the same code.
     """
 
     def __init__(
@@ -228,12 +231,13 @@ class Windpower_multi_period(Sgens_multi_period):
         return True
 
     def static_generation_wind_var_q(self, net, grid_code=None):
-        """Compute Q(P) and Q(U) characteristic slopes from VDE-AR-N 4105
-        and populate ``static_generation_data`` Q limits.
+        """Populate ``static_generation_data`` Q limits from the grid code.
 
-        The characteristic is parameterised by three operating variants
-        (``var_q`` column in ``net.sgen``).  Each variant selects a different
-        Q/P intercept from the selected grid code's capability table.
+        The capability is parameterised by operating variants (the ``var_q``
+        column in ``net.sgen``); each selects one column of the selected grid
+        code's capability table.  How many variants exist depends on the
+        code — VDE-AR-N 4105 defines two, 4110 one and 4120 three — so
+        ``var_q`` is validated against the resolved code.
         """
         code = resolve_grid_code(grid_code)
         self.grid_code = code
@@ -247,6 +251,11 @@ class Windpower_multi_period(Sgens_multi_period):
             sgens_var_q = self.static_generation_data.index[
                 self.static_generation_data.var_q.notna()
             ]
+            check_var_q(
+                self.static_generation_data.var_q[sgens_var_q],
+                code,
+                context="net.sgen.var_q",
+            )
 
             try:
                 p_inst = self.net.sgen.p_inst_mw.values / self.baseMVA
@@ -304,53 +313,64 @@ class Windpower_multi_period(Sgens_multi_period):
         """Add Q(P) and Q(U) constraints for controllable wind and HC
         generators."""
 
-        @model.Constraint(model.WINDc)
-        def QW_pos(model, w):
-            return (
-                model.qsG[w]
-                <= self.q_limit_parameter.b_qp_max[model.var_q[w]]
-                * model.PsG_inst[w]
-                + self.q_limit_parameter.m_qp_max[model.var_q[w]]
-                * model.psG[w]
+        # Each grid-code bound is a piecewise-linear envelope, so it becomes
+        # one inequality per affine piece: the upper bound is the pointwise
+        # minimum of its pieces, the lower bound the pointwise maximum.  A
+        # single line cannot express the saturation shelf.
+        pq_area = self.grid_code.pq_area
+        qv_area = self.grid_code.qv_area
+        v_span = bus_voltage_range(self.net)
+        sGbs_lookup = {g: b for (g, b) in model.sGbs}
+        model.W_QP_PIECE = pyo.RangeSet(
+            0, pq_area.max_pieces(DEFAULT_P_RANGE_PU) - 1
+        )
+        model.W_QU_PIECE = pyo.RangeSet(0, qv_area.max_pieces(v_span) - 1)
+
+        @model.Constraint(model.WINDc, model.W_QP_PIECE)
+        def QW_pos(model, w, k):
+            pieces = pq_area.upper_pieces(
+                int(pyo.value(model.var_q[w])), DEFAULT_P_RANGE_PU
             )
+            if k >= len(pieces):
+                return pyo.Constraint.Skip
+            m, b = pieces[k]
+            return model.qsG[w] <= m * model.psG[w] + b * model.PsG_inst[w]
 
-        @model.Constraint(model.WINDc)
-        def QW_neg(model, w):
-            return (
-                model.qsG[w]
-                >= self.q_limit_parameter.b_qp_min[model.var_q[w]]
-                * model.PsG_inst[w]
-                + self.q_limit_parameter.m_qp_min[model.var_q[w]]
-                * model.psG[w]
+        @model.Constraint(model.WINDc, model.W_QP_PIECE)
+        def QW_neg(model, w, k):
+            pieces = pq_area.lower_pieces(
+                int(pyo.value(model.var_q[w])), DEFAULT_P_RANGE_PU
             )
+            if k >= len(pieces):
+                return pyo.Constraint.Skip
+            m, b = pieces[k]
+            return model.qsG[w] >= m * model.psG[w] + b * model.PsG_inst[w]
 
-        @model.Constraint(model.WINDc)
-        def QV_min(model, w):
-            for g, b in model.sGbs:
-                if g == w:
-                    return (
-                        model.qsG[w]
-                        >= (
-                            self.q_limit_parameter.m_qv[model.var_q[w]]
-                            * model.v[b]
-                            + self.q_limit_parameter.b_qv_min[model.var_q[w]]
-                        )
-                        * model.PsG_inst[w]
-                    )
+        @model.Constraint(model.WINDc, model.W_QU_PIECE)
+        def QV_min(model, w, k):
+            if w not in sGbs_lookup:
+                return pyo.Constraint.Skip
+            pieces = qv_area.lower_pieces(
+                int(pyo.value(model.var_q[w])), v_span
+            )
+            if k >= len(pieces):
+                return pyo.Constraint.Skip
+            b_bus = sGbs_lookup[w]
+            m, b = pieces[k]
+            return model.qsG[w] >= (m * model.v[b_bus] + b) * model.PsG_inst[w]
 
-        @model.Constraint(model.WINDc)
-        def QV_max(model, w):
-            for g, b in model.sGbs:
-                if g == w:
-                    return (
-                        model.qsG[w]
-                        <= (
-                            self.q_limit_parameter.m_qv[model.var_q[w]]
-                            * model.v[b]
-                            + self.q_limit_parameter.b_qv_max[model.var_q[w]]
-                        )
-                        * model.PsG_inst[w]
-                    )
+        @model.Constraint(model.WINDc, model.W_QU_PIECE)
+        def QV_max(model, w, k):
+            if w not in sGbs_lookup:
+                return pyo.Constraint.Skip
+            pieces = qv_area.upper_pieces(
+                int(pyo.value(model.var_q[w])), v_span
+            )
+            if k >= len(pieces):
+                return pyo.Constraint.Skip
+            b_bus = sGbs_lookup[w]
+            m, b = pieces[k]
+            return model.qsG[w] <= (m * model.v[b_bus] + b) * model.PsG_inst[w]
 
         @model.Constraint(model.WIND_HC)
         def SW_max(model, w):
@@ -366,7 +386,7 @@ class Windpower_multi_period(Sgens_multi_period):
                 >= model.SWmin[w] ** 2 * model.y[w]
             )
 
-        # Simplified HC Q-P bounds (VDE-AR-N 4105, variant 0)
+        # Simplified HC Q-P bounds: the widest band the grid code offers
         @model.Constraint(model.WIND_HC)
         def QW_min(model, w):
             return model.qsG[w] >= self.qp_min * model.psG[w]

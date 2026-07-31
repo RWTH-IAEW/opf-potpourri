@@ -251,8 +251,8 @@ pv.get_all(opf.model)
 ## Wind power
 
 `Windpower_multi_period` extends `Sgens_multi_period` with reactive-power
-Q-curve constraints for wind generators based on the VDE-AR-N 4105 / BDEW
-grid code.  It also supports hosting-capacity (HC) binary placement via
+Q-curve constraints for wind generators based on the selected grid code.
+It also supports hosting-capacity (HC) binary placement via
 `y[w] ∈ {0, 1}`.
 
 ### Constructor
@@ -274,8 +274,8 @@ Windpower_multi_period(
 |---|---|---|
 | `sw_max_mva` | `10 000` | Maximum apparent power per HC wind generator (MVA) |
 | `sw_min_mva` | `0.0` | Minimum apparent power for an active HC generator (MVA) |
-| `qp_max` | `0.48` | Maximum Q/P ratio (capacitive) — VDE-AR-N 4105 variant 0 |
-| `qp_min` | `−0.41` | Minimum Q/P ratio (inductive) — VDE-AR-N 4105 variant 0 |
+| `qp_max` | `0.484322` | Maximum Q/P ratio (capacitive) — widest variant of the default VDE-AR-N 4120 |
+| `qp_min` | `−0.410775` | Minimum Q/P ratio (inductive) — widest variant of the same code |
 
 The Q-curve characteristic is computed from module-level constants
 `_VQU_V_POINTS` and `_VQU_Q_MAX` that encode the full three-variant

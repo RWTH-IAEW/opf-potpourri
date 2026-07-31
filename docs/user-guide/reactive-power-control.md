@@ -27,6 +27,7 @@ no effect:
 | Constraint | Single-period (`ACOPF.add_OPF`) | Multi-period (`ACOPF_multi_period.add_OPF`) |
 |---|---|---|
 | Q(P) / Q(U) | `pv_q_control="qp"` / `"qu"` / `"both"`, `net.sgen.var_q` set, **and** the sgen's `type` in `sgen_types` | automatic from `net.sgen.var_q` (no type filter) |
+| Q(U) dead band | `qu_deadband=True` / `(v_lo, v_hi)` / a `QVCurve`, replacing the Q(U) area | same argument on `add_OPF`, model-wide |
 | Inverter S² circle | `inverter_s2=True` **and** `net.sgen.sn_mva` present | automatic from `net.sgen.sn_mva` |
 | cos(φ) cone | `inverter_s2=True` **and** `sn_mva` **and** a `cos_phi_min` value | automatic from `sn_mva` **and** `net.sgen.cos_phi_min` |
 | P(U) curtailment | `pu_curtail=True` | automatic from `net.sgen.pu_curtail` |
@@ -133,6 +134,21 @@ outside HV because only `Wind` matched):
     It keys purely off `var_q`, so it reaches every annotated sgen regardless
     of category.  Only the single-period model filters by `type`.
 
+!!! danger "Fixed in 0.4.1 — multi-period Q-control did nothing"
+    The multi-period reactive bounds `QsGmax` / `QsGmin` were derived from
+    the `q_mvar` profile, which SimBench ships as **zero** for PV.  That
+    pinned `qsG` to zero, so every multi-period Q-control constraint —
+    Q(P), Q(U), the inverter circle — was satisfied trivially and **no
+    reactive power was ever dispatched**.  The model looked Q-controlled
+    and was not.
+
+    The single-period path had always overridden those bounds from the
+    capability table; the multi-period one now does the same.  Any
+    multi-period Q-control result from 0.4.0 or earlier should be rerun.
+
+    Sgens with `var_q` set take their reactive bounds from the grid code.
+    Leave `var_q` as NaN on sgens that should keep profile-derived limits.
+
 ---
 
 ## Selecting a grid code
@@ -141,14 +157,23 @@ The technical connection rules (TAR) are represented as selectable
 `GridCode` parameter sets in `potpourri.technologies.q_control`, so a study
 can target the rule that applies to its voltage level:
 
-| Grid code | Short name | Voltage level | Status |
+| Grid code | Short name | Voltage level | `var_q` variants |
 |---|---|---|---|
-| VDE-AR-N 4105 | `"4105"` | low voltage | normative values |
-| VDE-AR-N 4110 | `"4110"` | medium voltage | **provisional — placeholder values** |
+| VDE-AR-N 4105 | `"4105"` | low voltage | 2 |
+| VDE-AR-N 4110 | `"4110"` | medium voltage | 1 |
+| VDE-AR-N 4120 | `"4120"` | high voltage (110 kV) | 3 |
 
-A `GridCode` carries the Q(U) voltage breakpoints, the Q/Pn capability
-table and its variants, the Q(P) breakpoints, and the P(U) and cos(φ)(P)
-thresholds.  Select one model-wide:
+A `GridCode` carries two piecewise-linear capability areas — `pq_area`
+(Q against active power) and `qv_area` (Q against voltage) — plus the P(U)
+and cos(φ)(P) thresholds.  Every area reproduces the matching class in
+pandapower's `DERController` to machine precision; the test suite asserts
+it against pandapower's own `q_flexibility()`.
+
+`var_q` selects a column of the capability table, so it must index a
+variant the chosen code actually defines.  A value out of range, or a
+fractional one, raises rather than being silently rounded to a neighbour.
+
+Select a code model-wide:
 
 ```python
 # Single-period
@@ -158,36 +183,58 @@ opf.add_OPF(pv_q_control="both", grid_code="4110")
 mpopf.add_OPF(grid_code="4110")
 ```
 
-`grid_code` accepts `None` (VDE-AR-N 4105, the default, so existing models
-are unaffected), a short name (`"4105"`, `"4110"`, or the full
-`"VDE-AR-N 4110"`), or a `GridCode` instance.  An unknown name raises
-`ValueError`.
+`grid_code` accepts `None` (VDE-AR-N 4120, the default), a short name
+(`"4105"`, `"4110"`, `"4120"`, or the full `"VDE-AR-N 4110"`), or a
+`GridCode` instance.  An unknown name raises `ValueError`.
 
-!!! danger "VDE-AR-N 4110 currently holds placeholder values"
-    `VDE_AR_N_4110` is wired into the registry but **reuses the VDE-AR-N
-    4105 (low-voltage) parameters as a placeholder**.  Its normative
-    medium-voltage figures have not been entered yet, so results obtained
-    with `grid_code="4110"` are **not** 4110-compliant.
+!!! warning "The default changed meaning in 0.4.1"
+    Before 0.4.1 the default was named `VDE_AR_N_4105` but held the
+    **VDE-AR-N 4120** parameters: voltage breakpoints at 96 / 103 / 120 /
+    127 kV on the 110 kV base, and the three 4120 variant pairs.  It is now
+    named for the rule it actually encodes, and remains the default, so
+    models that relied on those numbers are unchanged apart from the
+    saturation fix below.
 
-    Selecting it emits a `ProvisionalGridCodeWarning` rather than failing,
-    so exploratory runs work, but do not report such results as
-    medium-voltage grid-code compliant.  To complete it, replace the
-    `vqu_v_points`, `vqu_q_max` and `qp_*` fields of `VDE_AR_N_4110` in
-    `potpourri/technologies/q_control.py` and clear its `provisional` flag.
+    `grid_code="4105"` now selects the **real** low-voltage rule: two
+    variants at cos φ 0.95 and 0.90, breakpoints at 0.90–1.10 p.u.  If you
+    were passing `"4105"` and want the previous numbers, pass `"4120"`.
+
+    Every reactive limit in the registry corresponds to a round power
+    factor the standards are written in — 0.90, 0.925, 0.95, 0.975 — which
+    is checked in the test suite.
+
+!!! note "VDE-AR-N 4130 (EHV) is not included"
+    It needs `vn_kv`-dependent breakpoints for 380/220 kV and potpourri
+    targets distribution grids.  Use pandapower's `PQVArea4130*` directly
+    if you need it.
 
 To add a further rule, construct a `GridCode` and register it:
 
 ```python
-from potpourri.technologies.q_control import GRID_CODES, GridCode
+import numpy as np
+
+from potpourri.technologies.q_control import (
+    GRID_CODES,
+    Envelope,
+    GridCode,
+)
 
 MY_TAR = GridCode(
     name="my-tar",
     title="Operator TAR",
     voltage_level="medium voltage",
-    vqu_v_points=...,   # [[V1, V2], [V3, V4]] in p.u.
-    vqu_q_max=...,      # shape (2, n_variants), Q/Pn
-    qp_p_high=0.1,
-    qp_p_low=0.2,
+    # Q bounds against P/Pn: ramp to the full limit by 0.2 Pn, then hold.
+    pq_area=Envelope(
+        x_points=np.array([0.1, 0.2, 1.0]),
+        q_min=np.array([[-0.1, -0.30, -0.30]]),
+        q_max=np.array([[0.1, 0.30, 0.30]]),
+    ),
+    # Q bounds against voltage: hold, ramp, plateau, ramp, hold.
+    qv_area=Envelope(
+        x_points=np.array([0.90, 0.95, 1.05, 1.10]),
+        q_min=np.array([[0.0, -0.30, -0.30, -0.30]]),
+        q_max=np.array([[0.30, 0.30, 0.30, 0.0]]),
+    ),
     vpu_v_curtail=1.06,
     vpu_v_max=1.10,
     cpp_p_threshold_pu=0.2,
@@ -195,15 +242,19 @@ MY_TAR = GridCode(
 GRID_CODES[MY_TAR.name] = MY_TAR
 ```
 
+Both arrays are `(n_variants, n_points)`, so a code with three variants
+carries three rows.  `Envelope` validates that the breakpoints ascend and
+that `q_min <= q_max` everywhere.
+
 !!! note "One grid code per model"
     The capability curves are computed once into a single table, so the
     grid code applies model-wide; per-sgen grid codes are not supported.
 
-    Every path now reads the registry, including the hosting-capacity wind
-    path in `potpourri/technologies/windpower.py`, which previously kept a
-    private copy of the VDE-AR-N 4105 table. Its simplified HC check uses the
-    widest envelope the selected code offers — the largest capacitive and most
-    negative inductive entry, +0.48 / −0.41 for VDE-AR-N 4105.
+    Every path reads the registry, including the hosting-capacity wind path
+    in `potpourri/technologies/windpower.py`. Its simplified HC check uses
+    the widest envelope the selected code offers — the largest capacitive
+    and most negative inductive entry, +0.484322 / −0.410775 for the
+    default VDE-AR-N 4120.
 
 ---
 
@@ -227,40 +278,50 @@ $$Q_{\min}(P) \;\le\; Q \;\le\; Q_{\max}(P)$$
 
 $$Q_{\max}(P) = b^+_{\rm QP} \cdot P_n + m^+_{\rm QP} \cdot P$$
 
-The slope and intercept depend on the selected variant index `var_q` (0–2).
-The coefficients are calibrated so that the envelope passes through the
-grid-code capability values at the reference point *P* = 0.2 · *P*_n
-(`QP_P_LOW` in `potpourri.technologies.q_control`):
+The bound is a **piecewise-linear envelope**, not a single line: it ramps
+between the two active-power breakpoints and then holds at the variant's
+limit.  For the default VDE-AR-N 4120 those breakpoints are 0.1 and
+0.2 · *P*_n, and the envelope narrows to ±0.1 · *P*_n at the lower one:
 
-| `var_q` | Q_max / P_n at 0.2·P_n (capacitive) | Q_min / P_n at 0.2·P_n (inductive) |
-|---|---|---|
-| 0 | +0.48 | −0.23 |
-| 1 | +0.41 | −0.33 |
-| 2 | +0.33 | −0.41 |
+| `var_q` | Q_max / P_n above 0.2·P_n | Q_min / P_n above 0.2·P_n | power factor |
+|---|---|---|---|
+| 0 | +0.484322 | −0.227902 | 0.90 / 0.975 |
+| 1 | +0.410775 | −0.328684 | 0.925 / 0.95 |
+| 2 | +0.328684 | −0.410775 | 0.95 / 0.925 |
 
-These are the two rows of `VQU_Q_MAX`; variant 0 is the widest capacitive
-envelope, variant 2 the widest inductive one.  At the lower breakpoint
-*P* = 0.1 · *P*_n (`QP_P_HIGH`) the envelope narrows to ±0.1 · *P*_n for
-every variant.
+Variant 0 is the widest capacitive envelope, variant 2 the widest inductive
+one.  Each bound becomes one linear inequality per affine piece, so the
+upper bound is the pointwise minimum of its pieces and the lower bound the
+pointwise maximum.
 
-!!! note "The Q(P) bound is not clipped above the reference point"
-    `compute_q_curves()` returns a single linear segment, so the bound keeps
-    widening for *P* > 0.2 · *P*_n rather than holding at the table value —
-    for `var_q=0` it reaches ±3.5 · *P*_n at full output.  The Q(P)
-    constraint is therefore only binding at low active power; at high output
-    the effective reactive limit comes from the **inverter S² circle** and
-    the **cos(φ) cone**.  Enable those (`inverter_s2=True` plus `sn_mva`)
-    whenever you need a physically meaningful Q limit across the whole
-    operating range.
+!!! danger "Fixed in 0.4.1 — the bound used to run away"
+    Before 0.4.1 both Q(P) and Q(U) were single **unclipped** lines: the
+    saturation shelves the standards define were missing.  Q(P) reached
+    **+3.52 · P_n** at rated output against a limit of +0.484, and the Q(U)
+    band was **3.4× too wide at every voltage**, including nominal.  Models
+    built with 0.4.0 or earlier permitted reactive dispatch far outside the
+    grid code.
+
+!!! note "Below the first breakpoint the model is deliberately permissive"
+    The standard's area is non-convex there — it steps down to a narrow
+    shelf — so it cannot be written as linear inequalities exactly.  Each
+    bound is replaced by its hull over the operating range, which can only
+    ever *widen* the feasible band, never narrow it.  For VDE-AR-N 4120 at
+    *P* = 0.1 · *P*_n the model permits Q ∈ [−0.164, +0.292] where the
+    standard requires only ±0.1.  It is exact from the reference point
+    (0.2 · *P*_n) to rated output.
+
+    The alternative — extrapolating the end segment — made the two bounds
+    cross, so that **no** reactive power at all was feasible below
+    *P* = 0.061 · *P*_n.  That was the behaviour up to 0.4.0, and any
+    curtailed sgen made the model infeasible.
 
 
-![Q(P) characteristic: reactive-power envelope against active power, for the three var_q variants](../assets/q-control/qp-characteristic.svg)
+![Q(P) capability area: reactive-power envelope against active power, for the three var_q variants](../assets/q-control/qp-characteristic.svg)
 
-*The envelope permitted by Q(P), for each `var_q` variant. Markers show the
-capability values at the 0.2·P_n reference point. Note that the bound is a
-single unclipped segment — it keeps widening past that point, reaching
-±3.5·P_n at full output, which is why Q(P) alone does not limit reactive power
-at high active output.*
+*The area permitted by Q(P), for each `var_q` variant. The bound ramps
+between the two breakpoints and then holds — the flat shelf beyond
+0.2·P_n is the saturation that was missing before 0.4.1.*
 
 ### Q(U) droop
 
@@ -270,17 +331,76 @@ $$Q_{\min}(v) \;\le\; Q \;\le\; Q_{\max}(v)$$
 
 $$Q_{\max}(v) = b^+_{\rm QU} + m^+_{\rm QU} \cdot v$$
 
-The droop coefficients follow from the VDE-AR-N 4105 characteristic table
-stored in `potpourri.technologies.q_control`.
+As with Q(P), the bound is a piecewise-linear envelope.  It forms a hexagon
+over the code's four voltage breakpoints: pinned to the capacitive limit
+below *V*₁, opening out across *V*₁–*V*₂, spanning the full range over the
+plateau *V*₂–*V*₃, closing again across *V*₃–*V*₄ and pinned to the
+inductive limit above *V*₄.
 
----
+For VDE-AR-N 4120 the breakpoints are 96 / 103 / 120 / 127 kV on the 110 kV
+base, so the span reaches 0.87–1.15 p.u. rather than the 0.90–1.10 of the
+LV and MV rules.
 
+![Q(U) capability area: the hexagonal envelope against bus voltage, over the grid code voltage breakpoints](../assets/q-control/qu-droop.svg)
 
-![Q(U) droop: reactive-power envelope against bus voltage, spanning the grid code voltage breakpoints](../assets/q-control/qu-droop.svg)
+*The area permitted by Q(U) across the code's own breakpoints V1–V4. The
+band slopes downward overall: at low voltage the unit may inject reactive
+power, at high voltage it must absorb — but it saturates at both ends
+instead of running on.*
 
-*The Q(U) envelope across the grid code's own voltage breakpoints V1–V4. The
-band slopes downward: at low voltage the unit may inject reactive power, at
-high voltage it must absorb. The three variants differ only slightly here.*
+### Q(U) with a dead band
+
+The area above **bounds** Q and leaves the optimiser free inside it.  A real
+Q(U) droop controller instead **assigns** Q from voltage, following a
+characteristic — and that is what makes a *dead band* expressible: a
+voltage span around nominal over which Q is held at zero.
+
+![Q(U) characteristic with a dead band, drawn against the capability area it sits inside](../assets/q-control/qu-deadband.svg)
+
+*The characteristic (red) inside the capability area (blue). Q is pinned to
+zero across the dead band and ramps to the code's reactive limits outside
+it.*
+
+Enable it with `qu_deadband`, which replaces the Q(U) area with the
+characteristic:
+
+```python
+# The grid code's own QV plateau becomes the dead band
+opf.add_OPF(pv_q_control="both", qu_deadband=True)
+
+# Or set it explicitly
+opf.add_OPF(pv_q_control="both", qu_deadband=(0.98, 1.02))
+
+# Multi-period, model-wide
+mpopf.add_OPF(qu_deadband=(0.98, 1.02))
+```
+
+You can also build the curve yourself and pass it:
+
+```python
+from potpourri.technologies.q_control import VDE_AR_N_4110
+
+curve = VDE_AR_N_4110.deadband_curve(deadband=(0.97, 1.03))
+mpopf.add_OPF(grid_code="4110", qu_deadband=curve)
+```
+
+!!! warning "This needs a MIP-capable solver"
+    Pinning Q to a curve that is flat at zero makes the feasible set pinch
+    to a point, which is **not convex**.  The constraint is built with
+    `pyomo.Piecewise` and introduces binary variables, so IPOPT alone
+    cannot solve it.
+
+    Use `gurobi_direct_minlp` (Gurobi 12+, whose nonlinear API handles the
+    AC power flow's trigonometric terms) — it solves the models on this
+    page in about a second.  MindtPy's outer approximation is *unsound* on
+    non-convex nonlinear equalities such as the AC power flow: it can
+    report `infeasible` for a model that is demonstrably feasible, so do
+    not trust a negative result from it here.
+
+!!! note "The dead band is a parameterisation, not a normative value"
+    Where the dead band sits is set by the network operator.  The default
+    reproduces the plateau of the selected code's QV area; pass an explicit
+    pair to set it.
 
 ## Inverter operating region for PV generators
 
@@ -396,7 +516,7 @@ from potpourri.models.ACOPF_base import ACOPF
 
 net = sb.get_simbench_net("1-LV-rural1--0-sw")
 
-# Mark PV sgens with Q-control variant 0 (Qmax = 0.48 Pn)
+# Mark PV sgens with Q-control variant 0 (Qmax = 0.484322 Pn)
 net.sgen["var_q"] = None       # object-dtype column; None for non-PV rows
 mask = net.sgen["type"] == "PV"
 net.sgen.loc[mask, "var_q"] = 0

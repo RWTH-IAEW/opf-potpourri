@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "opf-potpourri"
-version = "0.4.0"
+version = "0.4.1"
 description = "Multi-period Optimal Power Flow for distribution grids with storage — Pyomo models over pandapower networks"
 readme = "README.md"
 requires-python = ">=3.9,<3.13"
@@ -75,6 +75,10 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.4",
     "pre-commit>=4.0",
+    # test_q_control.py checks our capability areas against pandapower's own
+    # PQVArea classes.  The 4105/4110 ones are shapely polygons, so without
+    # shapely those parity tests skip rather than run.
+    "shapely>=2.0",
 ]
 performance-test = [
     "perfplot>=0.10.2",

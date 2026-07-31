@@ -5,6 +5,9 @@ import numpy as np
 import pyomo.environ as pyo
 from potpourri.technologies.flexibility import Flexibility_multi_period
 from potpourri.technologies.q_control import (
+    DEFAULT_P_RANGE_PU,
+    bus_voltage_range,
+    check_var_q,
     compute_q_curves,
     resolve_grid_code,
 )
@@ -131,6 +134,11 @@ class PV_multi_period(Flexibility_multi_period):
         self.pv_var_q = int(var_q)
         if q_control is not None:
             self.grid_code = resolve_grid_code(grid_code)
+            check_var_q(
+                [self.pv_var_q],
+                self.grid_code,
+                context="PV_multi_period(var_q=...)",
+            )
             self.q_limit_parameter = compute_q_curves(self.grid_code)
             if p_inst_mw is not None:
                 self.pv_p_inst = float(p_inst_mw) / self.baseMVA
@@ -212,50 +220,50 @@ class PV_multi_period(Flexibility_multi_period):
         if self.pv_q_control is None:
             return
 
-        qc = self.q_limit_parameter
+        # Each grid-code bound is a piecewise-linear envelope, so it becomes
+        # one inequality per affine piece: the upper bound is the pointwise
+        # minimum of its pieces, the lower bound the pointwise maximum.  A
+        # single line cannot express the saturation shelf.
         v = self.pv_var_q
         p_inst = self.pv_p_inst
+        pq_area = self.grid_code.pq_area
+        qv_area = self.grid_code.qv_area
+        v_span = bus_voltage_range(self.net)
         pv_bus_lookup = dict(model.PV_bus)
 
         if self.pv_q_control in ("qp", "both"):
+            pq_hi = pq_area.upper_pieces(v, DEFAULT_P_RANGE_PU)
+            pq_lo = pq_area.lower_pieces(v, DEFAULT_P_RANGE_PU)
 
-            @model.Constraint(model.PV, model.T)
-            def PV_QP_pos(model, pv, t):
-                return (
-                    model.qPV[pv, t]
-                    <= qc.b_qp_max[v] * p_inst
-                    + qc.m_qp_max[v] * model.pPV[pv, t]
-                )
+            @model.Constraint(model.PV, model.T, range(len(pq_hi)))
+            def PV_QP_pos(model, pv, t, k):
+                m, b = pq_hi[k]
+                return model.qPV[pv, t] <= m * model.pPV[pv, t] + b * p_inst
 
-            @model.Constraint(model.PV, model.T)
-            def PV_QP_neg(model, pv, t):
-                return (
-                    model.qPV[pv, t]
-                    >= qc.b_qp_min[v] * p_inst
-                    + qc.m_qp_min[v] * model.pPV[pv, t]
-                )
+            @model.Constraint(model.PV, model.T, range(len(pq_lo)))
+            def PV_QP_neg(model, pv, t, k):
+                m, b = pq_lo[k]
+                return model.qPV[pv, t] >= m * model.pPV[pv, t] + b * p_inst
 
         if self.pv_q_control in ("qu", "both") and hasattr(model, "v"):
+            qv_hi = qv_area.upper_pieces(v, v_span)
+            qv_lo = qv_area.lower_pieces(v, v_span)
 
-            @model.Constraint(model.PV, model.T)
-            def PV_QU_min(model, pv, t):
-                b = pv_bus_lookup.get(pv)
-                if b is None:
+            @model.Constraint(model.PV, model.T, range(len(qv_lo)))
+            def PV_QU_min(model, pv, t, k):
+                b_bus = pv_bus_lookup.get(pv)
+                if b_bus is None:
                     return pyo.Constraint.Skip
-                return (
-                    model.qPV[pv, t]
-                    >= (qc.m_qv[v] * model.v[b, t] + qc.b_qv_min[v]) * p_inst
-                )
+                m, b = qv_lo[k]
+                return model.qPV[pv, t] >= (m * model.v[b_bus, t] + b) * p_inst
 
-            @model.Constraint(model.PV, model.T)
-            def PV_QU_max(model, pv, t):
-                b = pv_bus_lookup.get(pv)
-                if b is None:
+            @model.Constraint(model.PV, model.T, range(len(qv_hi)))
+            def PV_QU_max(model, pv, t, k):
+                b_bus = pv_bus_lookup.get(pv)
+                if b_bus is None:
                     return pyo.Constraint.Skip
-                return (
-                    model.qPV[pv, t]
-                    <= (qc.m_qv[v] * model.v[b, t] + qc.b_qv_max[v]) * p_inst
-                )
+                m, b = qv_hi[k]
+                return model.qPV[pv, t] <= (m * model.v[b_bus, t] + b) * p_inst
 
     def get_all_ac(self, model):
         """No additional AC components needed for PV."""

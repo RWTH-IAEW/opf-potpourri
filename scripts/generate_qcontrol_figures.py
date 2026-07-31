@@ -34,7 +34,7 @@ import numpy as np  # noqa: E402
 import rwthplots  # noqa: E402
 
 from potpourri.technologies.q_control import (  # noqa: E402
-    VDE_AR_N_4105,
+    VDE_AR_N_4120,
     compute_q_curves,
 )
 
@@ -48,7 +48,8 @@ OUT_DIR = (
 STYLES = ("rwth-latex", "color.standard", "size.ieee-column")
 FORMATS = ("svg",)
 
-GRID_CODE = VDE_AR_N_4105
+GRID_CODE = VDE_AR_N_4120
+DEADBAND = (0.98, 1.02)  # operator parameterisation, not a normative value
 COS_PHI_MIN = 0.90  # cos(phi) cone / cos(phi)(P) target
 COS_PHI_FIXED = 0.95  # fixed cos(phi) mode
 S_INV_PU = 1.10  # inverter rating over Pn for the S^2 circle
@@ -98,11 +99,15 @@ def _save(fig, name):
 
 
 def fig_qp():
-    """Q(P) envelope for the three var_q variants.
+    """Q(P) capability area for the three var_q variants.
 
     Bounds are drawn as line pairs rather than filled bands: three overlapping
     translucent fills composite into darker tones where they intersect, which
     destroys the ordinal reading the tints are there to carry.
+
+    The bound ramps between the two active-power breakpoints and then holds.
+    Before 0.4.1 the shelf was missing and the line ran on to +3.5 Pn at
+    rated output, seven times the limit the standard sets.
     """
     p = np.linspace(0.0, 1.0, 400)
     fig, ax = plt.subplots()
@@ -110,48 +115,43 @@ def fig_qp():
     for v, (c, ls) in enumerate(
         zip((BLUE, BLUE_75, BLUE_50), ("-", "--", ":"))
     ):
-        hi = CURVES.b_qp_max[v] + CURVES.m_qp_max[v] * p
-        lo = CURVES.b_qp_min[v] + CURVES.m_qp_min[v] * p
+        lo, hi = GRID_CODE.pq_area.q_flexibility(p, v)
         ax.plot(p, hi, ls, color=c, label=rf"$\mathrm{{var\_q}}={v}$")
         ax.plot(p, lo, ls, color=c)
-        q_ref = CURVES.b_qp_max[v] + CURVES.m_qp_max[v] * p_ref
-        ax.plot([p_ref], [q_ref], "o", ms=2.5, color=c)
+        q_lo, q_hi = GRID_CODE.pq_area.q_flexibility(p_ref, v)
+        ax.plot([p_ref, p_ref], [q_lo, q_hi], "o", ms=2.5, color=c)
 
     ax.axvline(p_ref, color="#898781", lw=0.6, ls=(0, (1, 2)))
-    # The upper bounds leave the frame by p ~ 0.35, so the top right is free.
+    ax.axhline(0.0, color="#C3C2B7", lw=0.6)
     ax.annotate(
-        r"at $0.2\,P_n$: $+0.48$ / $+0.41$ / $+0.33$",
-        xy=(0.40, 0.78),
-        fontsize=5.5,
-        color="#52514E",
-    )
-    ax.annotate(
-        r"not clipped: $+3.5\,P_n$ at $P_n$ for $\mathrm{var\_q}=0$",
-        xy=(0.40, 0.60),
+        r"the bound holds beyond $0.2\,P_n$",
+        xy=(0.34, 0.56),
         fontsize=5.5,
         color="#52514E",
     )
     ax.set_xlim(0, 1)
-    ax.set_ylim(-1.05, 1.05)
-    _axes(ax, r"$P/P_n$", r"$Q/P_n$", r"Q(P) characteristic")
-    ax.legend(loc="upper left", fontsize=6, frameon=False)
+    ax.set_ylim(-0.52, 0.62)
+    _axes(ax, r"$P/P_n$", r"$Q/P_n$", r"Q(P) capability area")
+    ax.legend(loc="lower left", fontsize=6, frameon=False)
     _save(fig, "qp-characteristic")
 
 
 def fig_qu():
-    """Q(U) droop envelope, spanning the grid code's own voltage breakpoints.
+    """Q(U) capability area, over the grid code's own voltage breakpoints.
 
-    The variants differ only slightly here, so the bounds are drawn as lines;
-    filling them would overlap into a single indistinct band.
+    The area is a hexagon: the band is pinned to one limit below V1, opens
+    out across V1-V2, spans the full range over the plateau, closes again
+    across V3-V4 and is pinned above V4.  Before 0.4.1 both bounds were
+    single unclipped lines, so the band was 3.4x too wide at every voltage
+    and never saturated.
     """
-    pts = np.sort(GRID_CODE.vqu_v_points.ravel())
-    v_pu = np.linspace(pts[0] - 0.035, pts[-1] + 0.015, 400)
+    pts = np.sort(GRID_CODE.qv_area.x_points)
+    v_pu = np.linspace(pts[0] - 0.02, pts[-1] + 0.02, 600)
     fig, ax = plt.subplots()
     for var, (c, ls) in enumerate(
         zip((BLUE, BLUE_75, BLUE_50), ("-", "--", ":"))
     ):
-        hi = CURVES.m_qv[var] * v_pu + CURVES.b_qv_max[var]
-        lo = CURVES.m_qv[var] * v_pu + CURVES.b_qv_min[var]
+        lo, hi = GRID_CODE.qv_area.q_flexibility(v_pu, var)
         ax.plot(v_pu, hi, ls, color=c, label=rf"$\mathrm{{var\_q}}={var}$")
         ax.plot(v_pu, lo, ls, color=c)
 
@@ -159,17 +159,65 @@ def fig_qu():
         ax.axvline(x, color="#898781", lw=0.5, ls=(0, (1, 2)))
         ax.annotate(
             rf"$V_{i}$",
-            xy=(x, 2.75),
+            xy=(x, 0.60),
             fontsize=5.5,
             color="#52514E",
             ha="center",
         )
     ax.axhline(0.0, color="#C3C2B7", lw=0.6)
     ax.set_xlim(v_pu[0], v_pu[-1])
-    ax.set_ylim(-2.6, 3.0)
-    _axes(ax, r"$v$ [p.u.]", r"$Q/P_n$", r"Q(U) droop")
+    ax.set_ylim(-0.52, 0.68)
+    _axes(ax, r"$v$ [p.u.]", r"$Q/P_n$", r"Q(U) capability area")
     ax.legend(loc="lower left", fontsize=6, frameon=False)
     _save(fig, "qu-droop")
+
+
+def fig_qu_deadband():
+    """Q(U) characteristic with a dead band, against the area it sits in.
+
+    The area *bounds* Q and leaves the optimiser free inside it; the
+    characteristic *assigns* Q, so a dead band -- a voltage span over which
+    Q is held at zero -- becomes expressible.  That pinch makes the feasible
+    set non-convex, which is why this mode needs a MIP-capable solver.
+    """
+    curve = GRID_CODE.deadband_curve(deadband=DEADBAND)
+    pts = np.sort(GRID_CODE.qv_area.x_points)
+    v_pu = np.linspace(pts[0] - 0.02, pts[-1] + 0.02, 600)
+    fig, ax = plt.subplots()
+
+    lo, hi = GRID_CODE.qv_area.q_flexibility(v_pu, 0)
+    ax.fill_between(v_pu, lo, hi, color=BLUE, alpha=FILL_ALPHA, linewidth=0)
+    ax.plot(v_pu, hi, "-", color=BLUE, lw=0.8, label=r"capability area")
+    ax.plot(v_pu, lo, "-", color=BLUE, lw=0.8)
+    ax.plot(
+        v_pu,
+        curve.step(v_pu, 0),
+        "-",
+        color=RED,
+        lw=1.2,
+        label=r"characteristic",
+    )
+
+    db_lo, db_hi = curve.deadband(0)
+    ax.axvspan(db_lo, db_hi, color="#898781", alpha=0.12, linewidth=0)
+    ax.annotate(
+        r"dead band",
+        xy=((db_lo + db_hi) / 2, 0.13),
+        fontsize=5.5,
+        color="#52514E",
+        ha="center",
+    )
+    ax.axhline(0.0, color="#C3C2B7", lw=0.6)
+    ax.set_xlim(v_pu[0], v_pu[-1])
+    ax.set_ylim(-0.52, 0.68)
+    _axes(
+        ax,
+        r"$v$ [p.u.]",
+        r"$Q/P_n$",
+        r"Q(U) characteristic with dead band",
+    )
+    ax.legend(loc="lower left", fontsize=6, frameon=False)
+    _save(fig, "qu-deadband")
 
 
 def fig_s2():
@@ -360,6 +408,7 @@ def fig_cpp():
 FIGURES = (
     fig_qp,
     fig_qu,
+    fig_qu_deadband,
     fig_s2,
     fig_cone,
     fig_operating_region,
