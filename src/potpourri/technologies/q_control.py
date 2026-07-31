@@ -52,6 +52,17 @@ class SgenTypeOverlapWarning(UserWarning):
     """Raised when an sgen is claimed by both the PV and the wind Q path."""
 
 
+class QuCurveOutsidePqAreaWarning(UserWarning):
+    """Raised when a Q(U) characteristic conflicts with the Q(P) area.
+
+    Both are imposed on the same reactive power, and they express different
+    things: the Q(P) area *bounds* Q from active power, a Q(U)
+    characteristic *assigns* it from voltage.  Where the assigned value lies
+    outside the bound the model is infeasible, and the solver says only
+    "infeasible".  See :func:`warn_if_curve_leaves_pq_area`.
+    """
+
+
 class EnvelopeRangeWarning(UserWarning):
     """Raised when the operating range leaves an envelope's exact span.
 
@@ -961,6 +972,90 @@ def attach_deadband_qu(
         ),
     )
     return len(keys)
+
+
+def warn_if_curve_leaves_pq_area(
+    curve, pq_area, variant=0, v_range=None, p_range=None, context=""
+) -> bool:
+    """Warn when a Q(U) characteristic cannot coexist with the Q(P) area.
+
+    The two express different things and are imposed together.  The Q(P)
+    area *bounds* Q from active power; a Q(U) characteristic *assigns* Q
+    from voltage.  Where the assigned value falls outside the bound there is
+    no feasible reactive power at all, and the solver reports a plain
+    infeasibility with nothing pointing at the cause.
+
+    The conflict is real but conditional — it bites only when voltage sits
+    far from the dead band while active power is low.  For VDE-AR-N 4110
+    with its default dead band, the curve demands +0.484 Pn at 0.90 p.u.,
+    which the Q(P) area permits only at rated output.
+
+    Args:
+        curve: The :class:`QVCurve` being imposed.
+        pq_area: The :class:`Envelope` bounding Q against ``P/Pn``.
+        variant: Variant index to check.
+        v_range: ``(v_min, v_max)`` the buses may reach.  Defaults to the
+            curve's own span.
+        p_range: ``(p_min, p_max)`` in ``P/Pn``.  Defaults to
+            :data:`DEFAULT_P_RANGE_PU`.
+        context: Prefix identifying the caller in the warning.
+
+    Returns:
+        ``True`` if a warning was emitted.
+    """
+    p_range = DEFAULT_P_RANGE_PU if p_range is None else p_range
+    if v_range is None:
+        v_range = (
+            float(curve.v_points_pu[0]),
+            float(curve.v_points_pu[-1]),
+        )
+    vs = np.linspace(float(v_range[0]), float(v_range[1]), 201)
+    ps = np.linspace(float(p_range[0]), float(p_range[1]), 201)
+    hi = np.array(
+        [
+            min(m * p + b for m, b in pq_area.upper_pieces(variant, p_range))
+            for p in ps
+        ]
+    )
+    lo = np.array(
+        [
+            max(m * p + b for m, b in pq_area.lower_pieces(variant, p_range))
+            for p in ps
+        ]
+    )
+
+    worst_v, worst_p = None, 0.0
+    for v in vs:
+        q = float(curve.step(v, variant))
+        ok = (lo <= q + 1e-12) & (q - 1e-12 <= hi)
+        if not ok.any():
+            worst_v, worst_p = float(v), float("inf")
+            break
+        need = float(ps[ok][0])
+        if need > worst_p:
+            worst_v, worst_p = float(v), need
+    if worst_v is None or worst_p <= float(p_range[0]) + 1e-12:
+        return False
+
+    prefix = f"{context}: " if context else ""
+    where = (
+        "no active power at all satisfies it"
+        if worst_p == float("inf")
+        else f"only at P >= {worst_p:.3f} Pn"
+    )
+    warnings.warn(
+        f"{prefix}the Q(U) characteristic and the Q(P) capability area are "
+        f"both imposed, and they disagree over part of the operating range. "
+        f"At v = {worst_v:.4f} p.u. the characteristic assigns "
+        f"Q = {float(curve.step(worst_v, variant)):+.4f} Pn, which the Q(P) "
+        f"area permits {where}. If a bus reaches that voltage at lower "
+        f"active power the model is infeasible, with nothing in the solver "
+        f"output pointing here. Widen the dead band, raise the sgens' "
+        f"minimum active power, or drop qu_deadband and use the Q(U) area.",
+        QuCurveOutsidePqAreaWarning,
+        stacklevel=3,
+    )
+    return True
 
 
 def warn_if_outside_exact_range(

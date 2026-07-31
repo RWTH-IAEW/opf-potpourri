@@ -14,6 +14,7 @@ from potpourri.technologies.q_control import (
     compute_q_curves,
     resolve_grid_code,
     resolve_qu_curve,
+    warn_if_curve_leaves_pq_area,
 )
 
 
@@ -264,6 +265,15 @@ class Sgens_multi_period(Flexibility_multi_period):
         # When one is requested, Q is pinned to the characteristic instead.
         qu_curve = getattr(self, "qu_curve", None)
         if qu_curve is not None:
+            # The characteristic assigns Q while the Q(P) area bounds it;
+            # where they disagree the model is infeasible with nothing in
+            # the solver output pointing here.
+            warn_if_curve_leaves_pq_area(
+                qu_curve,
+                pq_area,
+                v_range=v_span,
+                context=f"{self.grid_code.title} Q(U) dead band",
+            )
             keys = [
                 (g, t) for g in qc_list for t in model.T if g in sGbs_lookup
             ]
@@ -495,8 +505,20 @@ class Sgens_multi_period(Flexibility_multi_period):
         profile-derived limits.
         """
         table = code.vqu_q_max
-        if not self.sgen_qc_indices or not hasattr(self, "QsGmax_data_dict"):
+        if not self.sgen_qc_indices:
             return
+        if not hasattr(self, "QsGmax_data_dict"):
+            # Silence is what made the original bug survive, so refuse
+            # rather than no-op: without the profile-derived bounds to
+            # override, the grid-code capability would never reach the
+            # model and Q-control would be vacuous again.
+            raise RuntimeError(
+                "static_generation_reactive_power_limits() must run before "
+                "static_generation_q_ctrl_data(): the grid-code reactive "
+                "bounds override QsGmax / QsGmin, which do not exist yet. "
+                "ACOPF_multi_period._calc_opf_parameters() calls them in "
+                "that order; call them in that order too."
+            )
         for g in self.sgen_qc_indices:
             variant = int(self.sgen_var_q[g])
             pn = float(self.sgen_p_inst[g])

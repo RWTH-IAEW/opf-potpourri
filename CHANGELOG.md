@@ -5,6 +5,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.2] — 2026-07-31
+
+### Fixed
+
+- **A dead-band Q(U) characteristic could silently conflict with the Q(P)
+  area.**  Both are imposed on the same reactive power: the area *bounds* Q
+  from active power, the characteristic *assigns* it from voltage.  Where
+  the assigned value falls outside the bound there is no feasible Q at all
+  and the solver reports a plain infeasibility.  For VDE-AR-N 4110 with its
+  default dead band the curve assigns +0.484 Pn at 0.90 p.u., which the
+  Q(P) area permits only at rated output.  Building such a model now emits
+  a `QuCurveOutsidePqAreaWarning` naming the voltage and the active power
+  required, so the conflict is diagnosable before solving.  Widening the
+  dead band does not help — the curve still assigns its full reactive limit
+  at its outermost breakpoints.
+- **The multi-period reactive-bound override failed silently when called out
+  of order.**  `static_generation_q_ctrl_data()` mutates the dicts built by
+  `static_generation_reactive_power_limits()`; running it first left them
+  absent and the override became a no-op, restoring exactly the defect
+  0.4.1 fixed.  It now raises `RuntimeError` naming the required order.
+
 ## [0.4.1] — 2026-07-31
 
 ### Added

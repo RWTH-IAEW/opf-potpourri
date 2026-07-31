@@ -402,6 +402,29 @@ mpopf.add_OPF(grid_code="4110", qu_deadband=curve)
     reproduces the plateau of the selected code's QV area; pass an explicit
     pair to set it.
 
+!!! danger "The characteristic and the Q(P) area can disagree"
+    Both are imposed on the same reactive power, and they express different
+    things: the Q(P) area **bounds** Q from active power, the characteristic
+    **assigns** it from voltage.  Where the assigned value falls outside the
+    bound there is no feasible Q at all, and the solver reports a plain
+    infeasibility with nothing pointing at the cause.
+
+    It bites when voltage sits far from the dead band while active power is
+    low.  For VDE-AR-N 4110 with its default dead band:
+
+    | bus voltage | the curve assigns | the Q(P) area permits it |
+    |---|---|---|
+    | 0.90 p.u. | +0.4843 Pn | only at rated output |
+    | 0.92 p.u. | +0.2906 Pn | at P ≥ 0.584 Pn |
+    | 0.95–1.05 p.u. | 0 | everywhere |
+
+    Building such a model emits a `QuCurveOutsidePqAreaWarning` naming the
+    voltage and the active power required, so the infeasibility is
+    diagnosable before you solve.  Widening the dead band does **not** fix
+    it — the curve still assigns its full reactive limit at its outermost
+    breakpoints.  Raise the sgens' minimum active power, keep bus voltages
+    away from the curve's extremes, or use the Q(U) area instead.
+
 ## Inverter operating region for PV generators
 
 The (P, Q) feasible region for a PV grid-forming inverter is the intersection

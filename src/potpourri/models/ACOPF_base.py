@@ -19,6 +19,7 @@ from potpourri.technologies.q_control import (
     compute_q_curves,
     resolve_grid_code,
     resolve_qu_curve,
+    warn_if_curve_leaves_pq_area,
     warn_if_outside_exact_range,
 )
 
@@ -801,6 +802,15 @@ class ACOPF(AC, OPF):
         # bounded by the area, via an integer piecewise block.
         qu_curve = resolve_qu_curve(qu_deadband, code)
         if qu_curve is not None:
+            # The characteristic assigns Q while the Q(P) area bounds it;
+            # where they disagree the model is infeasible with nothing in
+            # the solver output pointing here.
+            warn_if_curve_leaves_pq_area(
+                qu_curve,
+                pq_area,
+                v_range=v_span,
+                context=f"{code.title} Q(U) dead band",
+            )
             wind_keys = [w for w in self.model.WINDc if w in sGbs_lookup]
             attach_deadband_qu(
                 self.model,

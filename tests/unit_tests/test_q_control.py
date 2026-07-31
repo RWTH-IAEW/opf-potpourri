@@ -1506,3 +1506,108 @@ def test_sgens_without_var_q_keep_their_profile_bounds(lv_rural_net):
         assert float(pyo.value(mp.model.QsGmax[g, 0])) == pytest.approx(
             abs(float(net.sgen["q_mvar"][g])) / mp.baseMVA, abs=1e-12
         )
+
+
+# ── regressions from the review of the shipped 0.4.1 ──────────────────────
+
+
+def test_deadband_conflicting_with_qp_area_warns():
+    """A characteristic the Q(P) area cannot satisfy must be flagged.
+
+    Both are imposed on the same reactive power. For VDE-AR-N 4110 with its
+    default dead band the curve assigns +0.484 Pn at 0.90 p.u., which the
+    Q(P) area permits only at rated output — so a bus reaching that voltage
+    at lower active power makes the model infeasible, and the solver says
+    only "infeasible".
+    """
+    code = qc.VDE_AR_N_4110
+    curve = code.deadband_curve()
+    with pytest.warns(qc.QuCurveOutsidePqAreaWarning, match="disagree"):
+        assert qc.warn_if_curve_leaves_pq_area(curve, code.pq_area)
+
+
+def test_deadband_conflict_warning_names_the_operating_point():
+    """The message has to say where it breaks and what to do."""
+    code = qc.VDE_AR_N_4110
+    with pytest.warns(qc.QuCurveOutsidePqAreaWarning) as rec:
+        qc.warn_if_curve_leaves_pq_area(code.deadband_curve(), code.pq_area)
+    text = str(rec[0].message)
+    assert "0.9000" in text
+    assert "+0.4843" in text
+    assert "dead band" in text.lower()
+
+
+def test_shallow_deadband_curve_does_not_warn():
+    """A curve the Q(P) area can satisfy everywhere must stay quiet.
+
+    Widening the dead band does not help: the curve still assigns its full
+    reactive limit at its outermost breakpoints, and the Q(P) area grants
+    that only at rated output.  What removes the conflict is a curve whose
+    amplitude fits inside the area at zero active power.
+    """
+    code = qc.VDE_AR_N_4110
+    at_zero = min(
+        m * 0.0 + b
+        for m, b in code.pq_area.upper_pieces(0, qc.DEFAULT_P_RANGE_PU)
+    )
+    curve = qc.deadband_qv_curve(code.qv_area.x_points, q_max=at_zero * 0.9)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", qc.QuCurveOutsidePqAreaWarning)
+        assert not qc.warn_if_curve_leaves_pq_area(curve, code.pq_area)
+
+
+def test_widening_the_deadband_does_not_remove_the_conflict():
+    """Pinned so the misconception does not creep back into the docs."""
+    code = qc.VDE_AR_N_4110
+    v = code.qv_area.x_points
+    curve = code.deadband_curve(
+        deadband=(float(v[0]) + 1e-3, float(v[-1]) - 1e-3)
+    )
+    with pytest.warns(qc.QuCurveOutsidePqAreaWarning):
+        assert qc.warn_if_curve_leaves_pq_area(curve, code.pq_area)
+
+
+def test_deadband_conflict_checked_when_building_a_model(lv_rural_net):
+    """The check fires from add_OPF, not just the helper."""
+    with pytest.warns(qc.QuCurveOutsidePqAreaWarning):
+        _build_sp(
+            _annotate(lv_rural_net),
+            pv_q_control="both",
+            grid_code="4110",
+            qu_deadband=True,
+        )
+
+
+def test_no_conflict_warning_without_a_deadband(lv_rural_net):
+    """The area formulation cannot produce this conflict."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", qc.QuCurveOutsidePqAreaWarning)
+        _build_sp(
+            _annotate(lv_rural_net), pv_q_control="both", grid_code="4110"
+        )
+
+
+def test_reactive_bound_override_refuses_to_run_out_of_order(lv_rural_net):
+    """Calling the Q-control step first must fail loudly, not silently.
+
+    The override mutates the profile-derived `QsGmax` / `QsGmin` dicts.  If
+    they do not exist yet it used to return quietly, which would restore
+    exactly the no-op this release fixes.
+    """
+    from potpourri.technologies.sgens import Sgens_multi_period
+
+    net = _annotate(lv_rural_net)
+    mp = _build_mp(net)
+    sg = next(o for o in mp.flexibilities if isinstance(o, Sgens_multi_period))
+    # Reproduce the out-of-order state: the profile-derived bounds the
+    # override mutates have not been built.
+    del sg.QsGmax_data_dict
+    with pytest.raises(RuntimeError, match="must run before"):
+        sg.static_generation_q_ctrl_data(net)
+
+
+def test_reactive_bound_override_in_the_documented_order(lv_rural_net):
+    """In the order the model uses, the override applies."""
+    mp = _build_mp(_annotate(lv_rural_net))
+    for g in mp.model.sGqc:
+        assert float(pyo.value(mp.model.QsGmax[g, 0])) > 1e-9
