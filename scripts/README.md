@@ -47,6 +47,12 @@ python scripts/minimal_ac_power_flow.py
 | `q_control_opf.py` | **VDE-AR-N 4105 Q-control**: annotate PV/wind sgens with `var_q` and solve (1) a single-period AC OPF comparing the Q(P)/Q(U) modes, (2) the PV inverter controller modes (P(U) curtailment, fixed cos(φ), cos(φ)(P)), and (3) a 24-step multi-period AC OPF with automatic Q-control detection |
 | `grid_code_q_strategies.py` | **Grid-code selection and per-sgen strategies**: solves one snapshot under each registered grid code (`add_OPF(grid_code=…)`), surfacing the provisional-values warning for VDE-AR-N 4110; then assigns Q(P)/Q(U), fixed cos(φ), cos(φ)(P) and P(U) curtailment to different PV units in one multi-period model and reports which constraint blocks were built |
 
+### Documentation
+
+| Script | What it demonstrates |
+|--------|---------------------|
+| `generate_qcontrol_figures.py` | Renders the operating-area figures used in the reactive-power-control user guide, computing every curve from the grid-code registry so the figures cannot drift from the implementation. RWTH style with LaTeX typesetting; writes SVG to `docs/assets/q-control/`. Needs `matplotlib`, `rwthplots` and a LaTeX installation |
+
 ### Validation and benchmarking
 
 | Script | What it demonstrates |
@@ -78,6 +84,7 @@ python scripts/minimal_ac_power_flow.py
 | `grid_code_q_strategies.py` | IPOPT |
 | `ehv_grid_opf.py` | GLPK (DC-OPF) + IPOPT (AC-OPF) |
 | `custom_objective_weighted_voltage.py` | IPOPT |
+| `generate_qcontrol_figures.py` | none (figure generation) |
 | `validate_ac_model_against_pandapower.py` | IPOPT |
 | `compare_solvers.py` | NEOS (requires `NEOS_EMAIL`) |
 | `performance_test_solver.py` | NEOS + `perfplot` (see `performance-test` optional dep) |

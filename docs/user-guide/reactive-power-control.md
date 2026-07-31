@@ -209,6 +209,15 @@ GRID_CODES[MY_TAR.name] = MY_TAR
 
 ## Background: VDE-AR-N 4105 Q-control modes
 
+!!! note "The figures are generated, not drawn"
+    Every curve on this page is computed from
+    `potpourri.technologies.q_control` by
+    `scripts/generate_qcontrol_figures.py`, so the figures cannot drift from
+    the implementation — change a grid code and they change with it.
+    Regenerate with `python scripts/generate_qcontrol_figures.py`
+    (needs `matplotlib`, `rwthplots` and a LaTeX installation).
+
+
 ### Q(P) characteristic
 
 Reactive power is bounded as a linear function of the installed active power
@@ -244,6 +253,15 @@ every variant.
     whenever you need a physically meaningful Q limit across the whole
     operating range.
 
+
+![Q(P) characteristic: reactive-power envelope against active power, for the three var_q variants](../assets/q-control/qp-characteristic.svg)
+
+*The envelope permitted by Q(P), for each `var_q` variant. Markers show the
+capability values at the 0.2·P_n reference point. Note that the bound is a
+single unclipped segment — it keeps widening past that point, reaching
+±3.5·P_n at full output, which is why Q(P) alone does not limit reactive power
+at high active output.*
+
 ### Q(U) droop
 
 Reactive power is bounded as a linear function of the per-unit bus voltage *v*:
@@ -256,6 +274,13 @@ The droop coefficients follow from the VDE-AR-N 4105 characteristic table
 stored in `potpourri.technologies.q_control`.
 
 ---
+
+
+![Q(U) droop: reactive-power envelope against bus voltage, spanning the grid code voltage breakpoints](../assets/q-control/qu-droop.svg)
+
+*The Q(U) envelope across the grid code's own voltage breakpoints V1–V4. The
+band slopes downward: at low voltage the unit may inject reactive power, at
+high voltage it must absorb. The three variants differ only slightly here.*
 
 ## Inverter operating region for PV generators
 
@@ -281,6 +306,23 @@ The circle for batteries is already added automatically via
 
 ---
 
+
+![Inverter S-squared circle: the apparent-power limit as a semicircle in the P-Q plane](../assets/q-control/inverter-s2-circle.svg)
+
+*The apparent-power circle alone. It bounds the magnitude of (P, Q) but permits
+any power factor, including pure reactive injection at P = 0.*
+
+![cos-phi cone: the power-factor limit as a wedge in the P-Q plane](../assets/q-control/cos-phi-cone.svg)
+
+*The cos(φ) cone alone. It bounds the ratio of Q to P but not their magnitude —
+the wedge is unbounded, so the cone by itself permits arbitrarily large output.*
+
+![PV operating region: the intersection of the half-plane, the S-squared circle and the cos-phi cone](../assets/q-control/pv-operating-region.svg)
+
+*Both together with P ≥ 0 give the actual operating region. The cone binds
+below the crossover at P = S_inv·cos(φ); the circle binds above it. Neither
+constraint alone produces this shape.*
+
 ## P(U) active-power curtailment (VDE-AR-N 4105 §8.5)
 
 When bus voltage exceeds a threshold, the inverter reduces active output
@@ -294,6 +336,13 @@ The constraint is bilinear in P and v[b] — requires an NLP solver (IPOPT).
 
 ---
 
+
+![P(U) curtailment: permitted active power falling linearly between the curtailment threshold and the maximum voltage](../assets/q-control/pu-curtailment.svg)
+
+*Permitted active power against bus voltage. Output is unrestricted up to
+V_curtail, then falls linearly to zero at V_max. This constrains active, not
+reactive, power — which is why it may be combined with a Q rule.*
+
 ## Fixed cos(φ) mode
 
 An equality constraint that fixes the reactive-to-active ratio at every
@@ -305,6 +354,13 @@ Unlike the cos(φ) cone (which is a bound), this is an equality: the
 inverter tracks the prescribed power factor exactly.
 
 ---
+
+
+![Fixed cos-phi: the operating locus collapses from an area to a single ray](../assets/q-control/fixed-cos-phi.svg)
+
+*Fixed cos(φ) is an equality, so the operating area collapses to a line: Q is
+pinned to P rather than bounded by it. The cos(φ) cone is shown dotted for
+comparison — that is the area a bound of the same power factor would permit.*
 
 ## cos(φ)(P) profile (VDE-AR-N 4105)
 
@@ -319,6 +375,13 @@ Q_max = P_n · tan(φ) at P = P_n.
 Default threshold: *P*_t = 0.2 · P_n.
 
 ---
+
+
+![cos-phi(P) profile: a quadratic locus rising from zero at the threshold to the cone at full output](../assets/q-control/cos-phi-p-profile.svg)
+
+*The cos(φ)(P) profile is also an equality, so it is likewise a locus rather
+than an area. Q stays at zero until P_t, then rises quadratically to meet the
+cone at full output.*
 
 ## Single-period usage
 
