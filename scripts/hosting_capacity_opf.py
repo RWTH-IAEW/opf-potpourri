@@ -36,10 +36,11 @@ from potpourri.models.HC_ACOPF import HC_ACOPF
 
 warnings.filterwarnings("ignore")
 
-SOLVER = (
-    "mindtpy"  # HC uses MindtPy (MINLP); replace with gurobi for real runs
-)
-# For a production run use: SOLVER = "gurobi_direct" or mindtpy + ipopt/glpk
+SOLVER = "gurobi_direct_minlp"  # global MINLP: binaries + polar sin/cos
+# Alternative: SOLVER = "mindtpy" (decomposition, needs ipopt/glpk/cbc).
+# Do NOT use "gurobi_direct"/"gurobi_persistent" here -- they are limited to
+# expressions of degree 2 and reject the polar-form AC power flow with
+# DegreeError.
 NET_NAME = "1-LV-rural1--0-sw"
 PROFILE_IDX = 1190  # high-load winter evening
 

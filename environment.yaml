@@ -11,14 +11,14 @@ dependencies:
   - numba=0.65.0
   - pip:
       - geojson==3.2.0
-      - gurobipy==13.0.1
+      - gurobipy==13.0.2
       - loguru==0.7.3
       - matpowercaseframes==2.1.0
       - numpy==2.3.5
       - openpyxl==3.1.5
       - pandapower==3.4.0
       - pandas==2.3.3
-      - pyomo==6.10.0
+      - pyomo==6.10.1
       - scipy==1.16.3
       - simbench==1.6.2
       - tqdm==4.67.3

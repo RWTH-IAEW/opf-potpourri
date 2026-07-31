@@ -431,13 +431,21 @@ class Basemodel:
             to_net (bool): Whether to map results back to the pandapower
                 network.
             print_solver_output (bool): Whether to print solver output.
-            solver (str): The solver to use ('ipopt', 'mindtpy', 'neos', etc.).
+            solver (str): The solver to use ('ipopt', 'mindtpy', 'neos',
+                'gurobi_direct_minlp', etc.). Use 'gurobi_direct_minlp' to
+                send the model — including the polar-form sin/cos power flow
+                and any integer variables — straight to Gurobi's global
+                spatial branch-and-bound. Requires Pyomo >= 6.10 and
+                gurobipy >= 12.
             load_solutions (bool): Whether to load solutions into the model
                 after solving.
             mip_solver (str): The mixed-integer programming solver for
                 'mindtpy'.
             max_iter (int, optional): Maximum iterations for the solver.
-            time_limit (int): Time limit for the solver in seconds.
+                Mapped to Gurobi's 'IterationLimit' for 'gurobi*' solvers.
+            time_limit (int): Time limit for the solver in seconds. Honoured
+                by 'mindtpy' and by 'gurobi*' (as 'TimeLimit'); other solvers
+                ignore it.
             init_strategy (str): Initialization strategy for 'mindtpy'.
             neos_opt (str): Solver to use with NEOS.
             nlp_solver_args (dict, optional): Extra keyword arguments forwarded
@@ -489,7 +497,19 @@ class Basemodel:
         else:
             optimizer = pyo.SolverFactory(solver)
 
-            if max_iter:
+            if solver.startswith("gurobi"):
+                # Gurobi uses its own option names; 'max_iter' is IPOPT's and
+                # raises GurobiError("Unknown parameter"). A time limit matters
+                # here because 'gurobi_direct_minlp' runs a global spatial
+                # branch-and-bound that is otherwise unbounded on a nonconvex
+                # AC OPF.
+                if max_iter:
+                    optimizer.options["IterationLimit"] = max_iter
+                    logger.debug("Gurobi IterationLimit set to {}", max_iter)
+                if time_limit:
+                    optimizer.options["TimeLimit"] = time_limit
+                    logger.debug("Gurobi TimeLimit set to {} s", time_limit)
+            elif max_iter:
                 optimizer.options["max_iter"] = max_iter
                 logger.debug("Solver max_iter set to {}", max_iter)
 
