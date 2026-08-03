@@ -1,6 +1,8 @@
 """Static generator (sgen) mix-in: attaches sgen profiles and OPF limits to
 a multi-period model."""
 
+import warnings
+
 import numpy as np
 import pandas as pd
 import pyomo.environ as pyo
@@ -18,6 +20,15 @@ from potpourri.technologies.q_control import (
 )
 
 
+class SgenMinPAboveProfileWarning(UserWarning):
+    """Raised when ``net.sgen.min_p_mw`` exceeds the available generation.
+
+    ``sPGmax`` follows the profile, so a constant lower bound can sit above
+    it — a PV sgen with ``min_p_mw > 0`` is infeasible at night. The solver
+    reports only "infeasible", with nothing pointing at the lower bound.
+    """
+
+
 class Sgens_multi_period(Flexibility_multi_period):
     """Multi-period static generator device module; reads sgen profiles from
     net.profiles."""
@@ -28,10 +39,19 @@ class Sgens_multi_period(Flexibility_multi_period):
         # SimBench provides q_mvar profiles for sgens; if absent,
         # Basemodel_multi_period.calc_reactive_sgen_power() derives them
         # from the active-power profile and the power-factor argument.
+        #
+        # Both are divided by the system base, because every other quantity
+        # in the model is per-unit: the demand profiles
+        # (Flexibility_multi_period),
+        # the generator limits (Generator_multi_period), the shunt data, the
+        # line and transformer ratings, and the sgen capability data derived
+        # from net.sgen further down this class. pyo_to_net_multi_period also
+        # multiplies psG by baseMVA on the way out. Taking these two in MW made
+        # the power balance mix scales on any network with sn_mva != 1.
         sgen_bus = self.bus_lookup[self.net.sgen.bus.values]
         self.static_generation_data = {
-            "p": self.net.profiles[("sgen", "p_mw")],
-            "q": self.net.profiles[("sgen", "q_mvar")],
+            "p": self.net.profiles[("sgen", "p_mw")] / self.baseMVA,
+            "q": self.net.profiles[("sgen", "q_mvar")] / self.baseMVA,
             "in_service": self.net.sgen.in_service.values,
             "bus": sgen_bus,
         }
@@ -462,8 +482,79 @@ class Sgens_multi_period(Flexibility_multi_period):
         self.PsGmax_data_dict, self.PsGmax_tuple = self.make_to_dict(
             model.sG, model.T, self.static_generation_data["p"]
         )
+        self.static_generation_data["min_p"] = self._read_min_p()
         self.PsGmin_data_dict, self.PsGmin_tuple = self.make_to_dict(
-            model.sG, model.T, 0, False
+            model.sG,
+            model.T,
+            self.static_generation_data["min_p"],
+            False,
+        )
+        self._warn_if_min_p_above_profile(model)
+
+    def _read_min_p(self):
+        """Read the sgen real-power lower bound from ``net.sgen.min_p_mw``.
+
+        Mirrors ``OPF.static_generation_real_power_limits``: a missing column
+        or a NaN entry falls back to 0, the distribution-grid convention that
+        PV and wind can be curtailed to zero but cannot reverse. Before this
+        was read, the bound was hard-coded to 0 for every sgen and time step,
+        so ``min_p_mw`` was silently ignored and a single-period study could
+        not be reproduced over a horizon.
+
+        Divided by ``baseMVA`` like every other power quantity in the model,
+        including ``sPGmax``.
+        """
+        n_sgen = len(self.net.sgen.index)
+        if "min_p_mw" not in self.net.sgen:
+            return np.zeros(n_sgen)
+        return (
+            self.net.sgen.min_p_mw.astype(float).fillna(0.0).values
+            / self.baseMVA
+        )
+
+    def _warn_if_min_p_above_profile(self, model):
+        """Flag a lower bound the profile cannot satisfy.
+
+        ``sPGmin`` is constant over the horizon while ``sPGmax`` follows the
+        profile, so the two can cross — most obviously for PV at night. That
+        makes the model infeasible with nothing in the solver output naming
+        the cause, so say it here instead.
+
+        Only controllable, in-service sgens are checked: those are the ones
+        ``get_all_Constraints_opf`` bounds. Everything else has ``psG`` fixed
+        to its profile value, so its ``sPGmin`` is never enforced and a
+        stray ``min_p_mw`` on it is harmless.
+        """
+        controllable = np.where(self.static_generation_data["controllable"])[
+            0
+        ].tolist()
+        in_service = getattr(self, "sgens_in_service_list", None)
+        bounded = {
+            g for g in controllable if in_service is None or g in in_service
+        }
+        if not bounded:
+            return
+
+        conflicts = [
+            (g, t)
+            for (g, t), lo in self.PsGmin_data_dict.items()
+            if g in bounded and lo > self.PsGmax_data_dict[(g, t)]
+        ]
+        if not conflicts:
+            return
+        g, t = conflicts[0]
+        lo = self.PsGmin_data_dict[(g, t)]
+        hi = self.PsGmax_data_dict[(g, t)]
+        warnings.warn(
+            f"net.sgen.min_p_mw exceeds the available generation for "
+            f"{len(conflicts)} (sgen, time step) pairs. First one: sgen {g} "
+            f"at t={t} has min_p={lo:.6g} p.u. but the profile offers only "
+            f"{hi:.6g} p.u. The model is infeasible there, and the solver "
+            f"will report nothing more specific than 'infeasible'. Set "
+            f"min_p_mw to 0 (or NaN) for profile-driven sgens, or set "
+            f"controllable=False to pin them to the profile.",
+            SgenMinPAboveProfileWarning,
+            stacklevel=3,
         )
 
     def static_generation_reactive_power_limits(self, model):

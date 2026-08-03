@@ -5,6 +5,152 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-08-03
+
+A minor rather than a patch release: it adds battery reactive-power capability,
+warm starting, seeded device placement and three `add_OPF` options, and changes
+five defaults. Each behaviour change is reversible with one argument; they are
+collected under *Changed*.
+
+74 new regression tests, suite at 351.
+
+### Fixed
+
+- **pandapower 3.5 broke every single-period model constructor.** 3.5 removed
+  `create_continuous_bus_index` from its top-level namespace, and
+  `preprocess_grid` — which every single-period constructor runs — called it
+  there, so a fresh install produced a package that could not build a model at
+  all. It also removed `clear_result_tables`, the first call in **both** result
+  mappers, so on 3.5 `solve(to_net=True)` silently left the base-case power flow
+  in `net.res_*`. Both are now imported from `pandapower.toolbox`, which carries
+  them on every supported version, and the `pandapower` requirement gained the
+  upper bound it was missing.
+- **`solve()` reported success when result mapping failed.** Both `solve()`
+  methods wrapped the termination check *and* the mapping in one
+  `except AttributeError`, so a failure while writing `net.res_*` was logged
+  into a logger this package disables by default and then discarded. That is
+  what hid the breakage above. The guard now covers only the termination check.
+- **Multi-period `solve(to_net=True)` never wrote `net.res_*`.** It logged
+  `"Solution mapped to net.res_*"` and called no mapper. Because the constructor
+  runs `pp.runpp`, callers read **base-case** values as if they were the
+  optimisation result. `solve()` now maps, and a new `map_to_net(t)` writes any
+  chosen step — `net.res_*` has no time dimension, so `to_net=True` writes the
+  last step of the horizon and an `int` selects another.
+- **The multi-period battery efficiency produced no round-trip loss.** The
+  one-way efficiency was applied to a single *signed* power variable, so the same
+  factor scaled both directions and a charge/discharge cycle returned the state
+  of charge exactly to its start — an implied round trip of 100 % for any value
+  of `efficiency`. Charging and discharging are now separate non-negative legs
+  with `η·Pchg − Pdis/η`, matching the single-period storage block, so the round
+  trip costs `η²`. Nothing constrained the final state of charge either, so the
+  optimiser could drain the battery and export the stored energy for free.
+- **Multi-period sgen power parameters were in MW while demand was per-unit.**
+  Every other quantity in the model — demand, generator limits, shunt data, line
+  and transformer ratings, and the capability data derived from `net.sgen` — is
+  per-unit, and the result mapper multiplies by the base on the way out. On any
+  network with `sn_mva != 1` the nodal balance therefore added quantities on two
+  scales, with no error and no warning. A fully pinned model missed pandapower's
+  own power flow by 6.3e-2 p.u. at `sn_mva = 10` and was driven to a locally
+  infeasible point; it now reproduces it at any base. Every SimBench network has
+  `sn_mva == 1`, which is why this stayed invisible. The same slip is fixed for
+  the PV profile, the heat pump's heat-loss profile and the wind potential.
+- **`Battery`, `Heatpump` and `PV` were not coupled to the power balance.**
+  `KCL_flexibility()` returned `0`, so the devices attached their variables and
+  internal dynamics but their power never entered the Kirchhoff constraints —
+  feasible trajectories with no effect on voltages, line loading or the
+  objective. Devices now register a coupling term and `add_OPF` rebuilds the
+  balance, so a device attached after the power-flow equations still reaches
+  them. The DC formulation, which had no hook at all, gets the same treatment.
+- **PV's active power had the opposite sign to its own Q characteristics**, so
+  the Q(P) envelope was mirrored; its bound arguments were also ordered so that
+  Pyomo read the maximum as the lower bound. And **every PV Q(U) constraint was
+  silently skipped**, because a lookup built with `dict()` over a scalar Pyomo
+  Set yields no members and the rule took its skip branch.
+- **A multi-period AC OPF could report infeasible on a feasible model.** A cold
+  start puts every voltage at 1.0, every angle at 0 and leaves the branch flows
+  with no value at all, so Kirchhoff's laws are violated at every bus by the full
+  nodal injection, and IPOPT does not always recover on a nonconvex problem. On a
+  midday window it reported a locally infeasible point even though curtailing the
+  PV to zero is available and feasible. `solve()` now seeds a consistent
+  operating point from a power flow at each step first; the seed need not be near
+  the optimum, only satisfy the power flow. Also much faster — the unit suite
+  went from roughly eight minutes to three.
+- **Device placement drew from the unseeded global NumPy generator**, so two runs
+  of the same script equipped different buses and gave different results. It
+  changed conclusions rather than only bus numbers: the same converter
+  configuration in the battery example came out infeasible on one run and optimal
+  on the next.
+- **The AC model could not be built on a network with shunts.** The conductance
+  and susceptance parameters were declared with opposite index sets, and each
+  consumer used the wrong one for one of them, so construction raised
+  `KeyError`. The LPAC formulation declared the susceptance a third way. All of
+  them now agree. Invisible because every SimBench network has no shunts, so the
+  loop over them never iterated.
+- **Filling `net.res_*` mutated temporaries.** Both mappers used chained
+  `inplace=True` calls, which operate on the object the column access returns.
+  pandas warns today and makes it a silent no-op under copy-on-write, which
+  would leave `NaN` where a value was meant to be — and in one case would have
+  replaced a curtailed sgen dispatch with its uncurtailed profile. Replaced with
+  assignment, the result frames are built with a float dtype so filling no longer
+  downcasts, and `pandas` gained an upper bound.
+- **`potpourri.__version__` was hard-coded** and had drifted three releases
+  behind `pyproject.toml`, sending bug reports to the wrong changelog entries. It
+  now comes from the installed distribution metadata and cannot drift.
+- **Documented names and capabilities that do not exist.** EV support was
+  advertised in the README, the architecture diagram and the docs index; there is
+  no EV module. The README named a heat-pump class whose real name differs in
+  case, so copying it raised `ImportError`, omitted the shunt device, and showed
+  the wind device inheriting from the wrong base. The multi-period `add_OPF`
+  surface also diverged from single-period: `thermal_limit` and `angle_limits`
+  raised `TypeError` naming a private method, `net.sgen.min_p_mw` was silently
+  ignored, and the slack voltage was pinned with no way to free it — so the same
+  snapshot gave materially different voltages depending on the period kind.
+- **`performance_test_solver.py` could not run as shipped.** Every case is
+  submitted to the NEOS remote service with a placeholder address, which NEOS
+  rejects; the rejection surfaced as a bare Pyomo `ActionManagerError` saying
+  nothing about the cause. It now explains what to set and skips.
+
+### Added
+
+- **Battery converter reactive power.** `BAT_Q` in the generator sign
+  convention, bounded by the apparent-power circle `P² + Q² ≤ S_inv²`, an
+  optional power-factor floor, and the grid-code Q(P) and Q(U) capability areas.
+  The Q(P) area is keyed on the discharging leg, the mode in which a storage unit
+  acts as a generating unit under VDE-AR-N 4105/4110/4120. New arguments
+  `s_inv_pu`, `q_control`, `var_q`, `cos_phi_min` and `grid_code`; `s_inv_pu`
+  defaults to the active-power limit, which deliberately leaves no reactive
+  headroom at full charge or discharge.
+- **`warm_start_from_pf()`** on the multi-period models, and `warm_start` on
+  `solve()`.
+- **`seed` and `rng` on every placing device.** `rng` takes precedence, so one
+  generator threaded through a Monte Carlo sweep gives independent scenarios from
+  a run that replays exactly — which a single seed cannot express.
+- **`thermal_limit`, `angle_limits` and `free_slack_vm`** on the multi-period
+  models, matching the single-period surface, plus `angle_limits` on the DC one.
+- **`map_to_net(t)`** for reading a chosen time step into `net.res_*`.
+- **`terminal_soc` on the battery**, and a single-period-versus-multi-period
+  differences table in the user guide.
+
+### Changed
+
+Five defaults move. Each is reversible with one argument:
+
+- `solve(warm_start=True)` — every multi-period solve now runs one power flow per
+  time step first. Pass `False` to keep existing initial values.
+- `Battery_multi_period(terminal_soc="cyclic")` — the final state of charge
+  returns to its initial value. Always feasible, since holding both legs at zero
+  satisfies it. `None` restores the previous freedom.
+- PV's `pPV` is a generator-convention injection rather than a negated load, so
+  its sign flips for anyone reading it.
+- Device placement is seeded, so default placements differ from previous runs.
+  Nobody can have depended on a specific draw, because there was no way to
+  obtain one twice.
+- Unsupported `add_OPF` options raise `TypeError` naming the option and the model
+  class, instead of being silently discarded.
+
+`environment.yaml` moves to pandapower 3.5.4, which brings `scipy`, `tqdm` and
+`geojson` with it, so CI exercises the version a fresh install resolves to.
+
 ## [0.4.2] — 2026-07-31
 
 ### Fixed

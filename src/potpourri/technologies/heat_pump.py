@@ -43,6 +43,13 @@ class Heatpump_multi_period(Flexibility_multi_period):
         wall_thickness_m: Wall thickness in m used for heat-loss scaling.
         qloss_max: Scaling target for heat loss — the maximum heat-loss value
             (in p.u. power) that is mapped to the peak electrical load.
+        seed: Seed for the placement draw.  Defaults to
+            :data:`~potpourri.technologies.flexibility.DEFAULT_PLACEMENT_SEED`,
+            so repeated runs equip the same buses.  Vary it to sample
+            placements.
+        rng: An existing :class:`numpy.random.Generator`, taking precedence
+            over *seed*.  Thread one through a Monte Carlo sweep for
+            independent scenarios from a run that replays exactly.
 
     The thermal capacity of the building is derived from the supplied house
     geometry and material constants.  To override the calculated value, set
@@ -86,8 +93,10 @@ class Heatpump_multi_period(Flexibility_multi_period):
         avg_house_size_m3: float = 500.0,
         wall_thickness_m: float = 0.2,
         qloss_max: float = 0.01,
+        seed=None,
+        rng=None,
     ):
-        super().__init__(net, T, scenario)
+        super().__init__(net, T, scenario, seed=seed, rng=rng)
 
         if penetration is not None:
             self.hp_percentage = float(penetration)
@@ -99,12 +108,9 @@ class Heatpump_multi_period(Flexibility_multi_period):
                 "percentage via the penetration= argument."
             )
 
-        num_indexes = round(
-            len(self.buses_excl_extGrids) * self.hp_percentage / 100
-        )
-        self.random_indexes = np.random.choice(
-            self.buses_excl_extGrids, num_indexes, replace=False
-        )
+        # Drawn from this device's own generator, so the placement is
+        # reproducible (see Flexibility_multi_period.rng).
+        self.random_indexes = self.draw_placement(self.hp_percentage)
 
         self.temp_max = temp_max_c
         self.temp_min = temp_min_c
@@ -128,21 +134,35 @@ class Heatpump_multi_period(Flexibility_multi_period):
         ) / 3_600_000.0
 
         # --- Heat-loss profile proportional to load ---
+        # Both the reference peak and the profile it scales are per-unit, so
+        # heat_load comes out in p.u. power like hp_p and HP_Pmax. Scaling a
+        # per-unit factor onto an MW profile made Qloss wrong by baseMVA, which
+        # fed straight into the building temperature update.
         self.Qloss_max = qloss_max
-        self.max_load = float(
-            np.max(net.profiles[("load", "p_mw")][0] / self.baseMVA)
-        )
+        load_profile_pu = net.profiles[("load", "p_mw")][0] / self.baseMVA
+        self.max_load = float(np.max(load_profile_pu))
         self.heat_scaling_fac = self.Qloss_max / self.max_load
-        self.heat_load = (
-            self.heat_scaling_fac * self.net.profiles[("load", "p_mw")][0]
-        )
+        self.heat_load = self.heat_scaling_fac * load_profile_pu
 
     def get_all(self, model):
-        """Attach heat pump sets, parameters, variables, and constraints."""
+        """Attach heat pump sets, parameters, variables, and constraints, and
+        couple the electrical power into the nodal balance."""
         self.get_sets(model)
         self.get_parameters(model)
         self.get_variables(model)
         self.get_all_constraints(model)
+        self.couple_to_power_balance(model)
+
+    def couple_to_power_balance(self, model):
+        """Register the heat pump's electrical demand with the nodal balance.
+
+        ``hp_p`` is the electrical input power, bounded in ``[0, HP_Pmax]``, so
+        it is a pure load and enters the balance with a ``+``. Heat pumps have
+        no reactive-power variable, so nothing goes on the reactive balance.
+        """
+        self.register_kcl_real(
+            model, self.bus_term(model, model.HP_bus, "hp_p", sign=1.0)
+        )
 
     def get_sets(self, model):
         """Define HP and HP_bus sets from randomly placed heat pumps."""
@@ -191,9 +211,21 @@ class Heatpump_multi_period(Flexibility_multi_period):
 
     def get_variables(self, model):
         """Create hp_p (electrical power) and temp (indoor temperature)
-        variables."""
-        model.hp_p = pyo.Var(model.HP, model.T, within=pyo.Reals)
-        model.temp = pyo.Var(model.HP, model.T, within=pyo.Reals)
+        variables.
+
+        ``temp`` starts mid-band rather than at Pyomo's default of 0, which
+        sits outside ``[temp_min_c, temp_max_c]`` and so begins the solve on
+        an infeasible point. ``hp_p`` starts at 0, inside its own bounds.
+        """
+        model.hp_p = pyo.Var(
+            model.HP, model.T, within=pyo.Reals, initialize=0.0
+        )
+        model.temp = pyo.Var(
+            model.HP,
+            model.T,
+            within=pyo.Reals,
+            initialize=0.5 * (self.temp_min + self.temp_max),
+        )
         return True
 
     def get_all_constraints(self, model):

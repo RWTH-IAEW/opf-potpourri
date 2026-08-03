@@ -85,6 +85,48 @@ for t in opf.model.T:
     print(f"t={t}: total sgen output = {p_gen:.3f} MW")
 ```
 
+To read the pandapower result tables instead, map one time step at a time —
+`net.res_*` has no time dimension, so it holds a single step:
+
+```python
+for t in opf.model.T:
+    opf.map_to_net(t)
+    print(t, opf.net.res_bus.vm_pu.max())
+```
+
+`solve(to_net=True)` (the default) maps the **last** step of the horizon.
+See [Solving models](solvers.md).
+
+## Single-period vs multi-period differences
+
+The two model kinds do not expose the same surface. Passing a multi-period
+model an option it does not implement raises `TypeError` naming the option
+and the class, rather than being silently ignored.
+
+| `add_OPF` option | Single-period | Multi-period | Notes |
+|---|---|---|---|
+| `thermal_limit` | ✅ `"current"` / `"mva"` | ✅ `"current"` / `"mva"` | AC and LPAC only. The DC model is lossless and carries no reactive power, so it has no current-versus-MVA distinction to make and rejects the option. |
+| `free_slack_vm` | ✅ default `True` | ✅ default `True` | The base AC power flow pins the slack magnitude at every time step; `add_OPF` frees it within `[Vmin, Vmax]` unless you pass `False`. |
+| `angle_limits` | ✅ | ✅ | Enforced per time step, from `net.line.angmin_degree` / `angmax_degree`. |
+| `grid_code`, `qu_deadband` | ✅ | ✅ | |
+| `pv_q_control`, `inverter_s2`, `cos_phi_min`, `fixed_cos_phi`, `cos_phi_p_profile`, `pu_curtail` | ✅ as arguments | ⚠️ via `net.sgen` columns | Multi-period reads these from the `net.sgen` table (`var_q`, `sn_mva`, `pu_curtail`, `fixed_cos_phi`, `cos_phi_p_profile`) rather than from `add_OPF`. See [Reactive-power control](reactive-power-control.md). |
+| `fix_hv_buses`, `hv_bus_kv` | ✅ | ❌ | No multi-period equivalent. |
+| `sgen_types`, `wind_sgen_types` | ✅ | ❌ | No multi-period equivalent. |
+
+Other behavioural differences to know about:
+
+| Behaviour | Single-period | Multi-period |
+|---|---|---|
+| `solve(to_net=True)` | Writes `net.res_*` | Writes `net.res_*` for one time step (last by default); `map_to_net(t)` for others |
+| `net.sgen.min_p_mw` | Honoured | Honoured (constant over the horizon; warns when it exceeds the profile) |
+| Storage | `Basemodel.add_storage()` | `Battery_multi_period` device module, with reactive power bounded by the converter's S² circle |
+| Storage reactive power | Box bounds via `qSTOR` | `BAT_Q` with S² circle, optional cos φ floor and grid-code Q(P)/Q(U) areas |
+
+Everything in the model is **per-unit on `net.sn_mva`** — profiles, device
+ratings, line and transformer limits alike. Device constructor arguments named
+`*_pu` (`power_pu`, `capacity_pu_h`, `s_inv_pu`, `power_max_pu`) are already in
+that system; convert from MW by dividing by `net.sn_mva`.
+
 ## Model architecture
 
 The multi-period model is composed from modular device objects. Each device implements a standard interface:

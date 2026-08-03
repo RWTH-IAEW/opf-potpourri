@@ -102,28 +102,7 @@ class DC_multi_period(Basemodel_multi_period):
         )  # angle difference across transformers
 
         # --- KCL at each bus, per time step ---
-        @self.model.Constraint(self.model.B, self.model.T)
-        def KCL_def(model, b, t):
-            kcl = sum(
-                model.psG[g, t] for g in model.sG if (g, b) in model.sGbs
-            ) + sum(
-                model.pG[g, t] for g in model.G if (g, b) in model.Gbs
-            ) == sum(
-                model.pD[d, t] for d in model.D if (b, d) in model.Dbs
-            ) + sum(
-                model.pLfrom[l, t] for l in model.L if model.A[l, 1] == b
-            ) + sum(
-                model.pLto[l, t] for l in model.L if model.A[l, 2] == b
-            ) + sum(
-                model.pThv[l, t] for l in model.TRANSF if model.AT[l, 1] == b
-            ) + sum(
-                model.pTlv[l, t] for l in model.TRANSF if model.AT[l, 2] == b
-            ) + sum(
-                model.GB[s] for s in model.SHUNT if (b, s) in model.SHUNTbs
-            )
-            if isinstance(kcl, bool):
-                return Constraint.Skip
-            return kcl
+        self.build_kcl()
 
         # --- KVL on lines + impedance branches ---
         @self.model.Constraint(self.model.L, self.model.T)
@@ -160,3 +139,24 @@ class DC_multi_period(Basemodel_multi_period):
                 - model.delta[model.AT[l, 2], t]
                 - model.shift[l]
             )
+
+    #: The DC formulation has a single real-power balance and no reactive one.
+    KCL_CONSTRAINTS = ("KCL_def",)
+
+    def _kcl_def_rule(self, model, b, t):
+        kcl = sum(
+            model.psG[g, t] for g in model.sG if (g, b) in model.sGbs
+        ) + sum(model.pG[g, t] for g in model.G if (g, b) in model.Gbs) == sum(
+            model.pD[d, t] for d in model.D if (b, d) in model.Dbs
+        ) + sum(
+            model.pLfrom[l, t] for l in model.L if model.A[l, 1] == b
+        ) + sum(model.pLto[l, t] for l in model.L if model.A[l, 2] == b) + sum(
+            model.pThv[l, t] for l in model.TRANSF if model.AT[l, 1] == b
+        ) + sum(
+            model.pTlv[l, t] for l in model.TRANSF if model.AT[l, 2] == b
+        ) + sum(
+            model.GB[s, t] for s in model.SHUNT if (b, s) in model.SHUNTbs
+        ) + self.KCL_flexibility(model, b, t)
+        if isinstance(kcl, bool):
+            return Constraint.Skip
+        return kcl

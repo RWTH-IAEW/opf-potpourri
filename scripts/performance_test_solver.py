@@ -69,7 +69,25 @@ if __name__ == "__main__":
             "perfplot is required: pip install potpourri[performance-test]"
         ) from exc
 
-    os.environ.setdefault("NEOS_EMAIL", "your@email.com")
+    # Every kernel submits to NEOS, a remote solver service that requires a
+    # real registered address and rejects the submission otherwise — the
+    # failure surfaces as a bare
+    # `ActionManagerError: Problem executing an event` from deep inside Pyomo's
+    # async solver manager, which says nothing about the cause. Check up front
+    # instead, and skip rather than crash: this benchmark cannot run without an
+    # account, and that is a fact about the environment, not a defect.
+    neos_email = os.environ.get("NEOS_EMAIL", "")
+    if not neos_email or neos_email == "your@email.com":
+        print(
+            "Skipping: this benchmark solves every case on the NEOS server, "
+            "which needs a\nregistered address.  Set NEOS_EMAIL to your own "
+            "and re-run:\n\n"
+            "    NEOS_EMAIL=you@example.org python "
+            "scripts/performance_test_solver.py\n\n"
+            "Nothing else in potpourri requires NEOS — the local solvers "
+            "(IPOPT, GLPK, CBC,\nGurobi) are what the other scripts use."
+        )
+        raise SystemExit(0)
 
     net_data = _load_networks()
     bus_counts = sorted({net["bus"].shape[0] for _, net in net_data})

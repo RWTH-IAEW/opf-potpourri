@@ -4,51 +4,31 @@
 
 > *Potpourri — piece of music composed from various popular smaller works or melodies*
 
-[![CI](https://github.com/RWTH-IAEW/opf-potpourri/actions/workflows/ci.yml/badge.svg)](https://github.com/RWTH-IAEW/opf-potpourri/actions/workflows/ci.yml)
-[![Documentation Status](https://readthedocs.org/projects/opf-potpourri/badge/?version=latest)](https://opf-potpourri.readthedocs.io/)
-[![PyPI](https://img.shields.io/pypi/v/opf-potpourri)](https://pypi.org/project/opf-potpourri/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20357011.svg)](https://doi.org/10.5281/zenodo.20357011)
+`potpourri` is a Python library for AC/DC Optimal Power Flow (OPF) in distribution grids, with support for multi-period planning and flexible resources (batteries, heat pumps, PV, wind). It wraps [Pyomo](https://pyomo.readthedocs.io/) for optimisation modelling over [pandapower](https://pandapower.readthedocs.io/) network objects.
 
-`potpourri` is a Python library for AC/DC Optimal Power Flow (OPF) in distribution grids, with support for multi-period planning and flexible resources (batteries, EVs, heat pumps, PV, wind). It wraps [Pyomo](https://pyomo.readthedocs.io/) for optimisation modelling over [pandapower](https://pandapower.readthedocs.io/) network objects.
+---
 
-**Documentation:** <https://opf-potpourri.readthedocs.io/>  
-**Repository:** <https://github.com/RWTH-IAEW/opf-potpourri>  
-**PyPI:** <https://pypi.org/project/opf-potpourri/>
+## Documentation
+
+The project documentation is built with [MkDocs](https://www.mkdocs.org/).
+
+To serve the documentation locally:
+
+```bash
+pip install -e .[docs]
+mkdocs serve          # usually available at http://127.0.0.1:8000/
+```
 
 ---
 
 ## Installation
 
-### For users
-
-Install from PyPI with pip or uv. Python 3.9–3.12 is supported.
+Requires Python 3.9–3.12 and Conda (or Mamba).
 
 ```bash
-pip install opf-potpourri
-```
-
-or with [uv](https://docs.astral.sh/uv/):
-
-```bash
-uv pip install opf-potpourri
-```
-
-Solvers are **not** bundled. Install at least one separately before calling
-`solve()` — see [Solvers](#solvers) below.
-
-### For developers
-
-Clone the repository and create the Conda environment, which includes IPOPT
-and GLPK:
-
-```bash
-git clone --recurse-submodules https://github.com/RWTH-IAEW/opf-potpourri.git
-cd opf-potpourri
-
-conda env create -f environment.yaml   # creates potpourri_env, includes solvers
+conda env create -f environment.yaml
 conda activate potpourri_env
-pip install -e ".[dev]"                # editable install + ruff, pytest, pre-commit
+pip install -e .
 ```
 
 To update an existing environment:
@@ -59,24 +39,6 @@ conda env update -f environment.yaml --prune
 
 A Dockerfile is provided for a fully containerised setup with IPOPT 3.14.16
 compiled from source, CBC, and SHOT solvers.
-
----
-
-## Documentation
-
-Full documentation is available at <https://opf-potpourri.readthedocs.io/>, including:
-
-- [Getting Started](https://opf-potpourri.readthedocs.io/en/latest/getting-started/)
-- [Mathematical Modelling](https://opf-potpourri.readthedocs.io/en/latest/mathematical-modelling/)
-- [User Guide](https://opf-potpourri.readthedocs.io/en/latest/user-guide/single-period/)
-- [API Reference](https://opf-potpourri.readthedocs.io/en/latest/api/models/)
-
-To build and serve the documentation locally (contributors):
-
-```bash
-pip install -e ".[docs]"
-mkdocs serve          # available at http://127.0.0.1:8000/
-```
 
 ---
 
@@ -120,24 +82,6 @@ See `scripts/` for runnable examples covering each feature area.
 
 ---
 
-## Solvers
-
-`potpourri` does not bundle any solvers. Install at least one before
-calling `solve()`.
-
-| Solver | Type | Install |
-|---|---|---|
-| **IPOPT** | NLP — AC OPF | `conda install -c conda-forge ipopt` |
-| **GLPK** | LP / MIP — DC OPF | `conda install -c conda-forge glpk` |
-| **CBC** | LP / MIP | `conda install -c conda-forge coincbc` |
-| **Gurobi** | LP / MIP / NLP | `pip install gurobipy` (licence required) |
-| **NEOS** | Remote (free) | `opf.solve(solver='neos', neos_opt='ipopt')` |
-
-IPOPT and GLPK are included automatically in the developer Conda environment
-(`environment.yaml`). PyPI users must install solvers separately.
-
----
-
 ## Architecture
 
 ### Single-period models (`src/potpourri/models/`)
@@ -161,11 +105,12 @@ Basemodel_multi_period    adds time index T, integrates SimBench profiles
 
 Flexibility_multi_period  abstract base for all flexible devices
   ├── Battery_multi_period
-  ├── HeatPump_multi_period
+  ├── Heatpump_multi_period
   ├── PV_multi_period
-  ├── Windpower_multi_period
-  ├── Demand_multi_period
   ├── Sgens_multi_period
+  │     └── Windpower_multi_period
+  ├── Demand_multi_period
+  ├── Shunts_multi_period
   └── Generator_multi_period
 ```
 
@@ -186,41 +131,6 @@ pandapower net
 
 ---
 
-## Benchmarking against PGLib-OPF
-
-[PGLib-OPF](https://github.com/power-grid-lib/pglib-opf) is the IEEE PES
-Power Grid Library benchmark suite for optimal power flow. Each case ships
-with a published reference objective (DC and AC, solved by PowerModels.jl +
-IPOPT) so results from different solvers and formulations can be compared
-directly.
-
-The repository includes PGLib-OPF as a git submodule under `benchmarks/pglib-opf/`.
-Clone with submodules to enable it:
-
-```bash
-git clone --recurse-submodules https://github.com/RWTH-IAEW/opf-potpourri.git
-```
-
-Run the benchmark script against a configurable PGLib subset:
-
-```bash
-python scripts/pglib_benchmark.py
-```
-
-This solves DC and AC OPF on each case with PGLib-compatible flags
-(`thermal_limit='mva'`, `free_slack_vm=True`, `angle_limits=True`) and writes
-`results/pglib_benchmark.{csv,md}` with a BASELINE.md-style comparison table.
-
-The `potpourri.benchmarks` package provides `load_pglib_case` for loading any
-`.m` case file into a pandapower network ready for OPF, and reference baseline
-dicts (`PGLIB_BASELINE_TYP`, `PGLIB_BASELINE_API`, `PGLIB_BASELINE_SAD`)
-parsed from PGLib's upstream `BASELINE.md`.
-
-The PGLib submodule is only needed for benchmarking. Normal `pip install
-opf-potpourri` is unaffected — the submodule is not part of the PyPI package.
-
----
-
 ## External dependencies
 
 | Package | Role |
@@ -231,15 +141,32 @@ opf-potpourri` is unaffected — the submodule is not part of the PyPI package.
 | `numpy`, `pandas` | Numerical / data processing |
 | `matplotlib` | Plotting |
 
+### Solvers
+
+`potpourri` does not bundle any solvers. Install at least one before
+calling `solve()`.
+
+| Solver | Type | Install |
+|---|---|---|
+| **IPOPT** | NLP — AC OPF | `conda install -c conda-forge ipopt` |
+| **GLPK** | LP / MIP — DC OPF | `conda install -c conda-forge glpk` |
+| **CBC** | LP / MIP | `conda install -c conda-forge coincbc` |
+| **Gurobi** | LP / MIP / NLP | `pip install gurobipy` (licence required) |
+| **NEOS** | Remote (free) | `opf.solve(solver='neos', neos_opt='ipopt')` |
+
+IPOPT and GLPK are included automatically when you create the environment
+from `environment.yaml`.
+
 ---
 
 ## Development
 
 ```bash
-ruff check .                          # lint
-ruff format .                         # format
-pytest -m "not integration"           # unit tests (no solver required)
-pytest                                # all tests (integration tests need IPOPT)
+pip install -e ".[dev]"   # installs ruff, pytest, pytest-cov, pre-commit
+ruff check .              # lint
+ruff format .             # format
+pytest                    # run tests
+pytest -m "not integration"   # skip solver-dependent tests
 ```
 
 Analysis and example scripts are in `scripts/`. See `scripts/README.md`
@@ -256,17 +183,3 @@ for an overview of what each example demonstrates.
 - Farah Nasr — IAEW, RWTH Aachen University
 - Philip Kvesic — IAEW, RWTH Aachen University
 - Nina Stumberger — IAEW, RWTH Aachen University
-
----
-
-## Citation
-
-If you use `potpourri` in your research, please cite it using the metadata in
-[`CITATION.cff`](CITATION.cff). A BibTeX entry will be available once a
-Zenodo DOI is registered for the release.
-
----
-
-## License
-
-`potpourri` is released under the [MIT License](LICENSE).

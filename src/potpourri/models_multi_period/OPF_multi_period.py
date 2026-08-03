@@ -145,7 +145,26 @@ class OPF_multi_period(Basemodel_multi_period):
 
     def _calc_opf_parameters(self, **kwargs):
         """Compute line/transformer ratings and call generator/demand limit
-        methods on flexibility objects."""
+        methods on flexibility objects.
+
+        Args:
+            **kwargs: No options are consumed here. Anything left over has
+                been forwarded from ``add_OPF`` without a consumer, so it is
+                rejected rather than ignored — silently swallowing, e.g.,
+                ``thermal_limit`` on the DC path made an option look
+                supported when it changed nothing.
+
+        Raises:
+            TypeError: If any keyword argument reaches this point.
+        """
+        if kwargs:
+            unsupported = ", ".join(sorted(kwargs))
+            raise TypeError(
+                f"{type(self).__name__}.add_OPF() got unsupported option(s): "
+                f"{unsupported}. This model kind does not implement them; "
+                f"see the single-period vs multi-period table in "
+                f"docs/user-guide/multi-period.md."
+            )
         max_load = (
             self.net.line.max_loading_percent.values
             if "max_loading_percent" in self.net.line
@@ -219,6 +238,11 @@ class OPF_multi_period(Basemodel_multi_period):
         ):  # Gets all Opf parmas ands sets from flexibility objects
             flex.get_all_opf(self.model)
 
+        # Devices attach to the model after the power-flow equations were
+        # built, so the balance is rebuilt here to pick up their injections.
+        # A no-op when nothing registered a coupling term.
+        self.rebuild_kcl()
+
         # lines and transformer chracteristics and ratings
         self.model.SLmax = Param(
             self.model.L,
@@ -234,6 +258,75 @@ class OPF_multi_period(Basemodel_multi_period):
         )  # real power transformer limit
 
         # --- transformer tap ratio limits ---
+
+    def _branch_angle_bounds(self, table, idx_set, hv_col, lv_col):
+        """Read finite per-branch angle bounds, in radians, keyed by index.
+
+        Mirrors the reader in ``ACOPF._add_branch_angle_limits``: branches
+        with no angle columns, non-finite bounds, or the ±360° placeholder
+        MATPOWER uses for "unconstrained" are left out, as are the synthetic
+        impedance indices in ``model.L`` that have no row in ``net.line``.
+        """
+        angmin_col, angmax_col = "angmin_degree", "angmax_degree"
+        if angmin_col not in table.columns or angmax_col not in table.columns:
+            return {}
+        valid = set(table.index)
+        out = {}
+        for ix in idx_set:
+            if ix not in valid:
+                continue
+            amin = float(table.at[ix, angmin_col])
+            amax = float(table.at[ix, angmax_col])
+            if (
+                not np.isfinite(amin)
+                or not np.isfinite(amax)
+                or abs(amin) >= 359.0
+                or abs(amax) >= 359.0
+            ):
+                continue
+            out[ix] = (
+                self.bus_lookup[int(table.at[ix, hv_col])],
+                self.bus_lookup[int(table.at[ix, lv_col])],
+                np.deg2rad(amin),
+                np.deg2rad(amax),
+            )
+        return out
+
+    def _add_branch_angle_limits(self):
+        """Attach time-indexed branch phase-angle-difference constraints.
+
+        PowerModels.jl convention: ``angmin ≤ δ_from − δ_to ≤ angmax``, held
+        at every time step. The single-period equivalent is
+        ``ACOPF._add_branch_angle_limits``.
+        """
+        line_bounds = self._branch_angle_bounds(
+            self.net.line, list(self.model.L), "from_bus", "to_bus"
+        )
+        trafo_bounds = self._branch_angle_bounds(
+            self.net.trafo, list(self.model.TRANSF), "hv_bus", "lv_bus"
+        )
+
+        if line_bounds:
+            self.model.LineAngleSet = Set(initialize=list(line_bounds))
+
+            def _line_angle_rule(model, l, t):
+                f, to, amin, amax = line_bounds[l]
+                return amin, model.delta[f, t] - model.delta[to, t], amax
+
+            self.model.line_angle_diff = Constraint(
+                self.model.LineAngleSet, self.model.T, rule=_line_angle_rule
+            )
+
+        if trafo_bounds:
+            self.model.TrafoAngleSet = Set(initialize=list(trafo_bounds))
+
+            def _trafo_angle_rule(model, l, t):
+                f, to, amin, amax = trafo_bounds[l]
+                return amin, model.delta[f, t] - model.delta[to, t], amax
+
+            self.model.trafo_angle_diff = Constraint(
+                self.model.TrafoAngleSet, self.model.T, rule=_trafo_angle_rule
+            )
 
     def add_tap_changer_linear(self, max_tap_change_per_step=None):
         """Enable continuous (linear) OLTC tap-ratio optimisation.

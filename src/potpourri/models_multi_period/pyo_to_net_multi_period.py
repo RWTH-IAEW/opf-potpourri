@@ -2,8 +2,11 @@
 into net.res_* DataFrames."""
 
 import numpy as np
-import pandapower as pp
 import pandas as pd
+
+# pandapower 3.5 dropped clear_result_tables from the top-level namespace;
+# pandapower.toolbox carries it on every version we support.
+from pandapower.toolbox import clear_result_tables
 
 
 def pyo_sol_to_net_res(net, model, t):
@@ -23,7 +26,7 @@ def pyo_sol_to_net_res(net, model, t):
                 model.qsG[w].value * model.baseMVA.value * model.y[w].value
             )
 
-    pp.clear_result_tables(net)
+    clear_result_tables(net)
 
     _bus_voltage_results_to_net(net, model, t)
     _line_results_to_net(net, model, t)
@@ -146,9 +149,12 @@ def _line_results_to_net(net, model, t):
         )
 
     else:
-        net.res_line.q_from_mvar.fillna(0.0, inplace=True)
-        net.res_line.q_to_mvar.fillna(0.0, inplace=True)
-        net.res_line.ql_mvar.fillna(0.0, inplace=True)
+        # Assignment rather than a chained `.fillna(..., inplace=True)`, which
+        # mutates the temporary the column access returns. pandas warns today
+        # and makes it a silent no-op in 3.0, leaving NaN for the current and
+        # loading calculations below.
+        for column in ("q_from_mvar", "q_to_mvar", "ql_mvar"):
+            net.res_line[column] = net.res_line[column].fillna(0.0)
 
     # current
     net.res_line.i_from_ka = np.sqrt(
@@ -208,7 +214,7 @@ def _generation_results_to_net(net, model, t):
 
 def _load_results_to_net(net, model, t):
     net.res_load = pd.DataFrame(
-        columns=["p_mw", "q_mvar"], index=net.load.index
+        columns=["p_mw", "q_mvar"], index=net.load.index, dtype=float
     )
     # --- load ---
     net.res_load.p_mw = pd.Series(
@@ -222,53 +228,64 @@ def _load_results_to_net(net, model, t):
             index=net.load.index,
         )
         net.res_load.q_mvar *= model.baseMVA.value
-        net.res_load.q_mvar.fillna(
-            net.load.q_mvar * net.load.scaling * net.load.in_service,
-            inplace=True,
+        net.res_load["q_mvar"] = net.res_load["q_mvar"].fillna(
+            net.load.q_mvar * net.load.scaling * net.load.in_service
         )
 
     net.res_load.set_index(net.load.index, inplace=True)
-    net.res_load.p_mw.fillna(
-        net.load.p_mw * net.load.scaling * net.load.in_service, inplace=True
+    net.res_load["p_mw"] = net.res_load["p_mw"].fillna(
+        net.load.p_mw * net.load.scaling * net.load.in_service
     )
 
 
 def _sgen_results_to_net(net, model, t):
     # --- sgen ---
     net.res_sgen = pd.DataFrame(
-        columns=["p_mw", "q_mvar"], index=net.sgen.index
+        columns=["p_mw", "q_mvar"], index=net.sgen.index, dtype=float
     )
-    for g in model.sG:
-        net.res_sgen.iloc[g]["p_mw"] = (
+    # Collect first, then assign whole columns. `res_sgen.iloc[g]["p_mw"] = x`
+    # is chained assignment: it writes into the Series that iloc returns, which
+    # is a copy whenever pandas decides to make one. It happens to land today
+    # and will stop landing under copy-on-write in pandas 3.0 — silently, with
+    # the optimised dispatch replaced by the profile via the fillna below, so a
+    # curtailed sgen would report its uncurtailed output.
+    positions = list(model.sG)
+    p_column = net.res_sgen.columns.get_loc("p_mw")
+    for g in positions:
+        net.res_sgen.iloc[g, p_column] = (
             model.psG[g, t].value * model.baseMVA.value
         )
 
-        if "AC" in model.name:
-            net.res_sgen.iloc[g]["q_mvar"] = (
+    if "AC" in model.name:
+        q_column = net.res_sgen.columns.get_loc("q_mvar")
+        for g in positions:
+            net.res_sgen.iloc[g, q_column] = (
                 model.qsG[g, t].value * model.baseMVA.value
             )
 
     if "HC" in model.name:
         y = model.y.get_values()
         net.res_sgen["y_wind"] = None
+        y_column = net.res_sgen.columns.get_loc("y_wind")
         for w in model.WIND_HC:
-            net.res_sgen["y_wind"].iloc[w] = y[w]
+            net.res_sgen.iloc[w, y_column] = y[w]
 
     net.res_sgen.set_index(net.sgen.index, inplace=True)
-    net.res_sgen.p_mw.fillna(
-        net.sgen.p_mw * net.sgen.scaling * net.sgen.in_service, inplace=True
+    net.res_sgen["p_mw"] = net.res_sgen["p_mw"].fillna(
+        net.sgen.p_mw * net.sgen.scaling * net.sgen.in_service
     )
     if "AC" in model.name:
-        net.res_sgen.q_mvar.fillna(
-            net.sgen.q_mvar * net.sgen.scaling * net.sgen.in_service,
-            inplace=True,
+        net.res_sgen["q_mvar"] = net.res_sgen["q_mvar"].fillna(
+            net.sgen.q_mvar * net.sgen.scaling * net.sgen.in_service
         )
 
 
 def _gen_results_to_net(net, model, t):
     # --- gen ---
     net.res_gen = pd.DataFrame(
-        columns=["p_mw", "q_mvar", "va_degree", "vm_pu"], index=net.gen.index
+        columns=["p_mw", "q_mvar", "va_degree", "vm_pu"],
+        index=net.gen.index,
+        dtype=float,
     )
     for g in model.gG:
         # net.res_gen.loc[g, 'p_mw'] = model.pG[g].value * model.baseMVA.value

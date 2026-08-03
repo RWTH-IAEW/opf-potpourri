@@ -41,8 +41,24 @@ class Shunts_multi_period(Flexibility_multi_period):
         return True
 
     def get_parameters(self, model):
-        """Attach shunt conductance parameter GB."""
+        """Attach the shunt conductance parameter GB, indexed by (shunt, step).
+
+        Time-indexed to match ``BB``, the susceptance, which
+        ``AC_multi_period`` has always declared over ``SHUNT × T``. The two
+        disagreed: ``GB`` was declared over ``SHUNT`` alone while the result
+        mapper read ``GB[s, t]``, and the power-balance rules read ``BB[s]``.
+        Each consumer therefore used the wrong form for one of the two, and any
+        network carrying a shunt raised ``KeyError`` on model construction.
+        Every SimBench network has no shunts, so ``for s in model.SHUNT`` never
+        iterated and neither path was ever reached.
+
+        The conductance is constant over the horizon today; the index is there
+        so a switched shunt bank can vary with time without another mismatch.
+        """
+        self.GB_data_dict, self.GB_tuple = self.make_to_dict(
+            model.SHUNT, model.T, self.GB_data[model.SHUNT], False
+        )
         model.GB = pyo.Param(
-            model.SHUNT, within=pyo.Reals, initialize=self.GB_data[model.SHUNT]
-        )  # shunt conductance
+            self.GB_tuple, within=pyo.Reals, initialize=self.GB_data_dict
+        )  # shunt conductance, per (shunt, time step)
         return True

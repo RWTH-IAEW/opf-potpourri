@@ -5,6 +5,73 @@ inherits from `Flexibility_multi_period` and attaches its own Pyomo Sets,
 Parameters, Variables, and Constraints to an existing `ACOPF_multi_period`
 instance by calling `device.get_all(model)`.
 
+## Placement is reproducible
+
+`Battery`, `PV` and `Heatpump` place their units at a random fraction of the
+non-slack buses. The draw comes from a **generator owned by the device**, seeded
+with `DEFAULT_PLACEMENT_SEED` (42) unless told otherwise, so a study re-runs to
+the same answer:
+
+```python
+Battery_multi_period(net, T=96, scenario=1)               # same buses every run
+Battery_multi_period(net, T=96, scenario=1, seed=7)       # a different placement
+```
+
+Never the process-global `np.random`, so a device's buses do not depend on
+whatever else in the program drew a random number first.
+
+For a Monte Carlo sweep, thread one generator through it. Each scenario then
+gets an independent placement while the sweep as a whole replays exactly:
+
+```python
+import numpy as np
+
+rng = np.random.default_rng(2024)
+for scenario in range(50):
+    battery = Battery_multi_period(net, T=96, scenario=1, rng=rng)
+    ...
+```
+
+A single `seed` cannot express that — every scenario would land on the same
+buses. `rng` takes precedence over `seed` when both are given.
+
+The drawn buses are on `device.random_indexes`; record them with any result, so
+a number carries the placement it came from.
+
+## How a device reaches the power balance
+
+A device attaches to an already-built model, so its injections have to be
+registered rather than hard-coded into the power-flow equations:
+
+```
+device.get_all(model)
+  └─ couple_to_power_balance(model)
+       ├─ register_kcl_real(model, term)      # term(model, b, t) -> expression
+       └─ register_kcl_reactive(model, term)  # AC-style models only
+
+opf.add_OPF()
+  └─ rebuild_kcl()   # re-creates KCL_real / KCL_reactive with the terms
+```
+
+Registered terms use the **load sign convention**: positive is consumption,
+negative is injection, matching `pD` / `qD`. `Flexibility_multi_period.bus_term`
+builds a term from a device's `*_bus` set and maps the placement buses into ppc
+numbering, which is what the balance is indexed over.
+
+`rebuild_kcl()` is idempotent — with no device registered it reproduces the
+same constraints — so `add_OPF()` calls it unconditionally.
+
+To couple a custom device, register a term in its `get_all`:
+
+```python
+def couple_to_power_balance(self, model):
+    self.register_kcl_real(
+        model, self.bus_term(model, model.MY_bus, "my_p", sign=1.0)
+    )
+```
+
+Use `sign=-1.0` if the variable is a generator-convention injection.
+
 ---
 
 ## Battery storage
@@ -27,6 +94,12 @@ Battery_multi_period(
     capacity_pu_h=0.015,
     efficiency=0.9,
     initial_soc_fraction=0.5,
+    terminal_soc="cyclic",
+    s_inv_pu=None,          # defaults to power_pu
+    q_control=None,
+    var_q=0,
+    cos_phi_min=None,
+    grid_code=None,
 )
 ```
 
@@ -38,8 +111,46 @@ Battery_multi_period(
 | `soc_max` | `1.0` | Maximum state of charge (fraction of capacity) |
 | `soc_min` | `0.2` | Minimum state of charge (fraction of capacity) |
 | `capacity_pu_h` | `0.015` | Energy capacity (p.u. power × hours) |
-| `efficiency` | `0.9` | One-way charge/discharge efficiency |
+| `efficiency` | `0.9` | One-way efficiency: `η` charging, `1/η` discharging, so the round-trip efficiency is `η²` |
 | `initial_soc_fraction` | `0.5` | Initial SOC as fraction of `soc_max` |
+| `terminal_soc` | `"cyclic"` | SOC at the last step: `"cyclic"` = back to the initial SOC, a float pins an absolute value, `None` leaves it free |
+| `s_inv_pu` | `power_pu` | Converter apparent-power rating (p.u.). Bounds P and Q jointly through the S² circle |
+| `q_control` | `None` | Grid-code capability area: `None`, `"qp"`, `"qu"`, or `"both"` |
+| `var_q` | `0` | Grid-code operating variant (0–2) |
+| `cos_phi_min` | `None` | Power-factor floor |
+| `grid_code` | `None` | Connection rule supplying the capability areas (default VDE-AR-N 4120) |
+
+### Reactive power
+
+The battery converter supplies reactive power as well as active. `BAT_Q` uses
+the generator sign convention — positive is capacitive injection, matching
+`qsG` — and is bounded by, in increasing specificity:
+
+| Constraint | Present when | Meaning |
+|---|---|---|
+| `bat_inverter_s2` | always | `BAT_P² + BAT_Q² ≤ s_inv_pu²`, the converter's apparent-power circle |
+| `bat_cos_phi_upper` / `_lower` | `cos_phi_min` set | `\|BAT_Q\| ≤ tan(arccos(cos_phi_min)) · (BAT_Pchg + BAT_Pdis)` |
+| `bat_QP_pos` / `bat_QP_neg` | `q_control` includes `"qp"` | Grid-code Q(P) capability area |
+| `bat_QU_min` / `bat_QU_max` | `q_control` includes `"qu"` | Grid-code Q(U) capability area |
+
+Notes on the formulation:
+
+- `s_inv_pu` defaults to `power_pu`, a converter sized exactly to the active
+  power limit — which leaves **no** reactive headroom at full charge or
+  discharge. Oversize it (`s_inv_pu = 1.5 * power_pu`) for reactive support at
+  rated active power. It may not be set below `power_pu`.
+- The S² circle stays convex: `BAT_P` is the affine `BAT_Pchg − BAT_Pdis`.
+  `BAT_Q` also carries the box `[−s_inv_pu, +s_inv_pu]`, which the circle
+  already implies but which keeps IPOPT's iterates inside the capability
+  region.
+- The cos φ limit uses `BAT_Pchg + BAT_Pdis` as a convex stand-in for
+  `|BAT_P|`. The two coincide whenever only one leg is active, which a
+  loss-making `efficiency` already makes optimal.
+- The Q(P) area is keyed on the **discharging** leg, since that is the mode in
+  which a storage unit acts as a generating unit under VDE-AR-N
+  4105/4110/4120.
+- Reactive power exists on AC-style models only. On the DC formulation, which
+  has no reactive balance, `BAT_Q` and these constraints are skipped.
 
 **Scenario penetration levels:**
 
@@ -55,17 +166,33 @@ Battery_multi_period(
 **Parameters:** `BAT_Pmax[b]`, `BAT_Pmin[b]`, `BAT_SOCmax[b]`, `BAT_SOCmin[b]`,
 `BAT_Cap[b]`, `BAT_Eff[b]`, `BAT_SOC_init[b]`
 
-**Variables:** `BAT_P[b, t]` (charging positive), `BAT_SOC[b, t]` (0–1)
+**Variables:** `BAT_Pchg[b, t]`, `BAT_Pdis[b, t]` (both ≥ 0), `BAT_SOC[b, t]` (0–1),
+`BAT_Q[b, t]` (AC-style models only)
+
+**Expressions:** `BAT_P[b, t] = BAT_Pchg[b,t] − BAT_Pdis[b,t]`, the net
+injection (charging positive, i.e. a load on the grid)
 
 **Constraints:**
 
-- `bat_power_con` — power bounds: `BAT_Pmin ≤ BAT_P[b,t] ≤ BAT_Pmax`
+- `bat_chg_limit_con` / `bat_dis_limit_con` — per-leg bounds: `BAT_Pchg ≤ BAT_Pmax`, `BAT_Pdis ≤ −BAT_Pmin`
+- `bat_power_con` — converter throughput: `BAT_Pchg[b,t] + BAT_Pdis[b,t] ≤ BAT_Pmax`, which also keeps the two legs from running at once
 - `bat_soc_con` — SOC bounds: `BAT_SOCmin ≤ BAT_SOC[b,t] ≤ BAT_SOCmax`; initial condition `BAT_SOC[b,t₀] = BAT_SOC_init[b]`
 - `bat_soc_update_con` — energy balance:
 
 $$
-e_{b,t} = e_{b,t-1} + \Delta t \cdot \frac{\eta_b \cdot p_{b,t}^\text{bat}}{C_b}
+e_{b,t} = e_{b,t-1} + \frac{\Delta t}{C_b}
+          \left( \eta_b \, p^\text{chg}_{b,t}
+                 - \frac{p^\text{dis}_{b,t}}{\eta_b} \right)
 $$
+
+- `bat_terminal_soc_con` — terminal condition, unless `terminal_soc=None`
+
+!!! note "Why two power variables"
+    A single signed power variable cannot carry a one-way efficiency: the same
+    factor would scale both directions, so a charge/discharge cycle would
+    return the SOC exactly to its starting value and `efficiency` would model
+    no loss at all. Splitting the legs makes the round-trip efficiency `η²`,
+    matching the single-period `Basemodel.add_storage()` block.
 
 ### Example
 

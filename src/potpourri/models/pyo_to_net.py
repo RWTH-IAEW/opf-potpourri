@@ -2,8 +2,11 @@
 net.res_* DataFrames."""
 
 import numpy as np
-import pandapower as pp
 import pandas as pd
+
+# pandapower 3.5 dropped clear_result_tables from the top-level namespace;
+# pandapower.toolbox carries it on every version we support.
+from pandapower.toolbox import clear_result_tables
 
 
 def _is_ac(model):
@@ -32,7 +35,7 @@ def pyo_sol_to_net_res(net, model):
                 model.qsG[w].value * model.baseMVA.value * model.y[w].value
             )
 
-    pp.clear_result_tables(net)
+    clear_result_tables(net)
 
     _bus_voltage_results_to_net(net, model)
     _line_results_to_net(net, model)
@@ -151,9 +154,12 @@ def _line_results_to_net(net, model):
             net.res_line.q_from_mvar + net.res_line.q_to_mvar
         )
     else:
-        net.res_line.q_from_mvar.fillna(0.0, inplace=True)
-        net.res_line.q_to_mvar.fillna(0.0, inplace=True)
-        net.res_line.ql_mvar.fillna(0.0, inplace=True)
+        # Assignment rather than a chained `.fillna(..., inplace=True)`, which
+        # mutates the temporary the column access returns. pandas warns today
+        # and makes it a silent no-op in 3.0, leaving NaN for the current and
+        # loading calculations below.
+        for column in ("q_from_mvar", "q_to_mvar", "ql_mvar"):
+            net.res_line[column] = net.res_line[column].fillna(0.0)
 
     net.res_line.i_from_ka = np.sqrt(
         net.res_line.p_from_mw**2 + net.res_line.q_from_mvar.fillna(0) ** 2
@@ -231,7 +237,7 @@ def _generation_results_to_net(net, model):
 
 def _load_results_to_net(net, model):
     net.res_load = pd.DataFrame(
-        columns=["p_mw", "q_mvar"], index=net.load.index
+        columns=["p_mw", "q_mvar"], index=net.load.index, dtype=float
     )
     net.res_load.p_mw = model.pD.get_values()
     net.res_load.p_mw *= model.baseMVA.value
@@ -250,7 +256,7 @@ def _load_results_to_net(net, model):
 
 def _sgen_results_to_net(net, model):
     net.res_sgen = pd.DataFrame(
-        columns=["p_mw", "q_mvar"], index=net.sgen.index
+        columns=["p_mw", "q_mvar"], index=net.sgen.index, dtype=float
     )
     for g in model.sG:
         net.res_sgen.loc[g, "p_mw"] = model.psG[g].value * model.baseMVA.value

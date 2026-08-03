@@ -10,15 +10,21 @@ dependencies:
   - ipython=9.12.0
   - numba=0.65.0
   - pip:
-      - geojson==3.2.0
+      # pandapower 3.5 is what a fresh `pip install opf-potpourri` resolves to,
+      # so CI pins it rather than the older 3.4 the metadata also allows (see
+      # the `pandapower>=2.13,<3.6` bound in pyproject.toml). 3.5.4 tightens
+      # three of its own dependencies — scipy~=1.18 on Python >= 3.12,
+      # tqdm~=4.68 and geojson~=3.3 — so those move with it; the pin set below
+      # is the one the unit suite was verified against.
+      - geojson==3.3.0
       - gurobipy==13.0.2
       - loguru==0.7.3
       - matpowercaseframes==2.1.0
       - numpy==2.3.5
       - openpyxl==3.1.5
-      - pandapower==3.4.0
+      - pandapower==3.5.4
       - pandas==2.3.3
       - pyomo==6.10.1
-      - scipy==1.16.3
+      - scipy==1.18.0
       - simbench==1.6.2
-      - tqdm==4.67.3
+      - tqdm==4.70.0

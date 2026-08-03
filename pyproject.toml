@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "opf-potpourri"
-version = "0.4.2"
+version = "0.5.0"
 description = "Multi-period Optimal Power Flow for distribution grids with storage — Pyomo models over pandapower networks"
 readme = "README.md"
 requires-python = ">=3.9,<3.13"
@@ -45,8 +45,18 @@ dependencies = [
     "matplotlib>=3.7",
     "numpy>=1.24",
     "openpyxl>=3.1",
-    "pandapower>=2.13",
-    "pandas>=2.0",
+    # Upper bound is deliberate: pandapower moves symbols out of its top-level
+    # namespace between minor releases (3.5 dropped create_continuous_bus_index
+    # from it), which breaks model construction rather than degrading it. The
+    # unit suite is verified on 3.4.0 and 3.5.4; raise the bound after testing
+    # the next minor, do not drop it.
+    "pandapower>=2.13,<3.6",
+    # Upper bound is deliberate, for the same reason as the pandapower one:
+    # pandas 3.0 makes copy-on-write the default, which turns chained
+    # assignment into a silent no-op rather than an error. The result mappers
+    # were audited for that and use plain assignment, but the bound keeps the
+    # next major release from changing results before it has been tested.
+    "pandas>=2.0,<3",
     "pyomo>=6.10",
     "simbench>=1.4",
 ]
@@ -64,7 +74,6 @@ notebooks = [
 docs = [
     "mkdocs>=1.5",
     "mkdocs-material>=9.0",
-    "mkdocs-bibtex>=4.0",
     # mkdocs.yml enables pymdownx.arithmatex and pymdownx.superfences
     # directly, so declare this rather than relying on mkdocs-material
     # pulling it in transitively.
@@ -85,10 +94,10 @@ performance-test = [
 ]
 
 [project.urls]
-Homepage      = "https://github.com/RWTH-IAEW/opf-potpourri"
-Repository    = "https://github.com/RWTH-IAEW/opf-potpourri"
-Documentation = "https://opf-potpourri.readthedocs.io/"
-"Bug Tracker" = "https://github.com/RWTH-IAEW/opf-potpourri/issues"
+Homepage      = "https://github.com/IAEW-RWTH/opf-potpourri"
+Repository    = "https://github.com/IAEW-RWTH/opf-potpourri"
+Documentation = "https://github.com/IAEW-RWTH/opf-potpourri#readme"
+"Bug Tracker" = "https://github.com/IAEW-RWTH/opf-potpourri/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -99,8 +108,7 @@ where = ["src"]
 [tool.ruff]
 line-length = 79
 # Ruff 0.16 began formatting Python code blocks inside Markdown files. Keep the
-# prose, the examples and paper.md as authored; ruff's remit here is the Python
-# sources.
+# prose and its examples as authored; ruff's remit here is the Python sources.
 extend-exclude = ["*.md"]
 
 [tool.ruff.lint]
@@ -116,10 +124,9 @@ extend-select = ["E501"]
 ignore = ["E741", "F403", "F405"]
 
 [tool.ruff.lint.per-file-ignores]
-# Tutorial notebooks converted to percent-format scripts; imports appear mid-file.
-"tutorials/*.py"   = ["E402", "E501"]
-"tutorials/*.ipynb" = ["E501"]
 "scripts/*.py"     = ["E501"]
+"scripts/research/*.py" = ["E402", "E501"]
+"src/potpourri/research/**/*.py" = ["E501"]
 "tests/**/*.py"    = ["E501"]
 
 [tool.ruff.lint.pydocstyle]

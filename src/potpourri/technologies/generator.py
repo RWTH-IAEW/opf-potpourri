@@ -154,15 +154,22 @@ class Generator_multi_period(Flexibility_multi_period):
         max_p = np.full(len(self.generation_data), 1e9) / self.baseMVA
         min_p = np.full(len(self.generation_data), -1e9) / self.baseMVA
 
+        # astype(float) before fillna: these pandapower columns can carry
+        # object dtype when they hold NaN, and filling an object column
+        # downcasts, which pandas deprecates and will change. Converting first
+        # keeps the result a plain float array either way.
         for element, (f, t) in self.net._gen_order.items():
             if "max_p_mw" in self.net[element]:
                 max_p[f:t] = (
-                    self.net[element].max_p_mw.fillna(1e9).values
+                    self.net[element].max_p_mw.astype(float).fillna(1e9).values
                     / self.baseMVA
                 )
             if "min_p_mw" in self.net[element]:
                 min_p[f:t] = (
-                    self.net[element].min_p_mw.fillna(-1e9).values
+                    self.net[element]
+                    .min_p_mw.astype(float)
+                    .fillna(-1e9)
+                    .values
                     / self.baseMVA
                 )
 
@@ -191,11 +198,13 @@ class Generator_multi_period(Flexibility_multi_period):
         for element, (f, t) in self.net._gen_order.items():
             if "max_q_mvar" in self.net[element]:
                 max_q[f:t] = (
-                    self.net[element].max_q_mvar.fillna(1e9) / self.baseMVA
+                    self.net[element].max_q_mvar.astype(float).fillna(1e9)
+                    / self.baseMVA
                 )
             if "min_q_mvar" in self.net[element]:
                 min_q[f:t] = (
-                    self.net[element].min_q_mvar.fillna(-1e9) / self.baseMVA
+                    self.net[element].min_q_mvar.astype(float).fillna(-1e9)
+                    / self.baseMVA
                 )
 
         self.generation_data["max_q"] = max_q

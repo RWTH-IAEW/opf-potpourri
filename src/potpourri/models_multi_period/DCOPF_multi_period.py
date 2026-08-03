@@ -22,9 +22,23 @@ class DCOPF_multi_period(DC_multi_period, OPF_multi_period):
         super().__init__(net, toT, fromT, pf)
         self.model.name = "DCOPF"
 
-    def add_OPF(self, **kwargs):
+    def add_OPF(self, angle_limits: bool = False, **kwargs):
         """Attach OPF constraints — line / transformer ratings, generator
-        and demand limits, plus DC apparent-power thermal limits."""
+        and demand limits, plus DC apparent-power thermal limits.
+
+        Args:
+            angle_limits: When ``True``, enforce branch
+                phase-angle-difference constraints
+                ``angmin ≤ δ_from − δ_to ≤ angmax`` at every time step, read
+                from ``net.line.angmin_degree`` / ``net.line.angmax_degree``
+                and the transformer equivalent. Defaults to ``False``, as on
+                the single-period :class:`~potpourri.models.DCOPF.DCOPF`.
+            **kwargs: Forwarded to :meth:`OPF_multi_period.add_OPF`, which
+                rejects unsupported names. In particular ``thermal_limit``
+                is AC-only — the DC model is lossless and carries no
+                reactive power, so its limit is a real-power bound with no
+                current-versus-MVA distinction to make.
+        """
         OPF_multi_period.add_OPF(self, **kwargs)
 
         # --- line power limits (DC: lossless, check sending end only) ---
@@ -44,3 +58,7 @@ class DCOPF_multi_period(DC_multi_period, OPF_multi_period):
         @self.model.Constraint(self.model.TRANSF, self.model.T)
         def transf_lim_lower(model, l, t):
             return model.pThv[l, t] >= -model.SLmaxT[l]
+
+        # --- optional branch angle-difference limits ---
+        if angle_limits:
+            self._add_branch_angle_limits()

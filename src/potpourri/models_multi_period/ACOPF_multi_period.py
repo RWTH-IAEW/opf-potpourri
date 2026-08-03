@@ -21,10 +21,18 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
     def __init__(self, net, toT, fromT=None, pf=1):
         super().__init__(net, toT, fromT, pf)
 
-    def _calc_opf_parameters(self):
+    def _calc_opf_parameters(self, **kwargs):
         """Extend OPF parameter calculation with AC-specific limits: voltage
-        bounds, Q limits, Q-curve data."""
-        super()._calc_opf_parameters()
+        bounds, Q limits, Q-curve data.
+
+        Args:
+            **kwargs: Forwarded to
+                :meth:`OPF_multi_period._calc_opf_parameters`, which rejects
+                names it does not recognise. Options consumed by
+                :meth:`add_OPF` itself (``thermal_limit``, ``free_slack_vm``,
+                ``angle_limits``) never reach here.
+        """
+        super()._calc_opf_parameters(**kwargs)
 
         max_vm_pu, min_vm_pu = self.get_v_limits()
         self.v_limits = (max_vm_pu, min_vm_pu)
@@ -206,11 +214,37 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
 
         return max_vm_pu, min_vm_pu
 
-    def add_OPF(self, grid_code=None, qu_deadband=None, **kwargs):
+    def add_OPF(
+        self,
+        thermal_limit: str = "current",
+        free_slack_vm: bool = True,
+        angle_limits: bool = False,
+        grid_code=None,
+        qu_deadband=None,
+        **kwargs,
+    ):
         """Extend OPF.add_OPF() with voltage bounds, AC thermal limits, and
         reactive power constraints.
 
         Args:
+            thermal_limit: ``"current"`` enforces ``|S|² ≤ SLmax² · v²``
+                (current-limit form, physically meaningful for distribution
+                conductors). ``"mva"`` enforces ``|S|² ≤ SLmax²``
+                (constant-MVA limit, matches MATPOWER / PGLib-OPF). Defaults
+                to ``"current"``, as on the single-period model.
+            free_slack_vm: When ``True`` (default), the slack-bus voltage
+                magnitude floats within ``[Vmin, Vmax]`` at every time step;
+                the reference angle stays fixed. ``AC_multi_period`` pins the
+                slack magnitude to its base-case value while building the
+                power flow, so leaving this ``False`` reproduces that legacy
+                AC-PF behaviour — and gives materially different voltages
+                from a single-period AC OPF of the same snapshot, which
+                defaults to a free slack.
+            angle_limits: When ``True``, enforce branch
+                phase-angle-difference constraints
+                ``angmin ≤ δ_from − δ_to ≤ angmax`` at every time step, read
+                from ``net.line.angmin_degree`` / ``net.line.angmax_degree``
+                and the transformer equivalent. Defaults to ``False``.
             grid_code: Technical connection rule supplying the Q(P)/Q(U)
                 capability envelope and the P(U) / cos(phi)(P) thresholds,
                 as accepted by
@@ -237,6 +271,13 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
         self._grid_code = resolve_grid_code(grid_code)
         self._qu_deadband = qu_deadband
 
+        if thermal_limit not in ("current", "mva"):
+            raise ValueError(
+                f"thermal_limit must be 'current' or 'mva', got "
+                f"{thermal_limit!r}"
+            )
+        self.thermal_limit_mode = thermal_limit
+
         super().add_OPF(**kwargs)
 
         self.model.name = "ACOPF"
@@ -261,18 +302,61 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
             mutable=True,
         )  # min voltage (p.u.)
 
-        # --- line power limits ---
-        def line_lim_from_def(model, l, t):
-            return (
-                model.pLfrom[l, t] ** 2 + model.qLfrom[l, t] ** 2
-                <= model.SLmax[l] ** 2 * model.v[model.A[l, 1], t] ** 2
-            )
+        # --- line and transformer apparent-power limits ---
+        # Same two modes as the single-period model, so a snapshot and a
+        # horizon of the same network enforce the same limit.
+        if thermal_limit == "current":
+            # |S|² ≤ SLmax² · v² (i.e. |I| ≤ I_max). Varies with voltage;
+            # physically meaningful for a thermal current rating.
+            def line_lim_from_def(model, l, t):
+                return (
+                    model.pLfrom[l, t] ** 2 + model.qLfrom[l, t] ** 2
+                    <= model.SLmax[l] ** 2 * model.v[model.A[l, 1], t] ** 2
+                )
 
-        def line_lim_to_def(model, l, t):
-            return (
-                model.pLto[l, t] ** 2 + model.qLto[l, t] ** 2
-                <= model.SLmax[l] ** 2 * model.v[model.A[l, 2], t] ** 2
-            )
+            def line_lim_to_def(model, l, t):
+                return (
+                    model.pLto[l, t] ** 2 + model.qLto[l, t] ** 2
+                    <= model.SLmax[l] ** 2 * model.v[model.A[l, 2], t] ** 2
+                )
+
+            def transf_lim1_def(model, l, t):
+                return (
+                    model.pThv[l, t] ** 2 + model.qThv[l, t] ** 2
+                    <= model.SLmaxT[l] ** 2 * model.v[model.AT[l, 1], t] ** 2
+                )
+
+            def transf_lim2_def(model, l, t):
+                return (
+                    model.pTlv[l, t] ** 2 + model.qTlv[l, t] ** 2
+                    <= model.SLmaxT[l] ** 2 * model.v[model.AT[l, 2], t] ** 2
+                )
+        else:
+            # |S|² ≤ SLmax² (constant-MVA limit, matches MATPOWER /
+            # PowerModels' constraint_thermal_limit_* and PGLib-OPF rate_a).
+            def line_lim_from_def(model, l, t):
+                return (
+                    model.pLfrom[l, t] ** 2 + model.qLfrom[l, t] ** 2
+                    <= model.SLmax[l] ** 2
+                )
+
+            def line_lim_to_def(model, l, t):
+                return (
+                    model.pLto[l, t] ** 2 + model.qLto[l, t] ** 2
+                    <= model.SLmax[l] ** 2
+                )
+
+            def transf_lim1_def(model, l, t):
+                return (
+                    model.pThv[l, t] ** 2 + model.qThv[l, t] ** 2
+                    <= model.SLmaxT[l] ** 2
+                )
+
+            def transf_lim2_def(model, l, t):
+                return (
+                    model.pTlv[l, t] ** 2 + model.qTlv[l, t] ** 2
+                    <= model.SLmaxT[l] ** 2
+                )
 
         self.model.line_lim_from = Constraint(
             self.model.L, self.model.T, rule=line_lim_from_def
@@ -281,25 +365,22 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
             self.model.L, self.model.T, rule=line_lim_to_def
         )
 
-        # --- power flow limits on transformer lines--- DONE non time dependent
-        def transf_lim1_def(model, l, t):
-            return (
-                model.pThv[l, t] ** 2 + model.qThv[l, t] ** 2
-                <= model.SLmaxT[l] ** 2 * model.v[model.AT[l, 1], t] ** 2
-            )
-
-        def transf_lim2_def(model, l, t):
-            return (
-                model.pTlv[l, t] ** 2 + model.qTlv[l, t] ** 2
-                <= model.SLmaxT[l] ** 2 * model.v[model.AT[l, 2], t] ** 2
-            )
-
         self.model.transf_lim1 = Constraint(
             self.model.TRANSF, self.model.T, rule=transf_lim1_def
         )
         self.model.transf_lim2 = Constraint(
             self.model.TRANSF, self.model.T, rule=transf_lim2_def
         )
+
+        # --- slack voltage magnitude ---
+        # AC_multi_period pins v[b0, t] to the base-case magnitude while
+        # building the power flow. For a true AC OPF it should float within
+        # [Vmin, Vmax] with only the reference angle pinned, which is what the
+        # single-period model does by default.
+        if free_slack_vm:
+            for b0 in self.model.b0:
+                for t in self.model.T:
+                    self.model.v[b0, t].unfix()
 
         # voltage bounds are time-dependent
         def v_bounds(model, b, t):
@@ -308,6 +389,10 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
         self.model.v_constraint = Constraint(
             self.model.Bpd, self.model.T, rule=v_bounds
         )
+
+        # --- optional branch angle-difference limits ---
+        if angle_limits:
+            self._add_branch_angle_limits()
 
     def add_voltage_deviation_objective(self):
         """Set objective to minimise sum of squared bus voltage deviations

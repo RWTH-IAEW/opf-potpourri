@@ -10,6 +10,10 @@ import pandapower as pp
 import pyomo.environ as pyo
 from loguru import logger
 
+# pandapower 3.5 dropped create_continuous_bus_index from the top-level
+# namespace; pandapower.toolbox carries it on every version we support.
+from pandapower.toolbox import create_continuous_bus_index
+
 from potpourri.models.pyo_to_net import pyo_sol_to_net_res
 
 
@@ -519,23 +523,32 @@ class Basemodel:
                 tee=print_solver_output,
             )
 
+        # Only the termination check is guarded: a result object without a
+        # solver status is a solver-interface problem, not a modelling one.
+        # The mapping call below must NOT be inside the guard — an
+        # AttributeError raised while writing net.res_* would otherwise be
+        # logged and swallowed, leaving the base-case power flow in place and
+        # reporting success.
         try:
-            if pyo.check_optimal_termination(self.results):
-                logger.info(
-                    "Optimal solution found for model '{}'", self.model.name
-                )
-                if to_net:
-                    pyo_sol_to_net_res(self.net, self.model)
-                    logger.debug("Solution mapped to net.res_*")
-            else:
-                logger.warning(
-                    "Solver did not reach optimal termination for model '{}'"
-                    " (condition: {})",
-                    self.model.name,
-                    self.results.solver.termination_condition,
-                )
+            optimal = pyo.check_optimal_termination(self.results)
         except AttributeError as err:
             logger.error("Could not check termination condition: {}", err)
+            return self.results
+
+        if optimal:
+            logger.info(
+                "Optimal solution found for model '{}'", self.model.name
+            )
+            if to_net:
+                pyo_sol_to_net_res(self.net, self.model)
+                logger.debug("Solution mapped to net.res_*")
+        else:
+            logger.warning(
+                "Solver did not reach optimal termination for model '{}'"
+                " (condition: {})",
+                self.model.name,
+                self.results.solver.termination_condition,
+            )
 
         return self.results
 
@@ -787,7 +800,7 @@ def preprocess_grid(grid):
     shunt-only / storage-only / trafo-only buses stay consistent after the
     merge. The "referenced buses" computation also includes those tables, so
     a bus that is only connected via, e.g., a shunt or a transformer terminal
-    is no longer silently dropped before ``pp.create_continuous_bus_index``.
+    is no longer silently dropped before ``create_continuous_bus_index``.
     """
     grid = copy.deepcopy(grid)
 
@@ -840,6 +853,6 @@ def preprocess_grid(grid):
     if _present("switch"):
         bb = grid.switch.index[grid.switch["et"] == "b"]
         grid.switch.drop(bb, inplace=True)
-    pp.create_continuous_bus_index(grid, start=0)
+    create_continuous_bus_index(grid, start=0)
 
     return grid

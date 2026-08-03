@@ -185,61 +185,7 @@ class AC_multi_period(Basemodel_multi_period):
         self.model.qG = Var(self.model.G, self.model.T, domain=Reals)
 
         # --- Kirchoff's current law at each bus b ---
-        # extended by EV charging/discharging
-        def KCL_real_def(model, b, t):
-            kcl = sum(
-                model.psG[g, t] for g in model.sG if (g, b) in model.sGbs
-            ) + sum(
-                model.pG[g, t] for g in model.G if (g, b) in model.Gbs
-            ) == sum(
-                model.pD[d, t] for d in model.D if (b, d) in model.Dbs
-            ) + sum(
-                model.pLfrom[l, t] for l in model.L if model.A[l, 1] == b
-            ) + sum(
-                model.pLto[l, t] for l in model.L if model.A[l, 2] == b
-            ) + sum(
-                model.pThv[l, t] for l in model.TRANSF if model.AT[l, 1] == b
-            ) + sum(
-                model.pTlv[l, t] for l in model.TRANSF if model.AT[l, 2] == b
-            ) + sum(
-                model.GB[s] * model.v[b, t] ** 2
-                for s in model.SHUNT
-                if (b, s) in model.SHUNTbs and model.GB[s] != 0
-            ) + self.KCL_flexibility(model, b, t)
-            if isinstance(kcl, bool):
-                return Constraint.Skip
-            return kcl
-
-        def KCL_reactive_def(model, b, t):
-            kcl = sum(
-                model.qsG[g, t] for g in model.sG if (g, b) in model.sGbs
-            ) + sum(
-                model.qG[g, t] for g in model.G if (g, b) in model.Gbs
-            ) == sum(
-                model.qD[d, t] for d in model.D if (b, d) in model.Dbs
-            ) + sum(
-                model.qLfrom[l, t] for l in model.L if model.A[l, 1] == b
-            ) + sum(
-                model.qLto[l, t] for l in model.L if model.A[l, 2] == b
-            ) + sum(
-                model.qThv[l, t] for l in model.TRANSF if model.AT[l, 1] == b
-            ) + sum(
-                model.qTlv[l, t] for l in model.TRANSF if model.AT[l, 2] == b
-            ) - sum(
-                model.BB[s] * model.v[b, t] ** 2
-                for s in model.SHUNT
-                if (b, s) in model.SHUNTbs and model.BB[s] != 0
-            )
-            if isinstance(kcl, bool):
-                return Constraint.Skip
-            return kcl
-
-        self.model.KCL_real = Constraint(
-            self.model.B, self.model.T, rule=KCL_real_def
-        )
-        self.model.KCL_reactive = Constraint(
-            self.model.B, self.model.T, rule=KCL_reactive_def
-        )
+        self.build_kcl()
 
         # --- Kirchoff's voltage law on each line ---
         def KVL_real_fromend(model, l, t):
@@ -503,7 +449,45 @@ class AC_multi_period(Basemodel_multi_period):
             for t in self.model.T:
                 self.model.v[b0, t].fix(self.model.v_b0[b0])
 
-    def KCL_flexibility(self, model, b, t):
-        """Return the net power injection from flexible assets at bus b
-        at time t."""
-        return 0
+    def _kcl_real_rule(self, model, b, t):
+        kcl = sum(
+            model.psG[g, t] for g in model.sG if (g, b) in model.sGbs
+        ) + sum(model.pG[g, t] for g in model.G if (g, b) in model.Gbs) == sum(
+            model.pD[d, t] for d in model.D if (b, d) in model.Dbs
+        ) + sum(
+            model.pLfrom[l, t] for l in model.L if model.A[l, 1] == b
+        ) + sum(model.pLto[l, t] for l in model.L if model.A[l, 2] == b) + sum(
+            model.pThv[l, t] for l in model.TRANSF if model.AT[l, 1] == b
+        ) + sum(
+            model.pTlv[l, t] for l in model.TRANSF if model.AT[l, 2] == b
+        ) + sum(
+            model.GB[s, t] * model.v[b, t] ** 2
+            for s in model.SHUNT
+            if (b, s) in model.SHUNTbs and model.GB[s, t] != 0
+        ) + self.KCL_flexibility(model, b, t)
+        if isinstance(kcl, bool):
+            return Constraint.Skip
+        return kcl
+
+    def _kcl_reactive_rule(self, model, b, t):
+        kcl = sum(
+            model.qsG[g, t] for g in model.sG if (g, b) in model.sGbs
+        ) + sum(model.qG[g, t] for g in model.G if (g, b) in model.Gbs) == sum(
+            model.qD[d, t] for d in model.D if (b, d) in model.Dbs
+        ) + sum(
+            model.qLfrom[l, t] for l in model.L if model.A[l, 1] == b
+        ) + sum(model.qLto[l, t] for l in model.L if model.A[l, 2] == b) + sum(
+            model.qThv[l, t] for l in model.TRANSF if model.AT[l, 1] == b
+        ) + sum(
+            model.qTlv[l, t] for l in model.TRANSF if model.AT[l, 2] == b
+        ) - sum(
+            model.BB[s, t] * model.v[b, t] ** 2
+            for s in model.SHUNT
+            if (b, s) in model.SHUNTbs and model.BB[s, t] != 0
+        ) + self.KCL_flexibility(model, b, t, reactive=True)
+        if isinstance(kcl, bool):
+            return Constraint.Skip
+        return kcl
+
+    # build_kcl / rebuild_kcl / KCL_flexibility come from
+    # Basemodel_multi_period, shared with the LPAC and DC power flows.

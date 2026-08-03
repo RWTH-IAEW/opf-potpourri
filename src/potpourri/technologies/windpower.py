@@ -90,9 +90,10 @@ class Windpower_multi_period(Sgens_multi_period):
         self.qp_min = qp_min
 
         if "windpot_p_mw" in net.bus:
-            self.static_generation_data["windpot"] = net.bus.windpot_p_mw[
-                net.sgen.bus.values
-            ].values
+            # pWmax bounds psG, which is per-unit, so convert from MW.
+            self.static_generation_data["windpot"] = (
+                net.bus.windpot_p_mw[net.sgen.bus.values].values / self.baseMVA
+            )
             self.static_generation_data["type"] = net.sgen.type.values
 
     def get_all(self, model):
@@ -156,9 +157,11 @@ class Windpower_multi_period(Sgens_multi_period):
             sw_min_mva = self._sw_min_mva
 
         if "windpot_p_mw" in self.net.bus:
-            self.static_generation_data["windpot"] = self.net.bus.windpot_p_mw[
-                self.net.sgen.bus.values
-            ].values
+            # pWmax bounds psG, which is per-unit, so convert from MW.
+            self.static_generation_data["windpot"] = (
+                self.net.bus.windpot_p_mw[self.net.sgen.bus.values].values
+                / self.baseMVA
+            )
 
         wind_hc_set = np.arange(len(self.net.sgen))[
             self.net.sgen.wind_hc & self.net.sgen.in_service

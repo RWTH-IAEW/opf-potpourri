@@ -31,10 +31,17 @@ class HC_ACOPF_multi_period(ACOPF_multi_period):
 
         # noinspection PyProtectedMember
 
-    def _calc_opf_parameters(self, SWmax=10000, SWmin=0):
+    def _calc_opf_parameters(self, SWmax=10000, SWmin=0, **kwargs):
         """Extend AC-OPF parameters with wind HC apparent power bounds via
-        Windpower_multi_period."""
-        super()._calc_opf_parameters()
+        Windpower_multi_period.
+
+        Args:
+            SWmax: Upper bound on the wind hosting-capacity apparent power.
+            SWmin: Lower bound on the wind hosting-capacity apparent power.
+            **kwargs: Forwarded up the chain, which rejects names no model
+                consumes.
+        """
+        super()._calc_opf_parameters(**kwargs)
 
         if "windpot_p_mw" in self.net.bus:
             windpower_object = next(

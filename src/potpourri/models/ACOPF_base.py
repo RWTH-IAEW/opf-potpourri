@@ -337,10 +337,15 @@ class ACOPF(AC, OPF):
                 for g in sgens_var_q
             ]
 
-            self.static_generation_data["max_p"][sgens_var_q] = p_inst[
+            # `.loc[rows, column]` rather than `[column][rows] = ...`: the
+            # latter is chained assignment into the temporary the column access
+            # returns, which pandas warns about and copy-on-write in 3.0 turns
+            # into a silent no-op — the wind sgens would keep their
+            # profile-derived P limits instead of the grid-code ones.
+            self.static_generation_data.loc[sgens_var_q, "max_p"] = p_inst[
                 sgens_var_q
             ]
-            self.static_generation_data["min_p"][sgens_var_q] = (
+            self.static_generation_data.loc[sgens_var_q, "min_p"] = (
                 p_inst[sgens_var_q] * 0.1
             )
 

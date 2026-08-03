@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-`potpourri` is a Python tool for **multi-period Optimal Power Flow (OPF)** in distribution grids. It wraps [Pyomo](https://pyomo.readthedocs.io/) for optimization modeling over [pandapower](https://pandapower.readthedocs.io/) network objects, supporting AC/DC formulations and flexible resources (batteries, EVs, heat pumps, PV, wind).
+`potpourri` is a Python tool for **multi-period Optimal Power Flow (OPF)** in distribution grids. It wraps [Pyomo](https://pyomo.readthedocs.io/) for optimization modeling over [pandapower](https://pandapower.readthedocs.io/) network objects, supporting AC/DC formulations and flexible resources (batteries, heat pumps, PV, wind).
 
 ## Setup
 
@@ -52,11 +52,17 @@ pandapower Network
 
 ```python
 mpopf = ACOPF_multi_period(net, toT=24)
-battery = Battery_multi_period(mpopf)   # attaches battery constraints to mpopf
+# Devices take the net (not the model) and attach in a separate get_all() call
+battery = Battery_multi_period(mpopf.net, T=24, scenario=1)
+battery.get_all(mpopf.model)
+mpopf.add_OPF()
+mpopf.add_voltage_deviation_objective()
 mpopf.solve(solver='ipopt')
 ```
 
-Device modules: `Battery`, `EVs`, `HeatPump`, `PV`, `Windpower`, `Demand`, `Sgens`, `Flexibility`.
+Device modules (all suffixed `_multi_period`, in `src/potpourri/technologies/`):
+`Battery`, `Heatpump` (lower-case `p`), `PV`, `Windpower`, `Demand`, `Sgens`,
+`Shunts`, `Generator`, and the `Flexibility` base class. There is no EV module.
 
 ### Supporting modules
 
@@ -69,6 +75,7 @@ Device modules: `Battery`, `EVs`, `HeatPump`, `PV`, `Windpower`, `Demand`, `Sgen
 
 - **Deep copy** the pandapower network before passing it to a model to avoid mutation.
 - Pyomo components (Sets, Params, Vars, Constraints) are added to `self.model` inside each class.
-- `pyo_to_net` must be called after `solve()` to populate `net.res_*` DataFrames.
+- `solve(to_net=True)` (the default) populates `net.res_*` itself. Multi-period
+  writes **one** time step — the last of the horizon — because `net.res_*` has
+  no time dimension; use `map_to_net(t)` for any other step.
 - Example scripts in `scripts/` are the primary usage examples (see `scripts/README.md`).
-- Jupyter notebook tutorials are in `tutorials/` (kept for interactive exploration).

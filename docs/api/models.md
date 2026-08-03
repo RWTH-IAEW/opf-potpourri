@@ -58,7 +58,7 @@ Solves the optimisation model using the specified solver.
 | Parameter | Default | Description |
 |---|---|---|
 | `solver` | `'ipopt'` | Solver name: `'ipopt'`, `'mindtpy'`, `'neos'` |
-| `to_net` | `True` | Write results back to `self.net.res_*` after solving |
+| `to_net` | `True` | Write results back to `self.net.res_*` after solving. On multi-period models this also accepts an `int` time step; `True` writes the last step of the horizon |
 | `print_solver_output` | `False` | Stream solver output to stdout |
 | `mip_solver` | `'gurobi'` | MIP sub-solver for MindtPy |
 | `max_iter` | `None` | Maximum solver iterations |
@@ -284,6 +284,17 @@ Extracts the Pyomo solution from `model` and writes it to the pandapower result 
 - `net.res_gen` — `p_mw`, `q_mvar`
 - `net.res_load` — `p_mw`, `q_mvar`
 - `net.res_shunt` — `p_mw`, `q_mvar`
+
+### Multi-period variant
+
+```
+potpourri.models_multi_period.pyo_to_net_multi_period.pyo_sol_to_net_res(net, model, t)
+```
+
+Same tables, for a single time step `t`. Because `net.res_*` has no time
+dimension, only one step can be held at a time. Prefer the model method
+`map_to_net(t)`, which validates `t` against `model.T`; `Basemodel_multi_period.solve()`
+calls it for the last step when `to_net=True`.
 
 ---
 

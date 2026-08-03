@@ -6,6 +6,12 @@ import pyomo.environ as pyo
 from math import pi
 import numpy as np
 
+#: Seed used for device placement when the caller supplies neither *seed* nor
+#: *rng*. Fixed rather than random so that the shipped examples, the test suite
+#: and any study reproduce out of the box; matches the default in
+#: ``research/lin_opf/scenarios.py``.
+DEFAULT_PLACEMENT_SEED = 42
+
 
 class Flexibility_multi_period:
     """Base class for technology mix-in objects that attach Pyomo components
@@ -14,9 +20,31 @@ class Flexibility_multi_period:
     Reads network topology and profile data from *net* in ``__init__``.
     Subclasses implement ``get_all()``, ``get_sets()``, ``get_parameters()``,
     ``get_variables()``, and constraint methods.
+
+    Args:
+        net: pandapower network the device reads its data from.
+        T: Number of time steps, where the subclass needs it.
+        scenario: Predefined penetration scenario, where the subclass uses one.
+        seed: Seed for this device's placement draw. Defaults to
+            :data:`DEFAULT_PLACEMENT_SEED`.
+        rng: An existing :class:`numpy.random.Generator` to draw from, which
+            takes precedence over *seed*. Pass one generator through a whole
+            Monte Carlo sweep to get independent scenarios from a run that
+            replays exactly.
+
+    Placement draws from ``self.rng``, never from the global NumPy state, so a
+    device's buses depend only on its own seed and not on whatever else in the
+    process happened to draw a random number first.
     """
 
-    def __init__(self, net, T=None, scenario=None):
+    def __init__(self, net, T=None, scenario=None, *, seed=None, rng=None):
+        self.rng = (
+            rng
+            if rng is not None
+            else np.random.default_rng(
+                DEFAULT_PLACEMENT_SEED if seed is None else seed
+            )
+        )
         self.net = net
 
         # buses that are not ext_grids (eligible for technology placement)
@@ -48,6 +76,127 @@ class Flexibility_multi_period:
         self.QD_data = self.net.profiles[("load", "q_mvar")] / self.baseMVA
 
         self.GB_data = self.net.shunt.p_mw * self.net.shunt.step / self.baseMVA
+
+    def draw_placement(self, percentage):
+        """Draw the buses that receive a device, from this device's generator.
+
+        Args:
+            percentage: Share of eligible (non-slack) buses to equip, 0–100.
+
+        Returns:
+            ndarray of pandapower bus indices, drawn without replacement.
+
+        Drawing from ``self.rng`` rather than ``np.random`` is what makes a
+        study reproducible: the global generator is shared with every other
+        library in the process, so an unseeded draw gave a different
+        placement — and different results — on every run.
+        """
+        count = round(len(self.buses_excl_extGrids) * percentage / 100)
+        return self.rng.choice(self.buses_excl_extGrids, count, replace=False)
+
+    # --- power-balance coupling ------------------------------------------
+    #
+    # A device receives only the Pyomo model, never the model wrapper, so the
+    # registry of coupling terms lives on the model. The power-flow classes
+    # read it back through KCL_flexibility(). Terms are plain callables
+    # ``(model, b, t) -> expression`` so they are re-evaluated whenever the
+    # balance is rebuilt, which is what lets a device attach after the
+    # power-flow equations were first constructed.
+    _KCL_REAL_ATTR = "_kcl_real_terms"
+    _KCL_REACTIVE_ATTR = "_kcl_reactive_terms"
+
+    @classmethod
+    def kcl_terms(cls, model, reactive=False):
+        """Return the model's list of registered coupling terms."""
+        attr = cls._KCL_REACTIVE_ATTR if reactive else cls._KCL_REAL_ATTR
+        if not hasattr(model, attr):
+            setattr(model, attr, [])
+        return getattr(model, attr)
+
+    def _claim_registration(self, model, kind):
+        """Refuse a second registration of this device on the same model.
+
+        Registering twice would add the device's injection to the balance
+        twice — a silent doubling of its power, which no constraint would
+        catch.
+        """
+        attr = "_kcl_registered"
+        if not hasattr(model, attr):
+            setattr(model, attr, set())
+        # Key on the device object, not id(self): a recycled id could otherwise
+        # make a fresh device look already-registered.
+        key = (self, kind)
+        registered = getattr(model, attr)
+        if key in registered:
+            raise RuntimeError(
+                f"{type(self).__name__} is already coupled to this model's "
+                f"{kind} power balance. Registering again would double-count "
+                f"its power. Call get_all(model) once per device."
+            )
+        registered.add(key)
+
+    def register_kcl_real(self, model, term):
+        """Register a real-power contribution to the nodal balance.
+
+        Args:
+            term: ``(model, b, t) -> expression`` giving this device's net
+                real power at ppc bus *b* and time *t*, in the **load sign
+                convention**: positive is consumption, negative is injection.
+                The nodal balance places it on the consumption side, so this
+                matches ``pD`` rather than ``psG``.
+
+        Raises:
+            RuntimeError: If this device already registered a real-power term
+                on this model.
+        """
+        self._claim_registration(model, "real")
+        self.kcl_terms(model).append(term)
+
+    def register_kcl_reactive(self, model, term):
+        """Register a reactive-power contribution to the nodal balance.
+
+        Same signature and sign convention as :meth:`register_kcl_real`:
+        positive is consumption (inductive), negative is injection.
+
+        Raises:
+            RuntimeError: If this device already registered a reactive-power
+                term on this model.
+        """
+        self._claim_registration(model, "reactive")
+        self.kcl_terms(model, reactive=True).append(term)
+
+    def bus_term(self, model, buses, var, sign=1.0):
+        """Build a coupling term summing *var* over the devices at each bus.
+
+        Args:
+            model: The Pyomo model, used to resolve the device-bus set.
+            buses: Mapping of device index to **pandapower** bus index, as the
+                device's ``*_bus`` set holds it.
+            var: Name of the model component indexed by ``(device, t)``.
+            sign: ``+1`` if the variable is already in the load convention,
+                ``-1`` if it is a generator-convention injection.
+
+        The device placement sets hold pandapower bus indices, while the
+        balance is indexed over **ppc** bus numbers — the two differ on grids
+        where pandapower inserts auxiliary nodes for node-node switches. The
+        mapping goes through ``bus_lookup``, the same way the sgen and load
+        bus sets are built.
+        """
+        # Iterate the members, not dict(buses): dict() on a scalar Pyomo Set
+        # yields {None: <the set>} rather than its (device, bus) pairs.
+        by_ppc_bus = {}
+        for device, pd_bus in list(buses):
+            ppc_bus = int(self.bus_lookup[int(pd_bus)])
+            by_ppc_bus.setdefault(ppc_bus, []).append(device)
+
+        def term(model, b, t):
+            devices = by_ppc_bus.get(b)
+            if not devices:
+                return 0
+            component = getattr(model, var)
+            return sign * sum(component[d, t] for d in devices)
+
+        return term
 
     def get_sets(self, model):
         """Initialise (or re-initialise) the bus set B on the Pyomo model

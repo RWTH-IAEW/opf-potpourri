@@ -10,6 +10,13 @@ import pandapower as pp
 import simbench as sb
 import time as ctime
 from loguru import logger
+from potpourri.models_multi_period.init_pyo_from_pp_res_multi_period import (
+    init_pyo_from_pp_res_multi_period,
+)
+from potpourri.models_multi_period.pyo_to_net_multi_period import (
+    pyo_sol_to_net_res,
+)
+from potpourri.technologies.flexibility import Flexibility_multi_period
 from potpourri.technologies.generator import Generator_multi_period
 from potpourri.technologies.shunts import Shunts_multi_period
 from potpourri.technologies.sgens import Sgens_multi_period
@@ -349,12 +356,25 @@ class Basemodel_multi_period:
         time_limit=600,
         init_strategy="rNLP",
         neos_opt="bonmin",
+        warm_start=True,
     ):
         """Solve the multi-period OPF model with the specified solver.
 
         Args:
-            to_net: Whether to map the solution back to net.res_*
-                (not yet implemented).
+            to_net: Which time step to write into ``net.res_*``. The result
+                tables have no time dimension, so exactly one step can be
+                mapped. ``True`` maps the **last** step of the horizon; pass
+                an int to choose a step from ``model.T``; ``False`` leaves
+                ``net.res_*`` untouched. Use :meth:`map_to_net` to map a
+                different step afterwards.
+            warm_start: Seed every state variable from a per-step pandapower
+                power flow before solving (see :meth:`warm_start_from_pf`).
+                On by default: a cold start begins with all angles and branch
+                flows at zero, which violates the nodal balance everywhere, and
+                IPOPT can fail to recover — reporting a locally infeasible
+                point on a model that is demonstrably feasible. Set ``False``
+                to keep whatever initial values the variables already carry,
+                e.g. to re-solve from a previous solution.
             print_solver_output: Whether to stream solver output.
             solver: Solver name ('ipopt', 'mindtpy', 'neos',
                 'gurobi_direct_minlp', etc.). 'gurobi_direct_minlp' sends the
@@ -372,6 +392,9 @@ class Basemodel_multi_period:
             init_strategy: Initialization strategy for mindtpy.
             neos_opt: Solver name to use with NEOS.
         """
+        if warm_start:
+            self.warm_start_from_pf()
+
         logger.info("Solving model with solver '{}'", solver)
         optimizer = SolverFactory(solver)
 
@@ -432,19 +455,146 @@ class Basemodel_multi_period:
                 tee=print_solver_output,
             )
 
+        # Only the termination check is guarded: a result object without a
+        # solver status is a solver-interface problem, not a modelling one.
+        # The mapping call below must NOT be inside the guard — an
+        # AttributeError raised while writing net.res_* would otherwise be
+        # logged and swallowed, leaving the base-case power flow in place and
+        # reporting success.
         try:
-            if check_optimal_termination(self.results):
-                logger.info("Optimal solution found")
-                if to_net:
-                    logger.debug("Solution mapped to net.res_*")
-            else:
-                logger.warning(
-                    "Solver did not reach optimal termination (condition: {})",
-                    self.results.solver.termination_condition,
-                )
+            optimal = check_optimal_termination(self.results)
         except AttributeError as err:
             logger.error("Could not check termination condition: {}", err)
+            return self.results
+
+        if optimal:
+            logger.info("Optimal solution found")
+            if to_net is not False:
+                self.map_to_net(None if to_net is True else to_net)
+        else:
+            logger.warning(
+                "Solver did not reach optimal termination (condition: {})",
+                self.results.solver.termination_condition,
+            )
         return self.results
+
+    # --- nodal power balance ---------------------------------------------
+    #
+    # Each power-flow subclass supplies _kcl_real_rule (and, for the AC-style
+    # ones, _kcl_reactive_rule); the construction and the flexibility hook are
+    # shared so a device couples the same way whichever formulation is used.
+
+    #: Balance constraints this formulation builds, in construction order.
+    KCL_CONSTRAINTS = ("KCL_real", "KCL_reactive")
+
+    def build_kcl(self):
+        """Construct the nodal balance constraints, replacing any existing.
+
+        Called once while the power flow is created and again from ``add_OPF``
+        via :meth:`rebuild_kcl`, because flexibility devices attach to the
+        model *after* the power-flow equations are first built and their
+        injections have to reach the balance.
+        """
+        for name in self.KCL_CONSTRAINTS:
+            rule = getattr(self, f"_{name.lower()}_rule", None)
+            if rule is None:
+                continue
+            if hasattr(self.model, name):
+                self.model.del_component(getattr(self.model, name))
+            # Pyomo materialises an implicit index set for a multi-dimensional
+            # constraint; it has to go too, or re-adding clashes on the name.
+            index_name = f"{name}_index"
+            if hasattr(self.model, index_name):
+                self.model.del_component(getattr(self.model, index_name))
+            setattr(
+                self.model,
+                name,
+                Constraint(self.model.B, self.model.T, rule=rule),
+            )
+
+    def rebuild_kcl(self):
+        """Rebuild the balance so late-attached devices are included.
+
+        Idempotent: with no device registered, rebuilding reproduces the same
+        constraints.
+        """
+        self.build_kcl()
+
+    def KCL_flexibility(self, model, b, t, reactive=False):
+        """Return the flexible-asset power at bus ``b`` and time ``t``.
+
+        Sums whatever devices registered through
+        ``Flexibility_multi_period.register_kcl_real`` and its reactive
+        counterpart. The term sits on the consumption side of the balance, so
+        it is positive for consumption and negative for injection — the load
+        sign convention, matching ``pD`` / ``qD``.
+
+        Returns 0 when nothing registered, which is every model built from
+        ``net`` alone.
+        """
+        terms = Flexibility_multi_period.kcl_terms(model, reactive=reactive)
+        if not terms:
+            return 0
+        return sum(term(model, b, t) for term in terms)
+
+    def warm_start_from_pf(self, curtailment=1.0):
+        """Seed every state variable from a power flow at each time step.
+
+        A cold start puts ``v`` at 1.0 and leaves every angle and branch flow
+        at zero, so Kirchhoff's laws are violated at every bus by the full
+        nodal injection. IPOPT does not always recover from that on a nonconvex
+        AC OPF: on a 12-step midday window of ``1-LV-rural1--0-sw`` it reported
+        a locally infeasible point even though curtailing the PV to zero is
+        both available and feasible. Seeding a *consistent* operating point
+        fixes it. The seed need not be near the optimum — an uncurtailed,
+        curtailed, or half-curtailed seed all converge to the same solution —
+        it only has to satisfy the power flow.
+
+        Args:
+            curtailment: Factor applied to the static-generation profile in the
+                seeding power flow. Rarely needs changing; see
+                :func:`~potpourri.models_multi_period.init_pyo_from_pp_res_multi_period.init_pyo_from_pp_res_multi_period`.
+
+        Returns:
+            Number of time steps successfully seeded. A step whose power flow
+            does not converge is logged and left at its default values, so a
+            partial seed is possible.
+        """
+        return init_pyo_from_pp_res_multi_period(
+            self.net, self.model, self.bus_lookup, curtailment=curtailment
+        )
+
+    def map_to_net(self, t=None):
+        """Write the solution for one time step into ``self.net.res_*``.
+
+        The pandapower result tables carry no time dimension, so a horizon
+        cannot be written whole — one step has to be chosen. Call this once
+        per step of interest, reading ``net.res_*`` in between.
+
+        Args:
+            t: Time step from ``model.T``. Defaults to the last step of the
+                horizon.
+
+        Returns:
+            The time step that was written, so callers can label results
+            without re-deriving the default.
+
+        Raises:
+            ValueError: If ``t`` is not a step in ``model.T``.
+        """
+        last = self.model.T.last()
+        if t is None:
+            t = last
+        else:
+            t = int(t)
+            if t not in self.model.T:
+                raise ValueError(
+                    f"t={t} is not a time step of this model; model.T covers "
+                    f"[{self.model.T.first()}, {last}]."
+                )
+        pyo_sol_to_net_res(self.net, self.model, t)
+        logger.debug("Solution for time step {} mapped to net.res_*", t)
+        return t
 
     def change_vals(self, key, value):
         """Set all indices of a named Pyomo component to value."""

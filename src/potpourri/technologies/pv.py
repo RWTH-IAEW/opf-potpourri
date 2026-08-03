@@ -1,7 +1,6 @@
 """PV mix-in: attaches PV generation sets, parameters, variables, and
 power-bound constraints to a multi-period model."""
 
-import numpy as np
 import pyomo.environ as pyo
 from potpourri.technologies.flexibility import Flexibility_multi_period
 from potpourri.technologies.q_control import (
@@ -47,6 +46,13 @@ class PV_multi_period(Flexibility_multi_period):
             Defaults to ``"PV5"``.
         pv_pmin: Minimum PV output in per-unit (curtailment lower bound).
             Defaults to ``0.0`` (full curtailment allowed).
+        seed: Seed for the placement draw.  Defaults to
+            :data:`~potpourri.technologies.flexibility.DEFAULT_PLACEMENT_SEED`,
+            so repeated runs equip the same buses.  Vary it to sample
+            placements.
+        rng: An existing :class:`numpy.random.Generator`, taking precedence
+            over *seed*.  Thread one through a Monte Carlo sweep for
+            independent scenarios from a run that replays exactly.
 
     Example::
 
@@ -74,6 +80,8 @@ class PV_multi_period(Flexibility_multi_period):
         var_q: int = 0,
         p_inst_mw: float | None = None,
         grid_code=None,
+        seed=None,
+        rng=None,
     ):
         """
         Args:
@@ -91,12 +99,12 @@ class PV_multi_period(Flexibility_multi_period):
                 generation profile.
 
         Note:
-            ``qPV`` is a reactive compliance variable.  It is **not**
-            automatically wired into the nodal reactive power balance.
-            For full AC-OPF coupling, model PV units as sgens in
-            ``net.sgen`` with ``var_q`` set.
+            ``pPV`` and — when ``q_control`` is set — ``qPV`` are wired into
+            the nodal power balance by :meth:`couple_to_power_balance`, which
+            ``get_all`` calls. Both use the generator sign convention
+            (positive is injection), matching ``psG`` / ``qsG``.
         """
-        super().__init__(net, T, scenario)
+        super().__init__(net, T, scenario, seed=seed, rng=rng)
         self.net = net
 
         if penetration is not None:
@@ -109,26 +117,32 @@ class PV_multi_period(Flexibility_multi_period):
                 "percentage via the penetration= argument."
             )
 
-        # PV profiles are stored as positive generation values in SimBench;
-        # negate so that injection into the network is positive in the model.
-        pv_profiles = -self.net.pv_load_profiles
+        # SimBench stores the renewables profiles as positive generation in MW.
+        # Keep that sign — pPV is a generator-convention injection like psG,
+        # which is what the Q(P) / Q(U) characteristics below assume when they
+        # bound qPV by `m * pPV + b * p_inst`.
+        #
+        # Select the column before scaling: net.pv_load_profiles is the raw
+        # SimBench renewables table, which carries a non-numeric `time` column
+        # alongside the generation ones, so arithmetic on the whole frame
+        # raises.
+        pv_profiles = self.net.pv_load_profiles
         if profile_column not in pv_profiles.columns:
             available = list(pv_profiles.columns)
             raise ValueError(
                 f"profile_column '{profile_column}' not found in "
                 f"net.pv_load_profiles. Available columns: {available}"
             )
-        self.pv_load_profile = pv_profiles[profile_column]
+        # Divided by the system base, because every power quantity in the
+        # model is per-unit.
+        self.pv_load_profile = pv_profiles[profile_column] / self.baseMVA
 
         self.pv_pmax = self.pv_load_profile
         self.pv_pmin = pv_pmin
 
-        num_indexes = round(
-            len(self.buses_excl_extGrids) * self.pv_percentage / 100
-        )
-        self.random_indexes = np.random.choice(
-            self.buses_excl_extGrids, num_indexes, replace=False
-        )
+        # Drawn from this device's own generator, so the placement is
+        # reproducible (see Flexibility_multi_period.rng).
+        self.random_indexes = self.draw_placement(self.pv_percentage)
 
         self.pv_q_control = q_control
         self.pv_var_q = int(var_q)
@@ -141,20 +155,42 @@ class PV_multi_period(Flexibility_multi_period):
             )
             self.q_limit_parameter = compute_q_curves(self.grid_code)
             if p_inst_mw is not None:
+                # Supplied in MW, so convert.
                 self.pv_p_inst = float(p_inst_mw) / self.baseMVA
             else:
-                self.pv_p_inst = (
-                    float(self.pv_load_profile.abs().max()) / self.baseMVA
-                )
+                # pv_load_profile is already per-unit — do not divide twice.
+                self.pv_p_inst = float(self.pv_load_profile.abs().max())
 
     def get_all(self, model):
-        """Attach PV sets, parameters, variables, constraints, and unfix
-        variables."""
+        """Attach PV sets, parameters, variables, constraints, unfix
+        variables, and couple the generation into the nodal balance."""
         self.get_sets(model)
         self.get_parameters(model)
         self.get_variables(model)
         self.get_all_constraints(model)
         self.unfix_variables(model)
+        self.couple_to_power_balance(model)
+
+    def couple_to_power_balance(self, model):
+        """Register the PV generation with the nodal balance.
+
+        ``pPV`` is a generator-convention injection (``0 <= pPV <= PV_Pmax``),
+        so it enters the load-convention balance with a ``-``. ``qPV`` follows
+        the same convention as ``qsG`` — positive is capacitive injection —
+        and is registered on the reactive balance when Q-control is active.
+
+        Note that ``PV_multi_period`` places units at randomly chosen buses,
+        independent of ``net.sgen``. It therefore *adds* generation on top of
+        whatever sgens the network already carries rather than describing them,
+        which is what a penetration-scenario study wants.
+        """
+        self.register_kcl_real(
+            model, self.bus_term(model, model.PV_bus, "pPV", sign=-1.0)
+        )
+        if self.pv_q_control is not None and hasattr(model, "qPV"):
+            self.register_kcl_reactive(
+                model, self.bus_term(model, model.PV_bus, "qPV", sign=-1.0)
+            )
 
     def unfix_variables(self, model):
         """Unfix pPV (and qPV when Q-control is active) for all PV units."""
@@ -207,7 +243,9 @@ class PV_multi_period(Flexibility_multi_period):
 
         @model.Constraint(model.PV, model.T)
         def PV_real_power_bounds(model, pv, t):
-            return model.PV_Pmax[pv, t], model.pPV[pv, t], model.PV_Pmin[pv, t]
+            # (lower, body, upper). The arguments used to be the other way
+            # round, which read as Pmax being the floor.
+            return model.PV_Pmin[pv, t], model.pPV[pv, t], model.PV_Pmax[pv, t]
 
     def get_all_acopf(self, model):
         """Add Q(P) and/or Q(U) constraints for PV units when q_control is set.
@@ -229,7 +267,14 @@ class PV_multi_period(Flexibility_multi_period):
         pq_area = self.grid_code.pq_area
         qv_area = self.grid_code.qv_area
         v_span = bus_voltage_range(self.net)
-        pv_bus_lookup = dict(model.PV_bus)
+        # list() first: dict() on a scalar Pyomo Set yields {None: <the set>},
+        # so every lookup below returned None and every Q(U) constraint was
+        # silently skipped. The buses also need mapping into ppc numbering,
+        # which is what model.v is indexed over.
+        pv_bus_lookup = {
+            pv: int(self.bus_lookup[int(pd_bus)])
+            for pv, pd_bus in list(model.PV_bus)
+        }
 
         if self.pv_q_control in ("qp", "both"):
             pq_hi = pq_area.upper_pieces(v, DEFAULT_P_RANGE_PU)

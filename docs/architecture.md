@@ -319,23 +319,27 @@ classDiagram
         ── Parameters ──
         +BAT_Pmax[b]  BAT_SOCmax[b]  BAT_SOCmin[b]
         +BAT_Cap[b]   BAT_Eff[b]     BAT_SOC_init[b]
+        +BAT_Sinv[b]
         ── Variables ──
-        +BAT_P[b,t]    BAT_SOC[b,t]
+        +BAT_Pchg[b,t]  BAT_Pdis[b,t]  BAT_SOC[b,t]
+        +BAT_Q[b,t]  (AC-style models)
+        ── Expressions ──
+        +BAT_P[b,t] = BAT_Pchg - BAT_Pdis
         ── Constraints ──
+        +bat_chg_limit_con[b,t]
+        +bat_dis_limit_con[b,t]
         +bat_power_con[b,t]
         +bat_soc_con[b,t]
         +bat_soc_update_con[b,t]
+        +bat_terminal_soc_con[b]
+        +bat_inverter_s2[b,t]
+        +bat_cos_phi_upper/lower[b,t]
+        +bat_QP_pos/neg  bat_QU_min/max
         +get_all(model)
+        +couple_to_power_balance(model)
     }
 
-    class EVs_multi_period {
-        ── Sets: EV  EV_bus ──
-        ── Vars: EV_P[e,t]  EV_SOC[e,t] ──
-        ── Constrs: ev_power_con  ev_soc_update_con ──
-        +get_all(model)
-    }
-
-    class HeatPump_multi_period {
+    class Heatpump_multi_period {
         ── Sets: HP  HP_bus ──
         ── Vars: HP_P[h,t] ──
         ── Constrs: hp_power_con[h,t] ──
@@ -375,12 +379,12 @@ classDiagram
     }
 
     Flexibility_multi_period <|-- Battery_multi_period
-    Flexibility_multi_period <|-- EVs_multi_period
-    Flexibility_multi_period <|-- HeatPump_multi_period
+    Flexibility_multi_period <|-- Heatpump_multi_period
     Flexibility_multi_period <|-- PV_multi_period
-    Flexibility_multi_period <|-- Windpower_multi_period
     Flexibility_multi_period <|-- Demand_multi_period
+    Flexibility_multi_period <|-- Shunts_multi_period
     Flexibility_multi_period <|-- Sgens_multi_period
+    Sgens_multi_period <|-- Windpower_multi_period
     Flexibility_multi_period <|-- Generator_multi_period
     ACOPF_multi_period "1" *-- "0..*" Flexibility_multi_period : get_all(model)
 ```
@@ -396,26 +400,50 @@ opf = ACOPF_multi_period(net, toT=96)       # builds model.T, model.L, model.del
 battery = Battery_multi_period(opf.net, T=96, scenario=1)
 battery.get_all(opf.model)                  # stamps BAT, BAT_P, bat_*_con onto model
 
-opf.add_OPF()                               # reads BAT sets for KCL battery injection
+opf.add_OPF()
 opf.add_voltage_deviation_objective()
 opf.solve(solver="ipopt")
 ```
 
-`add_OPF()` calls `get_all_opf(model)` on each device in `flexibilities`, so
-the KCL constraints automatically include device injections.
+`add_OPF()` calls `get_all_opf(model)` on each device in `flexibilities`, which
+is how `Demand`, `Sgens`, `Shunts` and `Generator` — the four the base model
+constructs itself — reach the power balance.
+
+Opt-in devices (`Battery`, `Heatpump`, `PV`) attach *after* the power-flow
+equations exist, so they cannot be written into the balance when it is first
+built. Instead each registers a coupling term on the model, and `add_OPF()`
+rebuilds `KCL_real` / `KCL_reactive` (or `KCL_def` on the DC model) with those
+terms included:
+
+```
+Device.get_all(model)
+  └─ couple_to_power_balance(model)
+       └─ register_kcl_real / register_kcl_reactive   → stored on the model
+
+add_OPF()
+  └─ rebuild_kcl()
+       └─ KCL_flexibility(model, b, t) sums the registered terms
+```
+
+Terms are in the load sign convention (positive = consumption), and the device
+placement buses are mapped into ppc numbering — the balance is indexed over ppc
+buses, which differ from pandapower buses on grids with auxiliary switch nodes.
+`rebuild_kcl()` is idempotent, so a model with no device is unaffected.
 
 ### Available device modules
 
 | Module | Class | Adds to model |
 |---|---|---|
-| `battery.py` | `Battery_multi_period` | `BAT`, `BAT_P[b,t]`, `BAT_SOC[b,t]`, SOC dynamics |
-| `EVs.py` | `EVs_multi_period` | `EV`, `EV_P[e,t]`, `EV_SOC[e,t]`, charging constraints |
-| `heatpump.py` | `HeatPump_multi_period` | `HP`, `HP_P[h,t]`, thermal power limits |
-| `PV.py` | `PV_multi_period` | `PV`, `PV_P[pv,t]`, irradiance-based upper bound |
+| `battery.py` | `Battery_multi_period` | `BAT`, `BAT_Pchg/Pdis[b,t]`, `BAT_Q[b,t]`, `BAT_SOC[b,t]`, SOC dynamics, converter capability |
+| `heat_pump.py` | `Heatpump_multi_period` | `HP`, `hp_p[h,t]`, thermal power limits |
+| `pv.py` | `PV_multi_period` | `PV`, `PV_P[pv,t]`, irradiance-based upper bound |
 | `windpower.py` | `Windpower_multi_period` | `WIND`, `WIND_P[w,t]`, wind-speed-based limit |
 | `demand.py` | `Demand_multi_period` | `D`, time-varying `PD[d,t]` `QD[d,t]` from profiles |
 | `sgens.py` | `Sgens_multi_period` | `sG` `sGc`, time-varying `PsG[sg,t]` from profiles |
+| `shunts.py` | `Shunts_multi_period` | `SHUNT`, time-varying `GB[s,t]` `BB[s,t]` |
 | `generator.py` | `Generator_multi_period` | `G` `eG` `gG`, `pG[g,t]` `qG[g,t]` decision variables |
+
+There is no EV module.
 
 ---
 
@@ -441,7 +469,10 @@ net ──► __init__()       builds model.B, model.L, power-flow eqs
 ```
 
 `solve()` calls `pyo_to_net` automatically when `to_net=True` (the default),
-so `net.res_bus.vm_pu` is always populated after a successful solve.
+so `net.res_bus.vm_pu` is always populated after a successful solve. On
+multi-period models the same call writes one time step — the last of the
+horizon by default — because `net.res_*` carries no time dimension; see
+[Solving models](user-guide/solvers.md) for `map_to_net()`.
 
 ### Storage (single-period)
 
