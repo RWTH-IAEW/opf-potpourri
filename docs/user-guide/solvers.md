@@ -85,6 +85,7 @@ outside `model.T`.
 | `solver` | `str` | `'ipopt'` | Solver name: `'ipopt'`, `'glpk'`, `'cbc'`, `'gurobi'`, `'gurobi_direct_minlp'`, `'mindtpy'`, or `'neos'` |
 | `print_solver_output` | `bool` | `False` | Stream solver log to stdout |
 | `to_net` | `bool` \| `int` | `True` | Write solution back to `net.res_*` DataFrames. Multi-period: `True` writes the last time step, an `int` writes that step |
+| `warm_start` | `bool` | `True` | Multi-period only: seed every state variable from a per-step power flow before solving |
 | `load_solutions` | `bool` | `True` | Load variable values from solver into Pyomo model |
 | `time_limit` | `int` | `600` | Wall-clock time limit in seconds. Honoured by `mindtpy` and by `gurobi*` (sent as `TimeLimit`); **ignored by IPOPT, GLPK and CBC** |
 | `max_iter` | `int` | `None` | Maximum solver iterations (sent as `max_iter`, or as `IterationLimit` for `gurobi*`) |
@@ -125,7 +126,7 @@ Two routes are available.
 hc.solve(solver='gurobi_direct_minlp', time_limit=300)
 ```
 
-Requires **Pyomo >= 6.10** and **gurobipy >= 12**. The older `gurobi`, `gurobi_direct` and `gurobi_persistent` interfaces are limited to expressions of degree 2 and reject the AC power flow with `DegreeError` — use them only for `DCOPF` and `LPACOPF`.
+Requires **Pyomo >= 6.10** and **gurobipy >= 12**. The older `gurobi`, `gurobi_direct` and `gurobi_persistent` interfaces are limited to expressions of degree 2 and reject the AC power flow with `DegreeError` — use them only for `DCOPF`.
 
 Unsupported functions: `asin`, `acos`, `atan`, `sinh`, `cosh` and their inverses are not in Pyomo's dispatcher and will fail. The AC models use only `sin`/`cos`, so this does not affect them.
 
