@@ -20,10 +20,13 @@ class DC(Basemodel):
             ``"matpower"`` (default): branch susceptance ``-1/x`` and the
             transformer phase shift in the angle difference, the textbook DC
             power flow and MATPOWER's ``makeBdc``. ``"powermodels"``: the
-            series susceptance of the full impedance, ``-x/(r² + x²)``, and
-            no phase shift, i.e. ``p = -b (θ_from − θ_to)`` as in
-            PowerModels.jl's ``DCPPowerModel`` that produced the PGLib-OPF DC
-            reference values (neither tap nor shift enter its DC flow). The two
+            series susceptance of the full impedance at the nominal tap
+            position, ``-x/(r² + x²)``, and no phase shift, i.e.
+            ``p = -b (θ_from − θ_to)`` as in PowerModels.jl's
+            ``DCPPowerModel`` that produced the PGLib-OPF DC reference values
+            (neither tap nor shift enter its DC flow; pandapower's referral
+            of a transformer's impedance to the tapped LV voltage is undone
+            for the same reason). The two
             agree where r ≪ x and no phase shifters exist, and differ by
             several percent on high-r/x networks such as the RTE cases.
     """
@@ -39,14 +42,21 @@ class DC(Basemodel):
         self.dc_convention = dc_convention
         super().__init__(net)
 
-        r = self.net._ppc["branch"][:, 2].real
-        x = self.net._ppc["branch"][:, 3].real
+        r = self.net._ppc["branch"][:, 2].real.copy()
+        x = self.net._ppc["branch"][:, 3].real.copy()
+        trafo_start = len(self.net.line)
+        trafo_end = trafo_start + len(self.net.trafo)
         if dc_convention == "powermodels":
+            # pandapower refers a transformer's series impedance to the
+            # tapped LV voltage when the tap sits on the LV side, so r and x
+            # carry a factor (vn_trafo_lv / vn_lv_kv)². PowerModels reads the
+            # MATPOWER reactance, which no tap enters; undo the factor.
+            scale = self._lv_tap_impedance_scale()
+            r[trafo_start:trafo_end] /= scale
+            x[trafo_start:trafo_end] /= scale
             BL = -x / (r**2 + x**2)
         else:
             BL = -1 / x
-        trafo_start = len(self.net.line)
-        trafo_end = trafo_start + len(self.net.trafo)
         imp_table = self.net.get("impedance")
         n_imp = (
             len(imp_table)
@@ -91,6 +101,35 @@ class DC(Basemodel):
         self.line_data["BL_data"] = BL[line_idx_ppc]
 
         self.create_model()
+
+    def _lv_tap_impedance_scale(self):
+        """Factor pandapower applied to each transformer's series impedance
+        for a tap on the LV side: ``(vn_trafo_lv / vn_lv_kv)²`` per
+        ``net.trafo`` row, 1 where the tap sits on the HV side or is absent.
+        """
+        trafo = self.net.trafo
+        if trafo.empty:
+            return np.ones(0)
+        rated = trafo["vn_lv_kv"].to_numpy(dtype=float)
+        try:
+            from pandapower.build_branch import _calc_tap_from_dataframe
+
+            _, tapped, _ = _calc_tap_from_dataframe(self.net, trafo)
+        except Exception:  # noqa: BLE001 — no _options yet, or an old API
+            tapped = rated.copy()
+            if "tap_pos" in trafo:
+                pos = trafo["tap_pos"].to_numpy(dtype=float)
+                neutral = trafo.get(
+                    "tap_neutral", pd.Series(0.0, index=trafo.index)
+                ).to_numpy(dtype=float)
+                step = trafo.get(
+                    "tap_step_percent", pd.Series(0.0, index=trafo.index)
+                ).to_numpy(dtype=float)
+                on_lv = (trafo["tap_side"] == "lv").to_numpy()
+                steps = np.nan_to_num(pos) - np.nan_to_num(neutral)
+                ratio = 1.0 + steps * np.nan_to_num(step) / 100.0
+                tapped = np.where(on_lv, rated * ratio, rated)
+        return (np.asarray(tapped, dtype=float) / rated) ** 2
 
     def create_model(self):
         """Build the Pyomo ConcreteModel with DC power flow constraints.

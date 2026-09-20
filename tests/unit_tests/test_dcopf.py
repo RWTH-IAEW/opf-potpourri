@@ -157,3 +157,54 @@ def test_powermodels_convention_drops_the_phase_shift():
     assert pyo.value(powermodels.model.phase_diff2[0].body) == pytest.approx(
         0.0
     )
+
+
+def _trafo_feeder(tap_side, tap_pos):
+    """110/20 kV transformer with a tap changer, load on the LV bus."""
+    net = pp.create_empty_network(sn_mva=100.0)
+    hv = pp.create_bus(net, 110.0)
+    lv = pp.create_bus(net, 20.0)
+    pp.create_ext_grid(net, hv)
+    pp.create_transformer_from_parameters(
+        net,
+        hv,
+        lv,
+        sn_mva=40.0,
+        vn_hv_kv=110.0,
+        vn_lv_kv=20.0,
+        vk_percent=12.0,
+        vkr_percent=0.5,
+        pfe_kw=0.0,
+        i0_percent=0.0,
+        tap_side=tap_side,
+        tap_neutral=0,
+        tap_pos=tap_pos,
+        tap_step_percent=2.0,
+        tap_min=-9,
+        tap_max=9,
+        tap_changer_type="Ratio",
+    )
+    pp.create_load(net, lv, 10.0, 2.0)
+    return net
+
+
+def test_powermodels_convention_ignores_the_tap_position():
+    """pandapower refers the series impedance to the tapped LV voltage when
+    the tap sits on the LV side, (vn_trafo_lv / vn_lv_kv)². PowerModels reads
+    the untapped reactance, so the susceptance must not move with the tap on
+    either side; the default convention keeps pandapower's value."""
+    neutral = DCOPF(_trafo_feeder("lv", 0), dc_convention="powermodels")
+    b_neutral = float(neutral.trafo_data["BLT_data"].iloc[0])
+    for side in ("lv", "hv"):
+        tapped = DCOPF(_trafo_feeder(side, 5), dc_convention="powermodels")
+        assert float(tapped.trafo_data["BLT_data"].iloc[0]) == pytest.approx(
+            b_neutral, rel=1e-9
+        ), side
+    z_pu = 0.12 * 100.0 / 40.0  # vk % of the trafo rating, at the system base
+    r_pu = 0.005 * 100.0 / 40.0
+    x_pu = (z_pu**2 - r_pu**2) ** 0.5
+    assert b_neutral == pytest.approx(-x_pu / (r_pu**2 + x_pu**2), rel=1e-6)
+    scaled = DCOPF(_trafo_feeder("lv", 5))  # matpower convention: ppc value
+    assert float(scaled.trafo_data["BLT_data"].iloc[0]) == pytest.approx(
+        -1 / (x_pu * 1.1**2), rel=1e-6
+    )

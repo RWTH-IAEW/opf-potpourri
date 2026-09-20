@@ -19,8 +19,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **`DCOPF(net, dc_convention="powermodels")` selects the DC linearisation
   convention.** The default stays MATPOWER's `-1/x` with the phase shift. PowerModels'
   `DCPPowerModel`, which produced the PGLib DC references, uses the series
-  susceptance of the full impedance, `-x/(r²+x²)`, and lets neither the tap
-  nor the transformer phase shift enter the DC flow. The two conventions agree
+  susceptance of the full impedance at the nominal tap position,
+  `-x/(r²+x²)`, and lets neither the tap nor the transformer phase shift
+  enter the DC flow; pandapower refers a transformer's impedance to the
+  tapped LV voltage when the tap sits on the LV side, and that factor is
+  removed as well (it made `case24_ieee_rts__sad` infeasible and left
+  `case2383wp_k` 0.4 % below the reference). The two conventions agree
   where r ≪ x and no phase shifters exist, and differ by several percent on
   high-r/x networks; the difference accounted for the DC gaps in the benchmark
   (up to −2.8 % on the API cases, the SAD cases PowerModels reports
