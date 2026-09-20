@@ -243,7 +243,7 @@ class AC(Basemodel):
                 for s in model.SHUNT
                 if (b, s) in model.SHUNTbs and model.GB[s] != 0
             )
-            if isinstance(kcl, bool):
+            if isinstance(kcl, (bool, np.bool_)):
                 return pyo.Constraint.Skip
             return kcl
 
@@ -271,7 +271,7 @@ class AC(Basemodel):
                 for s in model.SHUNT
                 if (b, s) in model.SHUNTbs and model.BB[s] != 0
             )
-            if isinstance(kcl, bool):
+            if isinstance(kcl, (bool, np.bool_)):
                 return pyo.Constraint.Skip
             return kcl
 

@@ -57,3 +57,32 @@ def test_acopf_builds_on_the_fallback():
     acopf = ACOPF(_feeder(5.0))
     acopf.add_OPF(thermal_limit="mva")
     assert len(acopf.model.B) == 2
+
+
+def test_isolated_bus_gets_no_degenerate_kcl():
+    """A bus whose every branch is out of service has a balance without any
+    variable. Its sums are numpy floats, so the equality is a numpy bool, not
+    a Python bool; the KCL rules must skip it instead of handing Pyomo a
+    constant (case78484_epigrids has such buses)."""
+    import pandapower as pp
+
+    from potpourri.models.ACOPF_base import ACOPF
+    from potpourri.models.DCOPF import DCOPF
+
+    net = pp.create_empty_network(sn_mva=100.0)
+    b0 = pp.create_bus(net, 110.0)
+    b1 = pp.create_bus(net, 110.0)
+    b2 = pp.create_bus(net, 110.0)
+    pp.create_ext_grid(net, b0)
+    pp.create_line(net, b0, b1, 10.0, "149-AL1/24-ST1A 110.0")
+    pp.create_line(
+        net, b1, b2, 10.0, "149-AL1/24-ST1A 110.0", in_service=False
+    )
+    pp.create_load(net, b1, 20.0, 5.0)
+    pp.create_shunt(
+        net, b2, q_mvar=0.5, p_mw=0.0
+    )  # only a shunt: no variable in the balance
+    for builder, kwargs in ((DCOPF, {}), (ACOPF, dict(thermal_limit="mva"))):
+        model = builder(net)
+        model.add_OPF(**kwargs)
+        assert len(model.model.B) == 3

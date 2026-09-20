@@ -142,7 +142,7 @@ class DC(Basemodel):
             ) + sum(
                 model.GB[s] for s in model.SHUNT if (b, s) in model.SHUNTbs
             )
-            if isinstance(kcl, bool):
+            if isinstance(kcl, (bool, np.bool_)):
                 return pyo.Constraint.Skip
             return kcl
 

@@ -56,6 +56,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   warning for every bus. The fallback now wraps the start into (−180°, 180°],
   which leaves every branch's starting residual unchanged because the flows
   depend on angle differences only.
+- **Buses without a variable in their balance no longer break model
+  construction.** A bus whose every branch is out of service (six of them in
+  PGLib `case78484_epigrids`) has a nodal balance of constants only. Those
+  constants are numpy floats, so the equality was a numpy bool that the
+  `isinstance(kcl, bool)` guard in the KCL rules did not recognise, and Pyomo
+  refused the constraint. The DC and AC rules now skip numpy bools as well.
 
 ## [0.5.2] — 2026-09-20
 
