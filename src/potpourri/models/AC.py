@@ -250,8 +250,12 @@ class AC(Basemodel):
         def KCL_reactive_def(model, b):
             kcl = sum(
                 model.qsG[g] for g in model.sG if (g, b) in model.sGbs
-            ) + sum(model.qG[g] for g in model.G if (g, b) in model.Gbs) + sum(
-                model.qSTOR[s] for s in model.STOR if model.STOR_bus[s] == b
+            ) + sum(model.qG[g] for g in model.G if (g, b) in model.Gbs) - sum(
+                # storage reactive power follows pandapower's load convention
+                # (positive = consumption), like pSTOR in KCL_real
+                model.qSTOR[s]
+                for s in model.STOR
+                if model.STOR_bus[s] == b
             ) == sum(
                 model.qD[d] for d in model.D if (b, d) in model.Dbs
             ) + sum(
