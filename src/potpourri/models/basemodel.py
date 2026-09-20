@@ -775,6 +775,31 @@ class Basemodel:
         )
 
 
+_BR_B = 4  # pandapower/MATPOWER idx_brch.BR_B
+_BR_G = 23  # pandapower idx_brch.BR_G (no MATPOWER counterpart)
+
+
+def branch_charging_admittance(branch):
+    """Complex charging admittance ``g_c + j·b_c`` of every ppc branch.
+
+    pandapower stores the susceptance in column ``BR_B`` and, unlike
+    MATPOWER, the conductance (transformer iron losses) in ``BR_G``. A ppc
+    array without that column yields a purely imaginary result.
+
+    Args:
+        branch: ``net._ppc["branch"]`` array.
+
+    Returns:
+        Complex numpy array of length ``n_branch``.
+    """
+    b_c = branch[:, _BR_B].real.astype(float)
+    if branch.shape[1] > _BR_G:
+        g_c = np.nan_to_num(branch[:, _BR_G].real.astype(float))
+    else:
+        g_c = np.zeros_like(b_c)
+    return g_c + 1j * b_c
+
+
 _ELEMENT_BUS_COLUMNS = {
     "line": ("from_bus", "to_bus"),
     "trafo": ("hv_bus", "lv_bus"),

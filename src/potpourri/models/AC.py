@@ -3,7 +3,10 @@ power) to Basemodel."""
 
 import numpy as np
 import pyomo.environ as pyo
-from potpourri.models.basemodel import Basemodel
+from potpourri.models.basemodel import (
+    Basemodel,
+    branch_charging_admittance,
+)
 
 
 class AC(Basemodel):
@@ -29,17 +32,16 @@ class AC(Basemodel):
         # the branch into a from/to shunt of half the total line-charging
         # susceptance b_c and a mutual series term y_s.
         #
-        # ASSUMPTION (D11 in the formulation audit): we read y from
-        # ``_ppc["branch"][:, 4]`` and treat it as purely imaginary
-        # (``y = j·b_c``), so no branch-shunt CONDUCTANCE is modelled. This
-        # matches the standard MATPOWER convention (BR_B is susceptance
-        # only; MATPOWER has no BR_G column) and is fine for PGLib cases
-        # and pandapower's standard ``_ppc`` build. Magnetising-loss
-        # transformers with a non-zero g_m would be silently approximated
-        # by g_m = 0 here.
+        # The charging admittance is y_c = g_c + j·b_c. MATPOWER carries
+        # only the susceptance (BR_B, column 4); pandapower additionally
+        # stores the shunt conductance in BR_G (column 23), which is where
+        # the iron-loss (pfe_kw) part of a transformer's magnetising branch
+        # lives. Reading only column 4 dropped those losses (0.46 kW on a
+        # 160 kVA SimBench LV transformer, 14 kW on a 25 MVA MV one) and
+        # made the model disagree with pandapower's own power flow.
         r = self.net._ppc["branch"][:, 2].real
         x = self.net._ppc["branch"][:, 3].real
-        y = self.net._ppc["branch"][:, 4] * 1j  # j·b_c (no branch shunt G)
+        y = branch_charging_admittance(self.net._ppc["branch"])
         gt_ik = r / (r**2 + x**2)  # series conductance g
         bt_ik = -x / (r**2 + x**2)  # series susceptance b (b<0 inductive)
         BiiT = bt_ik + y.imag / 2  # self susceptance: b + b_c/2

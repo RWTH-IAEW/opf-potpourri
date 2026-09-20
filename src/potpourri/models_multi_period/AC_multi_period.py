@@ -2,6 +2,8 @@
 magnitudes over time."""
 
 import numpy as np
+
+from potpourri.models.basemodel import branch_charging_admittance
 from pyomo.environ import *
 from potpourri.models_multi_period.basemodel_multi_period import (
     Basemodel_multi_period,
@@ -23,7 +25,7 @@ class AC_multi_period(Basemodel_multi_period):
         # line and transformer admittances
         r = self.net._ppc["branch"][:, 2].real
         x = self.net._ppc["branch"][:, 3].real
-        y = self.net._ppc["branch"][:, 4] * 1j
+        y = branch_charging_admittance(self.net._ppc["branch"])
         gt_ik = r / (r**2 + x**2)
         bt_ik = -x / (r**2 + x**2)
         BiiT = bt_ik + y.imag / 2
