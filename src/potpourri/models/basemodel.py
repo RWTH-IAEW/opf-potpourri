@@ -36,7 +36,22 @@ class Basemodel:
             raise ValueError("Input network must be a pandapower network.")
         # Make sure bus-to-bus switches are handled correctly by merging them
         self.net = preprocess_grid(copy.deepcopy(net))
-        pp.runpp(self.net, voltage_depend_loads=False)
+        try:
+            pp.runpp(self.net, voltage_depend_loads=False)
+        except pp.LoadflowNotConverged:
+            # The power flow only supplies the ppc tables and a starting
+            # point; the OPF solver finds the operating point itself. When
+            # Newton-Raphson diverges from the flat start (heavily loaded
+            # transmission cases such as PGLib case300_ieee, on which PYPOWER
+            # diverges as well), a DC power flow yields the same bus, branch
+            # and generator tables, with the DC angles and flat voltage
+            # magnitudes as the start.
+            logger.warning(
+                "AC power flow did not converge while building the model; "
+                "using a DC power flow for the network tables and the "
+                "starting point instead."
+            )
+            pp.rundcpp(self.net)
 
         # --- pyo.Sets ---
         # Every ppc bus, not the first len(net.bus) rows.  pandapower's ppc

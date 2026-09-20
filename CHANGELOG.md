@@ -5,6 +5,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Model construction no longer fails when the base power flow diverges.**
+  `Basemodel` runs a flat-start pandapower power flow only to obtain the
+  `ppc` tables and a starting point, yet a `LoadflowNotConverged` there
+  aborted the whole model. On heavily loaded transmission cases such as
+  PGLib `case162_ieee_dtc`, `case240_pserc` and `case300_ieee` Newton-Raphson
+  diverges with the shipped setpoints (PYPOWER diverges on the same files),
+  so no OPF could be attempted. `Basemodel` now falls back to a DC power
+  flow, which yields identical bus, branch and generator tables with the DC
+  angles and flat voltage magnitudes as the start, and logs a warning. The
+  multi-period model is unchanged.
 ### Changed
 
 - **Python 3.10 is now the minimum.** `requires-python` declared `>=3.9,<3.13`,
