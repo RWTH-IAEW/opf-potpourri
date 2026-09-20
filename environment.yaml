@@ -6,7 +6,7 @@ channels:
 dependencies:
   - python>=3.9,<3.13
   - glpk=5.0
-  - ipopt=3.14.19
+  - ipopt=3.14.20
   - ipython=9.12.0
   - numba=0.65.0
   - pip:

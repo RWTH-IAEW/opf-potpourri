@@ -78,7 +78,7 @@ mamba env create -f environment.yaml   # Mamba (faster)
 ```
 
 This creates the `potpourri_env` environment with all pinned dependencies
-including IPOPT 3.14.19 and GLPK 5.0.
+including IPOPT 3.14.20 and GLPK 5.0.
 
 **4. Activate the environment**
 
@@ -109,7 +109,7 @@ conda env update -f environment.yaml --prune
 #### Option B — Docker (recommended for Windows)
 
 The Dockerfile provides a fully self-contained Linux environment with IPOPT
-3.14.16 compiled from source, CBC, and SHOT. This is the recommended path on
+3.14.20 compiled from source, CBC, and SHOT. This is the recommended path on
 **Windows** because Windows conda channels do not distribute IPOPT.
 
 **Prerequisites**
@@ -159,7 +159,7 @@ docker run --rm -v $(pwd):/app potpourri:latest \
 
 | Solver | Type | Source |
 |---|---|---|
-| IPOPT 3.14.16 | NLP | compiled from source |
+| IPOPT 3.14.20 | NLP | compiled from source |
 | GLPK | LP / MIP | conda-forge (via environment.yaml) |
 | CBC | MIP | `coinor-cbc` apt package |
 | SHOT | MINLP | compiled from source |

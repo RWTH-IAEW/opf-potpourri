@@ -57,7 +57,7 @@ To update an existing environment:
 conda env update -f environment.yaml --prune
 ```
 
-A Dockerfile is provided for a fully containerised setup with IPOPT 3.14.16
+A Dockerfile is provided for a fully containerised setup with IPOPT 3.14.20
 compiled from source, CBC, and SHOT solvers.
 
 ---

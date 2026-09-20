@@ -14,7 +14,7 @@ conda activate potpourri_env
 pip install -e .
 ```
 
-Solvers (IPOPT, GLPK, CBC, Gurobi) must be installed separately. The Dockerfile shows how to compile IPOPT 3.14.16.
+Solvers (IPOPT, GLPK, CBC, Gurobi) must be installed separately. The Dockerfile shows how to compile IPOPT 3.14.20.
 
 ## Development Commands
 
