@@ -143,20 +143,6 @@ class Basemodel:
         trafo_start = len(self.net.line.index)
         trafo_end = trafo_start + len(self.net.trafo.index)
 
-        hv_bus_line = hv_bus[:trafo_start]
-        lv_bus_line = lv_bus[:trafo_start]
-        self.line_data = pd.DataFrame(
-            {"in_service": self.net.line.in_service.values}
-        )
-        line_ind = self.line_data.index[self.line_data.in_service]
-        self.bus_line_dict = dict(
-            zip(
-                list(zip(line_ind, [1] * len(line_ind)))
-                + list(zip(line_ind, [2] * len(line_ind))),
-                np.concatenate([hv_bus_line[line_ind], lv_bus_line[line_ind]]),
-            )
-        )
-        # Build bus_line_dict directly using pandapower net bus indices.
         # We treat ``net.impedance`` rows as additional "lines" in the model.
         # pandapower puts these in a separate table when ``from_vn_kv !=
         # to_vn_kv`` (and the branch has no off-nominal tap or phase shift),
@@ -169,15 +155,15 @@ class Basemodel:
         line_in_service = self.net.line["in_service"].astype(bool).values
         imp_table = self.net.get("impedance")
         has_impedance = imp_table is not None and not imp_table.empty
+        n_imp = len(imp_table) if has_impedance else 0
         if has_impedance:
             imp_in_service = (
                 imp_table["in_service"].astype(bool).values
                 if "in_service" in imp_table.columns
-                else np.ones(len(imp_table), dtype=bool)
+                else np.ones(n_imp, dtype=bool)
             )
             ext_index = pd.Index(
-                list(self.net.line.index)
-                + [n_line + i for i in range(len(imp_table))]
+                list(self.net.line.index) + [n_line + i for i in range(n_imp)]
             )
             ext_in_service = np.concatenate([line_in_service, imp_in_service])
         else:
@@ -186,17 +172,32 @@ class Basemodel:
         self.line_data = pd.DataFrame(
             {"in_service": ext_in_service}, index=ext_index
         )
+        # Branch endpoints are read from the ppc branch table (F_BUS / T_BUS),
+        # i.e. in *ppc* bus numbering — the numbering ``model.B`` and the
+        # load / generator bus maps (``bus_lookup``) use.  Reading
+        # ``net.line.from_bus`` (pandapower numbering) instead mis-wired the
+        # network whenever pandapower's bus lookup is not the identity:
+        # pandapower moves orphan buses to the end of its numbering, so the
+        # merged-away bus that a bus-bus switch leaves behind shifted every
+        # later bus by one and lines ended up attached to the wrong loads
+        # (1-MV-rural--0-sw became infeasible).  It also silently closed open
+        # line switches, which pandapower represents by routing the branch to
+        # an auxiliary bus.  ``_pd2ppc_lookups["branch"]`` gives the row range
+        # of each element table inside ``_ppc["branch"]``.
+        br_lookup = self.net._pd2ppc_lookups.get("branch", {})
+        line_rows = np.arange(*br_lookup.get("line", (0, n_line)))
+        imp_first = br_lookup.get("impedance", (trafo_end, trafo_end + n_imp))[
+            0
+        ]
+        imp_rows = np.arange(imp_first, imp_first + n_imp)
+        self._line_rows_ppc = np.concatenate([line_rows, imp_rows]).astype(int)
         self.bus_line_dict = {}
-        for line_idx in self.line_data.index[self.line_data["in_service"]]:
-            if int(line_idx) < n_line:
-                fb = int(self.net.line.at[line_idx, "from_bus"])
-                tb = int(self.net.line.at[line_idx, "to_bus"])
-            else:
-                imp_row = int(line_idx) - n_line
-                fb = int(imp_table.iloc[imp_row]["from_bus"])
-                tb = int(imp_table.iloc[imp_row]["to_bus"])
-            self.bus_line_dict[(int(line_idx), 1)] = fb
-            self.bus_line_dict[(int(line_idx), 2)] = tb
+        for pos, line_idx in enumerate(self.line_data.index):
+            if not bool(self.line_data["in_service"].iloc[pos]):
+                continue
+            row = self._line_rows_ppc[pos]
+            self.bus_line_dict[(int(line_idx), 1)] = int(hv_bus[row])
+            self.bus_line_dict[(int(line_idx), 2)] = int(lv_bus[row])
         self._n_native_lines = n_line  # used by subclasses to slice _ppc
 
         # --- transformer ---
@@ -211,7 +212,7 @@ class Basemodel:
                 "tap": tap,
             }
         )
-        # Same for the bus_trafo_dict
+        # Same for the bus_trafo_dict (ppc numbering, see the line map above)
         self.trafo_data = pd.DataFrame(
             {
                 "in_service": self.net.trafo["in_service"].astype(bool),
@@ -220,14 +221,17 @@ class Basemodel:
             },
             index=self.net.trafo.index,
         )
+        trafo_rows = np.arange(
+            *br_lookup.get("trafo", (trafo_start, trafo_end))
+        ).astype(int)
+        self._trafo_rows_ppc = trafo_rows
         self.bus_trafo_dict = {}
-        for trafo_idx in self.trafo_data.index[self.trafo_data["in_service"]]:
-            self.bus_trafo_dict[(int(trafo_idx), 1)] = int(
-                self.net.trafo.at[trafo_idx, "hv_bus"]
-            )
-            self.bus_trafo_dict[(int(trafo_idx), 2)] = int(
-                self.net.trafo.at[trafo_idx, "lv_bus"]
-            )
+        for pos, trafo_idx in enumerate(self.trafo_data.index):
+            if not bool(self.trafo_data["in_service"].iloc[pos]):
+                continue
+            row = trafo_rows[pos]
+            self.bus_trafo_dict[(int(trafo_idx), 1)] = int(hv_bus[row])
+            self.bus_trafo_dict[(int(trafo_idx), 2)] = int(lv_bus[row])
 
     def create_model(self):
         """Create the Pyomo ConcreteModel with sets, parameters, and fixed
@@ -807,26 +811,74 @@ def preprocess_grid(grid):
     def _present(name):
         return name in grid and hasattr(grid[name], "loc") and len(grid[name])
 
-    # Iterate over closed bus-bus switches with zero impedance and merge the
-    # connected buses across every bus-referencing table.
-    for sw_idx, sw in grid.switch.iterrows():
-        if (
-            sw["closed"]
-            and sw["et"] == "b"
-            and float(sw.get("z_ohm", 0.0)) == 0.0
-        ):
-            keep_bus = int(sw["bus"])
-            remove_bus = int(sw["element"])
-            for name, cols in _ELEMENT_BUS_COLUMNS.items():
-                if not _present(name):
-                    continue
-                table = grid[name]
-                for col in cols:
-                    if col in table.columns:
-                        mask = table[col] == remove_bus
-                        if mask.any():
-                            table.loc[mask, col] = keep_bus
-            grid.switch.drop(sw_idx, inplace=True)
+    # Merge the buses joined by closed zero-impedance bus-bus switches across
+    # every bus-referencing table.  Chains (A–B, B–C) are resolved through
+    # ``alias`` so a bus that was already merged away is never used as the
+    # surviving bus.  A missing / NaN ``z_ohm`` counts as zero, matching
+    # pandapower's own treatment of such switches.
+    alias: dict[int, int] = {}
+
+    def _resolve(bus):
+        while bus in alias:
+            bus = alias[bus]
+        return bus
+
+    if _present("switch"):
+        z_ohm = (
+            grid.switch["z_ohm"]
+            if "z_ohm" in grid.switch.columns
+            else pd.Series(0.0, index=grid.switch.index)
+        )
+        merge_rows = grid.switch.index[
+            grid.switch["closed"].astype(bool)
+            & (grid.switch["et"] == "b")
+            & (z_ohm.fillna(0.0).astype(float) == 0.0)
+        ]
+    else:
+        merge_rows = []
+    for sw_idx in list(merge_rows):
+        sw = grid.switch.loc[sw_idx]
+        keep_bus = _resolve(int(sw["bus"]))
+        remove_bus = _resolve(int(sw["element"]))
+        grid.switch.drop(sw_idx, inplace=True)
+        if keep_bus == remove_bus:
+            continue
+        for name, cols in _ELEMENT_BUS_COLUMNS.items():
+            if not _present(name):
+                continue
+            table = grid[name]
+            for col in cols:
+                if col in table.columns:
+                    mask = table[col] == remove_bus
+                    if mask.any():
+                        table.loc[mask, col] = keep_bus
+        # Switches sitting on the removed bus (line / trafo switches, and
+        # the bus side of any other bus-bus switch) must follow the merge;
+        # otherwise a normally-open tie switch no longer refers to an
+        # endpoint of its branch.  Bus measurements likewise.
+        if _present("switch"):
+            sw_tbl = grid.switch
+            sw_tbl.loc[sw_tbl["bus"] == remove_bus, "bus"] = keep_bus
+            bb_el = (sw_tbl["et"] == "b") & (sw_tbl["element"] == remove_bus)
+            sw_tbl.loc[bb_el, "element"] = keep_bus
+        if _present("measurement") and "element_type" in grid.measurement:
+            meas = grid.measurement
+            m_mask = (meas["element_type"] == "bus") & (
+                meas["element"] == remove_bus
+            )
+            meas.loc[m_mask, "element"] = keep_bus
+        # The surviving node inherits the tightest voltage band of the pair.
+        for col, agg in (("max_vm_pu", min), ("min_vm_pu", max)):
+            if col in grid.bus.columns and remove_bus in grid.bus.index:
+                vals = grid.bus.loc[[keep_bus, remove_bus], col].dropna()
+                if len(vals):
+                    grid.bus.at[keep_bus, col] = agg(vals)
+        # Drop the merged-away bus: pandapower moves orphan buses to the end
+        # of its internal numbering, which is how a bus left behind here
+        # once shifted the ppc numbering of every later bus.
+        if remove_bus in grid.bus.index:
+            grid.bus.drop(remove_bus, inplace=True)
+        alias[remove_bus] = keep_bus
 
     # Remove self-loop branches/transformers created by the merge.
     if _present("line"):
