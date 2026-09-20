@@ -42,6 +42,8 @@ def test_basemodel_falls_back_to_dc_power_flow():
     assert model.net._ppc["branch"].shape[0] == 1
     assert np.allclose(model.bus_data.v_m.values, 1.0)
     assert model.bus_data.v_a_rad.abs().max() > 0.0
+    # the start stays inside the (-π, π) bounds of the angle variables
+    assert model.bus_data.v_a_rad.abs().max() <= np.pi
 
 
 def test_converging_feeder_keeps_the_ac_start():

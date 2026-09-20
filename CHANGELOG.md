@@ -37,6 +37,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   and could not run a power flow. `load_pglib_case` adds a zero-capacity
   external grid at that bus, which restores the reference without adding
   dispatchable power.
+- **The DC power-flow fallback hands the model a start inside the angle
+  bounds.** DC angles are unbounded and reached −22 rad on the largest PGLib
+  cases; `Basemodel` bounds the angle variables to (−π, π), so Pyomo logged a
+  warning for every bus. The fallback now wraps the start into (−180°, 180°],
+  which leaves every branch's starting residual unchanged because the flows
+  depend on angle differences only.
 
 ## [0.5.2] — 2026-09-20
 

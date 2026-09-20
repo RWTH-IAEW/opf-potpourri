@@ -52,6 +52,13 @@ class Basemodel:
                 "starting point instead."
             )
             pp.rundcpp(self.net)
+            # DC angles are unbounded and reach far beyond ±π on heavily
+            # loaded networks; the model bounds delta to (-π, π), so wrap
+            # the start into (-180°, 180°]. Every branch flow depends on the
+            # angle difference only, so wrapping leaves the starting
+            # residuals unchanged.
+            va = self.net._ppc["bus"][:, 8]
+            self.net._ppc["bus"][:, 8] = (va + 180.0) % 360.0 - 180.0
 
         # --- pyo.Sets ---
         # Every ppc bus, not the first len(net.bus) rows.  pandapower's ppc
