@@ -489,7 +489,7 @@ class Basemodel:
         load_solutions: bool = True,
         mip_solver="gurobi",
         max_iter=None,
-        time_limit=600,
+        time_limit=None,
         init_strategy="rNLP",
         neos_opt="ipopt",
         nlp_solver_args=None,
@@ -513,9 +513,12 @@ class Basemodel:
                 'mindtpy'.
             max_iter (int, optional): Maximum iterations for the solver.
                 Mapped to Gurobi's 'IterationLimit' for 'gurobi*' solvers.
-            time_limit (int): Time limit for the solver in seconds. Honoured
-                by 'mindtpy' and by 'gurobi*' (as 'TimeLimit'); other solvers
-                ignore it.
+            time_limit (float, optional): Wall-clock limit for the solver in
+                seconds. IPOPT receives it as ``max_wall_time`` (IPOPT 3.14
+                or newer), 'gurobi*' as ``TimeLimit`` and 'mindtpy' as its
+                ``time_limit``. ``None`` (the default) sets no limit for
+                IPOPT; 'gurobi*' and 'mindtpy' then keep their previous
+                default of 600 s. Other solvers ignore it.
             init_strategy (str): Initialization strategy for 'mindtpy'.
             neos_opt (str): Solver to use with NEOS.
             nlp_solver_args (dict, optional): Extra keyword arguments forwarded
@@ -552,7 +555,7 @@ class Basemodel:
                     nlp_solver_args=nlp_solver_args or {},
                     tee=print_solver_output,
                     iteration_limit=max_iter,
-                    time_limit=time_limit,
+                    time_limit=600 if time_limit is None else time_limit,
                     init_strategy=init_strategy,
                 )
             except ValueError as err:
@@ -576,12 +579,22 @@ class Basemodel:
                 if max_iter:
                     optimizer.options["IterationLimit"] = max_iter
                     logger.debug("Gurobi IterationLimit set to {}", max_iter)
-                if time_limit:
-                    optimizer.options["TimeLimit"] = time_limit
-                    logger.debug("Gurobi TimeLimit set to {} s", time_limit)
-            elif max_iter:
-                optimizer.options["max_iter"] = max_iter
-                logger.debug("Solver max_iter set to {}", max_iter)
+                gurobi_time_limit = 600 if time_limit is None else time_limit
+                if gurobi_time_limit:
+                    optimizer.options["TimeLimit"] = gurobi_time_limit
+                    logger.debug(
+                        "Gurobi TimeLimit set to {} s", gurobi_time_limit
+                    )
+            else:
+                if max_iter:
+                    optimizer.options["max_iter"] = max_iter
+                    logger.debug("Solver max_iter set to {}", max_iter)
+                if time_limit is not None and solver.startswith("ipopt"):
+                    # IPOPT's wall-clock cap (3.14+). Its CPU-time cap would
+                    # let a solve that shares the host with others run far
+                    # beyond the requested wall time.
+                    optimizer.options["max_wall_time"] = float(time_limit)
+                    logger.debug("IPOPT max_wall_time set to {} s", time_limit)
 
             self.results = optimizer.solve(
                 self.model,

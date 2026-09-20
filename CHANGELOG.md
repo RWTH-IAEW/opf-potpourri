@@ -68,6 +68,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   flow nor the DC fallback could run and no model could be built. `Basemodel`
   now falls back a level further and takes pandapower's network tables without
   solving anything, with a flat start; the OPF solver does the rest.
+- **`solve(time_limit=...)` reaches IPOPT.** The keyword was honoured by
+  Gurobi (`TimeLimit`) and mindtpy only and silently dropped for IPOPT, so
+  the PGLib benchmark's `TIME_LIMIT_S` never applied and AC solves of the
+  largest cases ran for up to 2.6 h before IPOPT stopped on its own. IPOPT
+  now receives it as `max_wall_time` (IPOPT 3.14 or newer). The default
+  changed from 600 to `None`: IPOPT runs that never passed a limit behave as
+  before, Gurobi and mindtpy keep their 600 s default when none is given.
 
 ## [0.5.2] — 2026-09-20
 
