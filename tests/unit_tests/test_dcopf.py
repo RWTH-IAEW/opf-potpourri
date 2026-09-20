@@ -81,3 +81,36 @@ def test_dcopf_solves_with_neos():
     )
     dcopf.solve(solver="neos", neos_opt="cplex", to_net=False)
     assert pyo.check_optimal_termination(dcopf.results)
+
+
+def test_dc_susceptance_conventions():
+    """``-1/x`` (MATPOWER, default) versus ``-x/(r²+x²)`` (PowerModels)."""
+    import pandapower as pp
+    import pytest
+
+    from potpourri.models.DCOPF import DCOPF
+
+    net = pp.create_empty_network(sn_mva=100.0)
+    b0 = pp.create_bus(net, 110.0)
+    b1 = pp.create_bus(net, 110.0)
+    pp.create_ext_grid(net, b0)
+    pp.create_line_from_parameters(
+        net,
+        b0,
+        b1,
+        1.0,
+        r_ohm_per_km=6.05,
+        x_ohm_per_km=12.1,
+        c_nf_per_km=0.0,
+        max_i_ka=1.0,
+    )
+    pp.create_load(net, b1, 20.0, 5.0)
+    zn = 110.0**2 / 100.0  # per-unit base impedance
+    r, x = 6.05 / zn, 12.1 / zn
+    default = DCOPF(net)
+    powermodels = DCOPF(net, dc_susceptance="powermodels")
+    assert default.model.BL[0] == pytest.approx(-1 / x)
+    assert powermodels.model.BL[0] == pytest.approx(-x / (r**2 + x**2))
+    assert powermodels.model.BL[0] != pytest.approx(default.model.BL[0])
+    with pytest.raises(ValueError):
+        DCOPF(net, dc_susceptance="lossless")

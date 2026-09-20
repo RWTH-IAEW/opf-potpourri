@@ -53,6 +53,7 @@ RUN_AC = True  # include AC-OPF column
 CASES = None  # None → all cases of each group; list of bare names to override
 N_WORKERS = 8  # parallel worker processes (IPOPT is single-threaded)
 TIME_LIMIT_S = 3600  # IPOPT wall-time limit per solve
+DC_SUSCEPTANCE = "powermodels"  # DC branch susceptance convention, see DCOPF
 RESULTS_DIR = Path(__file__).parent / "results"
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -131,7 +132,9 @@ def _select_cases(
     return out
 
 
-def _solve(builder, case_name: str, opf_kwargs: dict) -> dict:
+def _solve(
+    builder, case_name: str, opf_kwargs: dict, model_kwargs: dict | None = None
+) -> dict:
     """Build and solve one model; return objective, status and timings."""
     import pyomo.environ as pyo
 
@@ -140,7 +143,7 @@ def _solve(builder, case_name: str, opf_kwargs: dict) -> dict:
 
     t0 = time.perf_counter()
     net = load_pglib_case(case_name)
-    model = builder(net)
+    model = builder(net, **(model_kwargs or {}))
     model.add_OPF(**opf_kwargs)
     add_poly_cost_objective(model, allow_quadratic=True)
     t_build = time.perf_counter() - t0
@@ -166,9 +169,17 @@ def run_dcopf(case_name: str) -> dict:
     """Solve DC-OPF for ``case_name`` (full PGLib name) and return a summary."""
     from potpourri.models.DCOPF import DCOPF
 
-    # PGLib DC-OPF uses linear costs only (c2 dropped in pure LP).
-    # We still accept quadratic terms — IPOPT handles them as a QP.
-    return _solve(DCOPF, case_name, dict(angle_limits=True))
+    # The PGLib DC references come from PowerModels' DCPPowerModel, whose
+    # branch susceptance is -x/(r²+x²); potpourri's default is MATPOWER's
+    # -1/x. Using the PowerModels convention here makes the DC column a
+    # like-for-like comparison (it closed gaps of up to 2.8 % on the API
+    # cases and reproduces the SAD infeasibilities).
+    return _solve(
+        DCOPF,
+        case_name,
+        dict(angle_limits=True),
+        model_kwargs=dict(dc_susceptance=DC_SUSCEPTANCE),
+    )
 
 
 def run_acopf(case_name: str) -> dict:

@@ -16,13 +16,32 @@ class DC(Basemodel):
 
     Args:
         net: A pandapower network compatible with pp.runpp().
+        dc_susceptance: Which branch susceptance the DC flow uses.
+            ``"matpower"`` (default): ``-1/x``, the textbook DC power flow
+            and MATPOWER's ``makeBdc``. ``"powermodels"``: ``-x/(r² + x²)``,
+            the series susceptance of the full impedance, as in
+            PowerModels.jl's ``DCPPowerModel`` that produced the PGLib-OPF DC
+            reference values. The two agree where r ≪ x and differ by
+            several percent on high-r/x networks.
     """
 
-    def __init__(self, net):
+    DC_SUSCEPTANCES = ("matpower", "powermodels")
+
+    def __init__(self, net, dc_susceptance: str = "matpower"):
+        if dc_susceptance not in self.DC_SUSCEPTANCES:
+            raise ValueError(
+                f"dc_susceptance must be one of {self.DC_SUSCEPTANCES}, "
+                f"got {dc_susceptance!r}"
+            )
+        self.dc_susceptance = dc_susceptance
         super().__init__(net)
 
+        r = self.net._ppc["branch"][:, 2].real
         x = self.net._ppc["branch"][:, 3].real
-        BL = -1 / x
+        if dc_susceptance == "powermodels":
+            BL = -x / (r**2 + x**2)
+        else:
+            BL = -1 / x
         trafo_start = len(self.net.line)
         trafo_end = trafo_start + len(self.net.trafo)
         imp_table = self.net.get("impedance")
@@ -41,11 +60,14 @@ class DC(Basemodel):
         # for impedance branches (which carry per-unit r/x referenced to
         # impedance.sn_mva, in actual ohms per the from-bus), we read the
         # per-unit value pandapower already wrote into _ppc['branch'].
-        ZN = self.net.bus.vn_kv**2 / self.baseMVA
-        y_s_line = -1 / (
-            self.net.line.x_ohm_per_km * self.net.line.length_km
-        )  # according to matpower manual dc modeling
-        bl_line = y_s_line * ZN[self.net.line.from_bus].values
+        if dc_susceptance == "powermodels":
+            bl_line = BL[:trafo_start]
+        else:
+            ZN = self.net.bus.vn_kv**2 / self.baseMVA
+            y_s_line = -1 / (
+                self.net.line.x_ohm_per_km * self.net.line.length_km
+            )  # according to matpower manual dc modeling
+            bl_line = y_s_line * ZN[self.net.line.from_bus].values
         # Use a pd.Series keyed by the model.L indices (native line indices +
         # synthetic impedance indices) so out-of-service line rows — whose
         # indices are skipped in model.L — don't shift the lookup.

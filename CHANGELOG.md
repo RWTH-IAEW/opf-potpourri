@@ -16,6 +16,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   whose reference reads `inf.` (PowerModels.jl found the problem infeasible;
   45 SAD cases have no DC-OPF solution), returning `inf`, and the script counts
   an infeasible potpourri result on such a row as agreement.
+- **`DCOPF(net, dc_susceptance="powermodels")` selects the DC branch
+  susceptance convention.** The default stays MATPOWER's `-1/x`. PowerModels'
+  `DCPPowerModel`, which produced the PGLib DC references, uses the series
+  susceptance of the full impedance, `-x/(r²+x²)`, and ignores the tap. The
+  two agree where r ≪ x and differ by several percent on high-r/x networks,
+  which accounted for every DC gap in the benchmark (up to −2.8 % on the API
+  cases and the SAD cases PowerModels reports infeasible). The benchmark uses
+  the PowerModels convention so its DC column is a like-for-like comparison.
 
 ### Fixed
 
