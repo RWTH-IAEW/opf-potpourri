@@ -5,6 +5,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Python 3.10 is now the minimum.** `requires-python` declared `>=3.9,<3.13`,
+  but the pinned pyomo 6.10 and simbench 1.6 both require 3.10, so a 3.9
+  install resolved to older releases of both that the suite has never been run
+  against. Continuous integration exercises 3.10–3.12 only; the declaration,
+  the classifiers, `environment.yaml` and the docs now match. The upper bound
+  is unchanged.
+
 ## [0.5.1] — 2026-09-20
 
 A patch release: three model fixes found while cross-checking the single-period

@@ -22,7 +22,7 @@
 
 ### For users
 
-Install from PyPI with pip or uv. Python 3.9–3.12 is supported.
+Install from PyPI with pip or uv. Python 3.10–3.12 is supported.
 
 ```bash
 pip install opf-potpourri

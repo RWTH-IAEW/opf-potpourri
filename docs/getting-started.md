@@ -10,7 +10,7 @@ If you want to use `potpourri` in your own scripts or notebooks without
 modifying the source code, install the released package directly from PyPI.
 This is the recommended path for most users.
 
-**Requirements:** Python 3.9–3.12.
+**Requirements:** Python 3.10–3.12.
 
 ```bash
 pip install opf-potpourri
@@ -42,7 +42,7 @@ python -c "import potpourri; print(potpourri.__version__)"
 Clone the repository and install in editable mode if you plan to modify the
 source code, run the full test suite, or build the documentation locally.
 
-**Requirements:** Python 3.9–3.12 and Conda (or Mamba).
+**Requirements:** Python 3.10–3.12 and Conda (or Mamba).
 
 #### Option A — Conda / Mamba (recommended)
 
