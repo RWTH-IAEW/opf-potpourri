@@ -1233,9 +1233,10 @@ class ACOPF(AC, OPF):
     def _add_branch_angle_limits(self):
         """Attach branch phase-angle-difference constraints to ``self.model``.
 
-        Reads per-line / per-transformer angle bounds from
-        ``net.line.angmin_degree`` / ``net.line.angmax_degree`` (and the
-        transformer equivalent if present), converts to radians, and adds
+        Reads per-branch angle bounds from ``angmin_degree`` /
+        ``angmax_degree`` on ``net.line``, ``net.trafo`` and
+        ``net.impedance`` (impedance rows are the synthetic line indices
+        behind ``net.line``), converts to radians, and adds
         ``angmin_rad ≤ delta[from] − delta[to] ≤ angmax_rad`` on every branch
         that has finite bounds.
         """
@@ -1249,14 +1250,30 @@ class ACOPF(AC, OPF):
             ):
                 return {}
             valid = set(table.index)
+            imp = self.net.get("impedance")
+            n_line = len(self.net.line.index)
+            has_imp_bounds = (
+                table is self.net.line
+                and imp is not None
+                and not imp.empty
+                and angmin_col in imp.columns
+                and angmax_col in imp.columns
+            )
             out = {}
             for ix in idx_set:
-                if ix not in valid:
-                    # synthetic impedance indices live in model.L beyond
-                    # net.line — they have no MATPOWER angle bound
+                if ix in valid:
+                    src, row, f_col, t_col = table, ix, hv_col, lv_col
+                elif has_imp_bounds and 0 <= ix - n_line < len(imp):
+                    # impedance rows sit in model.L behind net.line under
+                    # synthetic indices n_line + i (see Basemodel); their
+                    # MATPOWER angle bound arrives on net.impedance
+                    src = imp
+                    row = imp.index[ix - n_line]
+                    f_col, t_col = "from_bus", "to_bus"
+                else:
                     continue
-                amin = float(table.at[ix, angmin_col])
-                amax = float(table.at[ix, angmax_col])
+                amin = float(src.at[row, angmin_col])
+                amax = float(src.at[row, angmax_col])
                 if (
                     not np.isfinite(amin)
                     or not np.isfinite(amax)
@@ -1265,8 +1282,8 @@ class ACOPF(AC, OPF):
                 ):
                     continue
                 out[ix] = (
-                    self.bus_lookup[int(table.at[ix, hv_col])],
-                    self.bus_lookup[int(table.at[ix, lv_col])],
+                    self.bus_lookup[int(src.at[row, f_col])],
+                    self.bus_lookup[int(src.at[row, t_col])],
                     np.deg2rad(amin),
                     np.deg2rad(amax),
                 )

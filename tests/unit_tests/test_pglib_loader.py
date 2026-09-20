@@ -133,3 +133,47 @@ def test_baseline_parser_keeps_rows_powermodels_found_infeasible(tmp_path):
     }
     sad = parsed["SAD"]["pglib_opf_case5_pjm__sad"]
     assert math.isinf(sad["dc"]) and sad["ac"] == 26109.0
+
+
+# bus 5 (20 kV) hangs off bus 3 through a branch with a nominal ratio between
+# different voltage levels: pandapower turns that into an ``impedance``
+# element, the third table a MATPOWER branch can land in.
+IMPEDANCE_CASE = TINY_CASE.replace(
+    "\t4\t1\t10\t2\t0\t0\t1\t1\t0\t20\t1\t1.1\t0.9;\n];",
+    "\t4\t1\t10\t2\t0\t0\t1\t1\t0\t20\t1\t1.1\t0.9;\n"
+    "\t5\t1\t5\t1\t0\t0\t1\t1\t0\t20\t1\t1.1\t0.9;\n];",
+).replace(
+    "\t4\t2\t0.002\t0.04\t0\t100\t100\t100\t1.05\t0\t1\t-30\t30;\n];",
+    "\t4\t2\t0.002\t0.04\t0\t100\t100\t100\t1.05\t0\t1\t-30\t30;\n"
+    "\t3\t5\t0.01\t0.05\t0\t100\t100\t100\t0\t0\t1\t-2\t2;\n];",
+)
+
+
+@pytest.fixture
+def impedance_case(tmp_path):
+    path = tmp_path / "pglib_opf_tiny_imp.m"
+    path.write_text(IMPEDANCE_CASE)
+    return path
+
+
+def test_angle_limits_reach_impedance_branches(impedance_case):
+    from potpourri.models.ACOPF_base import ACOPF
+    from potpourri.models.DCOPF import DCOPF
+
+    net = load_pglib_case(impedance_case)
+    assert len(net.impedance) == 1
+    assert list(net.impedance.angmin_degree) == [-2.0]
+    assert list(net.impedance.angmax_degree) == [2.0]
+    synthetic = len(net.line)  # impedance rows follow the lines in model.L
+    for builder, kwargs in (
+        (DCOPF, dict(angle_limits=True)),
+        (ACOPF, dict(thermal_limit="mva", angle_limits=True)),
+    ):
+        model = builder(net)
+        model.add_OPF(**kwargs)
+        assert synthetic in model.model.LineAngleSet
+        lo, body, hi = model.model.line_angle_diff[
+            synthetic
+        ].to_bounded_expression()
+        assert lo == pytest.approx(np.deg2rad(-2.0))
+        assert hi == pytest.approx(np.deg2rad(2.0))

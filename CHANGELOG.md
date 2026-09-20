@@ -17,6 +17,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   45 SAD cases have no DC-OPF solution), returning `inf`, and the script counts
   an infeasible potpourri result on such a row as agreement.
 
+### Fixed
+
+- **Angle limits reach the branches pandapower stores as impedance
+  elements.** A MATPOWER branch between different voltage levels without a
+  tap becomes a `net.impedance` row. The PGLib loader attached
+  `ANGMIN`/`ANGMAX` to lines and transformers only, and both the AC and the DC
+  model skipped the synthetic line indices that carry impedance rows, so those
+  branches had no angle limit at all. On `case60_c__sad` 27 of 88 branches
+  were unconstrained: the AC-OPF settled 3.7 % below the PGLib reference with
+  six limits violated, and DC cases PowerModels reports infeasible solved. The
+  loader now writes the limits to `net.impedance` and both models enforce
+  them; `case60_c__sad` matches the reference and its DC-OPF is infeasible as
+  published.
+
 ## [0.5.2] — 2026-09-20
 
 A patch release. The single-period model no longer fails to build when the

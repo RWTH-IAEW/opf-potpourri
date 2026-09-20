@@ -73,8 +73,9 @@ class DCOPF(DC, OPF):
     def _add_dc_branch_angle_limits(self):
         """Attach branch phase-angle-difference constraints (DC variant).
 
-        Reads angle bounds from ``net.line.{angmin,angmax}_degree`` and the
-        transformer equivalent if present, and applies them to
+        Reads angle bounds from ``{angmin,angmax}_degree`` on ``net.line``,
+        ``net.trafo`` and ``net.impedance`` (impedance rows are the synthetic
+        line indices behind ``net.line``) and applies them to
         ``delta[from] − delta[to]`` (radians).
         """
 
@@ -85,14 +86,30 @@ class DCOPF(DC, OPF):
             ):
                 return {}
             valid = set(table.index)
+            imp = self.net.get("impedance")
+            n_line = len(self.net.line.index)
+            has_imp_bounds = (
+                table is self.net.line
+                and imp is not None
+                and not imp.empty
+                and "angmin_degree" in imp.columns
+                and "angmax_degree" in imp.columns
+            )
             out = {}
             for ix in idx_set:
-                if ix not in valid:
-                    # synthetic impedance indices live in model.L beyond
-                    # net.line — they have no MATPOWER angle bound
+                if ix in valid:
+                    src, row, f_col, t_col = table, ix, hv_col, lv_col
+                elif has_imp_bounds and 0 <= ix - n_line < len(imp):
+                    # impedance rows sit in model.L behind net.line under
+                    # synthetic indices n_line + i (see Basemodel); their
+                    # MATPOWER angle bound arrives on net.impedance
+                    src = imp
+                    row = imp.index[ix - n_line]
+                    f_col, t_col = "from_bus", "to_bus"
+                else:
                     continue
-                amin = float(table.at[ix, "angmin_degree"])
-                amax = float(table.at[ix, "angmax_degree"])
+                amin = float(src.at[row, "angmin_degree"])
+                amax = float(src.at[row, "angmax_degree"])
                 if (
                     not np.isfinite(amin)
                     or not np.isfinite(amax)
@@ -101,8 +118,8 @@ class DCOPF(DC, OPF):
                 ):
                     continue
                 out[ix] = (
-                    self.bus_lookup[int(table.at[ix, hv_col])],
-                    self.bus_lookup[int(table.at[ix, lv_col])],
+                    self.bus_lookup[int(src.at[row, f_col])],
+                    self.bus_lookup[int(src.at[row, t_col])],
                     np.deg2rad(amin),
                     np.deg2rad(amax),
                 )

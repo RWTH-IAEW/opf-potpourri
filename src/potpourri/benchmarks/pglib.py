@@ -207,8 +207,8 @@ def _dispatchable_sgens(net: pp.pandapowerNet) -> np.ndarray:
 
 def _attach_branch_angle_limits(net: pp.pandapowerNet, mpc_path: Path) -> None:
     """Read MATPOWER ``ANGMIN``/``ANGMAX`` from the source ``.m`` file and
-    write them to ``net.line.angmin_degree`` / ``net.line.angmax_degree``
-    (and the transformer equivalent).
+    write them to ``angmin_degree`` / ``angmax_degree`` on ``net.line``,
+    ``net.trafo`` and ``net.impedance``.
 
     pandapower's ``from_mpc`` doesn't preserve these, but they are needed
     for PGLib-OPF benchmark fidelity. We match each MATPOWER branch to a
@@ -231,53 +231,53 @@ def _attach_branch_angle_limits(net: pp.pandapowerNet, mpc_path: Path) -> None:
     amin = branch["ANGMIN"].astype(float).values
     amax = branch["ANGMAX"].astype(float).values
 
-    line_amin = np.full(len(net.line), -360.0, dtype=float)
-    line_amax = np.full(len(net.line), 360.0, dtype=float)
-    trafo_amin = np.full(len(net.trafo), -360.0, dtype=float)
-    trafo_amax = np.full(len(net.trafo), 360.0, dtype=float)
-
-    line_from = net.line["from_bus"].astype(int).values
-    line_to = net.line["to_bus"].astype(int).values
-    line_used = np.zeros(len(net.line), dtype=bool)
-    if not net.trafo.empty:
-        trafo_hv = net.trafo["hv_bus"].astype(int).values
-        trafo_lv = net.trafo["lv_bus"].astype(int).values
-        trafo_used = np.zeros(len(net.trafo), dtype=bool)
+    # Every MATPOWER branch ends up in one of three pandapower tables: lines
+    # (same voltage level, nominal ratio), transformers (off-nominal ratio or
+    # phase shift) or impedance elements (different voltage levels without a
+    # tap). All three carry the angle limit; leaving the impedance rows out
+    # let case60_c__sad settle 3.7 % below the PGLib reference with six
+    # angle limits violated.
+    tables = [
+        ("line", net.line, "from_bus", "to_bus"),
+        ("trafo", net.trafo, "hv_bus", "lv_bus"),
+        ("impedance", net.get("impedance"), "from_bus", "to_bus"),
+    ]
+    tables = [
+        (n, t, a, b) for n, t, a, b in tables if t is not None and not t.empty
+    ]
+    ends = {
+        n: (t[a].astype(int).values, t[b].astype(int).values)
+        for n, t, a, b in tables
+    }
+    used = {n: np.zeros(len(t), dtype=bool) for n, t, _, _ in tables}
+    lim = {
+        n: (
+            np.full(len(t), -360.0, dtype=float),
+            np.full(len(t), 360.0, dtype=float),
+        )
+        for n, t, _, _ in tables
+    }
 
     for i in range(len(branch)):
-        # Try lines first (lookups against both directions)
-        line_hit = np.where(
-            ~line_used
-            & (
-                ((line_from == fr[i]) & (line_to == to[i]))
-                | ((line_from == to[i]) & (line_to == fr[i]))
-            )
-        )[0]
-        if len(line_hit):
-            j = line_hit[0]
-            line_amin[j] = amin[i]
-            line_amax[j] = amax[i]
-            line_used[j] = True
-            continue
-        if not net.trafo.empty:
-            t_hit = np.where(
-                ~trafo_used
+        for name, _, _, _ in tables:
+            a, b = ends[name]
+            hit = np.where(
+                ~used[name]
                 & (
-                    ((trafo_hv == fr[i]) & (trafo_lv == to[i]))
-                    | ((trafo_hv == to[i]) & (trafo_lv == fr[i]))
+                    ((a == fr[i]) & (b == to[i]))
+                    | ((a == to[i]) & (b == fr[i]))
                 )
             )[0]
-            if len(t_hit):
-                k = t_hit[0]
-                trafo_amin[k] = amin[i]
-                trafo_amax[k] = amax[i]
-                trafo_used[k] = True
+            if len(hit):
+                j = hit[0]
+                lim[name][0][j] = amin[i]
+                lim[name][1][j] = amax[i]
+                used[name][j] = True
+                break
 
-    net.line["angmin_degree"] = line_amin
-    net.line["angmax_degree"] = line_amax
-    if not net.trafo.empty:
-        net.trafo["angmin_degree"] = trafo_amin
-        net.trafo["angmax_degree"] = trafo_amax
+    for name, table, _, _ in tables:
+        table["angmin_degree"] = lim[name][0]
+        table["angmax_degree"] = lim[name][1]
 
 
 def _align_transformer_tap_sides(net: pp.pandapowerNet, mpc_path: Path) -> int:
