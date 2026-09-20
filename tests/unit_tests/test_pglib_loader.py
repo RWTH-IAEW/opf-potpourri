@@ -177,3 +177,32 @@ def test_angle_limits_reach_impedance_branches(impedance_case):
         ].to_bounded_expression()
         assert lo == pytest.approx(np.deg2rad(-2.0))
         assert hi == pytest.approx(np.deg2rad(2.0))
+
+
+# the MATPOWER slack bus 1 carries no generator (both units sit at bus 2), as
+# in the RTE cases; pandapower then creates no ext_grid
+NO_SLACK_GEN_CASE = TINY_CASE.replace(
+    "\t1\t0\t0\t100\t-100\t1\t100\t1\t200\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0;\n",
+    "",
+).replace(
+    "\t2\t0\t0\t3\t0.01\t20\t100;\n",
+    "",
+)
+
+
+def test_slack_bus_without_generator_gets_a_zero_capacity_ext_grid(tmp_path):
+    from potpourri.models.DCOPF import DCOPF
+
+    path = tmp_path / "pglib_opf_tiny_noslack.m"
+    path.write_text(NO_SLACK_GEN_CASE)
+    net = load_pglib_case(path)
+    assert len(net.ext_grid) == 1
+    eg = net.ext_grid.iloc[0]
+    assert eg.bus == 0 and eg.max_p_mw == 0.0 and eg.min_p_mw == 0.0
+    assert eg.max_q_mvar == 0.0 and eg.min_q_mvar == 0.0
+    # the model builds (a reference bus exists) and the reference does not
+    # appear in the cost objective
+    model = DCOPF(net)
+    model.add_OPF(angle_limits=True)
+    assert 0 in model.model.b0
+    assert (net.poly_cost.et == "ext_grid").sum() == 0

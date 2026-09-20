@@ -30,6 +30,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   loader now writes the limits to `net.impedance` and both models enforce
   them; `case60_c__sad` matches the reference and its DC-OPF is infeasible as
   published.
+- **PGLib cases whose slack bus carries no generator now load.** MATPOWER
+  and PowerModels use the type-3 bus only as the angle reference; pandapower
+  derives `net.ext_grid` from the generator sitting there, so the four RTE
+  cases (`case6468_rte` to `case6515_rte`) came out without a reference bus
+  and could not run a power flow. `load_pglib_case` adds a zero-capacity
+  external grid at that bus, which restores the reference without adding
+  dispatchable power.
 
 ## [0.5.2] — 2026-09-20
 
