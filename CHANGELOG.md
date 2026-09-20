@@ -5,6 +5,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **The PGLib benchmark covers all three operating conditions and every case
+  size.** `scripts/pglib_benchmark.py` runs the Typical (TYP), Congested (API)
+  and Small Angle Difference (SAD) groups, all 66 cases each by default
+  (`MAX_BUSES = None`), in parallel worker processes with the largest cases
+  dispatched first, an IPOPT time limit per solve and build/solve times per
+  model; one results table per group. `parse_baseline_md` now keeps the rows
+  whose reference reads `inf.` (PowerModels.jl found the problem infeasible;
+  45 SAD cases have no DC-OPF solution), returning `inf`, and the script counts
+  an infeasible potpourri result on such a row as agreement.
+
 ## [0.5.2] — 2026-09-20
 
 A patch release. The single-period model no longer fails to build when the

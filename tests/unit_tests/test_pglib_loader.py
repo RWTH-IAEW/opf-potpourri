@@ -110,3 +110,26 @@ def test_loaded_case_runs_a_power_flow_that_matches_matpower_admittance(
     # the off-diagonal is -ys / TAP either way
     assert Y[lk[3], lk[1]] == pytest.approx(-ys / 1.05, rel=2e-3)
     assert np.isfinite(Y).all()
+
+
+def test_baseline_parser_keeps_rows_powermodels_found_infeasible(tmp_path):
+    """Most SAD rows carry ``inf.`` in the DC column; their AC reference must
+    survive parsing and the DC value must come back as ``inf``."""
+    import math
+
+    from potpourri.benchmarks.pglib import parse_baseline_md
+
+    md = tmp_path / "BASELINE.md"
+    md.write_text(
+        "## Typical Operating Conditions (TYP)\n"
+        "| pglib_opf_case5_pjm | 5 | 6 | 1.7480e+04 | 1.7552e+04 | 0.1 | 0.1 | <1 | <1 |\n"
+        "## Small Angle Difference Conditions (SAD)\n"
+        "| pglib_opf_case5_pjm__sad | 5 | 6 | inf. | 2.6109e+04 | 0.99 | 3.62 | <1 | <1 |\n"
+    )
+    parsed = parse_baseline_md(md)
+    assert parsed["TYP"]["pglib_opf_case5_pjm"] == {
+        "dc": 17480.0,
+        "ac": 17552.0,
+    }
+    sad = parsed["SAD"]["pglib_opf_case5_pjm__sad"]
+    assert math.isinf(sad["dc"]) and sad["ac"] == 26109.0

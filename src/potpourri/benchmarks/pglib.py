@@ -389,10 +389,18 @@ def list_available_cases() -> list[str]:
     return sorted(cases)
 
 
+# DC/AC cells hold a number or "inf." (PowerModels found the problem
+# infeasible; 45 of the 66 SAD cases have no DC solution under the tight
+# angle limits). Both must parse, or the AC reference of those rows is lost.
 _ROW_RE = re.compile(
     r"^\|\s*(pglib_opf_\S+?)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*"
-    r"([0-9.eE+\-]+)\s*\|\s*([0-9.eE+\-]+)\s*\|"
+    r"([0-9.eE+\-]+|inf\.?)\s*\|\s*([0-9.eE+\-]+|inf\.?)\s*\|"
 )
+
+
+def _baseline_value(cell: str) -> float:
+    """``"inf."`` means PowerModels reported the problem infeasible."""
+    return float("inf") if cell.startswith("inf") else float(cell)
 
 
 def parse_baseline_md(
@@ -401,7 +409,9 @@ def parse_baseline_md(
     """Parse PGLib's ``BASELINE.md`` to extract DC/AC reference values.
 
     Returns a nested dict ``{group: {case_name: {"dc": $/h, "ac": $/h}}}``
-    with ``group`` in ``{"TYP", "API", "SAD"}``.
+    with ``group`` in ``{"TYP", "API", "SAD"}``. A value of ``inf`` records
+    that PowerModels.jl found that problem infeasible (``"inf."`` in the
+    table; most SAD cases have no DC-OPF solution).
 
     Args:
         baseline_path: Path to ``BASELINE.md`` (defaults to the one inside
@@ -438,8 +448,8 @@ def parse_baseline_md(
                 continue
             case_name, _, _, dc_val, ac_val = m.groups()
             out[current][case_name] = {
-                "dc": float(dc_val),
-                "ac": float(ac_val),
+                "dc": _baseline_value(dc_val),
+                "ac": _baseline_value(ac_val),
             }
     return out
 
