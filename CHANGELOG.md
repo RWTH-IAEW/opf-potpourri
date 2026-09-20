@@ -5,6 +5,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.2] — 2026-09-20
+
+A patch release. The single-period model no longer fails to build when the
+flat-start power flow diverges, the PGLib loader converts MATPOWER cases
+faithfully (all 18 Typical-Operations cases up to 300 buses now match
+PowerModels.jl), and the declared Python floor moves to 3.10, which the
+pinned dependencies already required. The only API addition is the
+`align_tap_sides` keyword of `load_pglib_case`.
+
+8 new regression tests, suite at 360.
+
 ### Fixed
 
 - **Model construction no longer fails when the base power flow diverges.**
