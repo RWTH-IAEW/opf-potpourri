@@ -50,7 +50,9 @@ git clone --recurse-submodules https://github.com/RWTH-IAEW/opf-potpourri.git
 ```
 for each selected PGLib case (.m file)
     ┌─ load via load_pglib_case()
-    │    (from_mpc → pandapower net, attach ANGMIN/ANGMAX,
+    │    (from_mpc → pandapower net; drop out-of-service generators together
+    │     with their cost rows; keep negative-demand sgens fixed; attach
+    │     ANGMIN/ANGMAX; put transformer taps on MATPOWER's from bus;
     │     rebalance the initial dispatch)
     ├─ DC-OPF: DCOPF + add_poly_cost_objective + angle_limits=True
     ├─ AC-OPF: ACOPF + add_poly_cost_objective
@@ -63,8 +65,11 @@ for each selected PGLib case (.m file)
 
 The PGLib-compatible flags are passed directly to `ACOPF.add_OPF`; no
 monkey-patching of the model is required. Building either model runs one
-flat-start pandapower power flow first (`Basemodel` needs the `ppc` tables),
-which is why the initial dispatch is rebalanced by the loader.
+flat-start pandapower power flow first (`Basemodel` needs the `ppc` tables).
+Where Newton-Raphson diverges, as it does on `case162_ieee_dtc`,
+`case240_pserc` and `case300_ieee` with the shipped setpoints (PYPOWER
+diverges on them too), `Basemodel` falls back to a DC power flow for the
+tables and the starting point and logs a warning.
 
 ---
 
@@ -108,7 +113,7 @@ buses, DC and AC).
 
 | Component | Version |
 |---|---|
-| potpourri | 0.5.1 (commit `d3a384a`) |
+| potpourri | 0.5.1 plus the loader and power-flow fixes below (unreleased) |
 | pandapower | 3.5.4 |
 | Pyomo | 6.10.1 |
 | IPOPT | 3.14.20 (conda-forge) |
@@ -120,45 +125,58 @@ buses, DC and AC).
 | case3_lmbd | 3 | 5 693.80 | 5 695.90 | −0.04 | 5 812.64 | 5 812.60 | 0.00 |
 | case5_pjm | 5 | 17 479.90 | 17 480.00 | 0.00 | 17 551.89 | 17 552.00 | 0.00 |
 | case14_ieee | 14 | 2 051.53 | 2 051.50 | 0.00 | 2 178.08 | 2 178.10 | 0.00 |
-| case24_ieee_rts | 24 | 61 001.24 | 61 001.00 | 0.00 | 63 384.08 | 63 352.00 | +0.05 |
+| case24_ieee_rts | 24 | 61 001.24 | 61 001.00 | 0.00 | 63 352.20 | 63 352.00 | 0.00 |
 | case30_as | 30 | 767.60 | 767.60 | 0.00 | 803.13 | 803.13 | 0.00 |
 | case30_ieee | 30 | 7 506.48 | 7 472.80 | +0.45 | 8 208.52 | 8 208.50 | 0.00 |
 | case39_epri | 39 | 136 816.15 | 136 890.00 | −0.05 | 138 415.56 | 138 420.00 | 0.00 |
 | case57_ieee | 57 | 34 772.95 | 34 773.00 | 0.00 | 37 589.34 | 37 589.00 | 0.00 |
 | case60_c | 60 | 90 700.00 | 90 700.00 | 0.00 | 92 693.67 | 92 694.00 | 0.00 |
-| case73_ieee_rts | 73 | 183 003.72 | 183 000.00 | 0.00 | 189 843.46 | 189 760.00 | +0.04 |
-| case89_pegase | 89 | 105 117.82 | 105 040.00 | +0.07 | 107 259.47 | 107 290.00 | −0.03 |
+| case73_ieee_rts | 73 | 183 003.72 | 183 000.00 | 0.00 | 189 764.08 | 189 760.00 | 0.00 |
+| case89_pegase | 89 | 105 117.82 | 105 040.00 | +0.07 | 107 285.67 | 107 290.00 | 0.00 |
 | case118_ieee | 118 | 93 152.38 | 93 101.00 | +0.06 | 97 213.61 | 97 214.00 | 0.00 |
-| case162_ieee_dtc | 162 | — | 101 460.00 | — | — | 108 080.00 | — |
-| case179_goc | 179 | 751 888.13 | 751 880.00 | 0.00 | 754 236.69 | 754 270.00 | 0.00 |
-| case197_snem | 197 | 1.47 | 1.47 | 0.00 | 1.50 | 1.50 | −0.01 |
-| case200_activ | 200 | 31 474.92 | 27 480.00 | +14.54 | 31 474.92 | 27 558.00 | +14.21 |
-| case240_pserc | 240 | — | 3 271 400.00 | — | — | 3 329 700.00 | — |
-| case300_ieee | 300 | — | 517 850.00 | — | — | 565 220.00 | — |
+| case162_ieee_dtc | 162 | 101 505.86 | 101 460.00 | +0.05 | 108 075.68 | 108 080.00 | 0.00 |
+| case179_goc | 179 | 751 888.13 | 751 880.00 | 0.00 | 754 266.41 | 754 270.00 | 0.00 |
+| case197_snem | 197 | 1.47 | 1.47 | 0.00 | 1.50 | 1.50 | −0.02 |
+| case200_activ | 200 | 27 479.64 | 27 480.00 | 0.00 | 27 557.57 | 27 558.00 | 0.00 |
+| case240_pserc | 240 | 3 270 857.31 | 3 271 400.00 | −0.02 | 3 329 670.06 | 3 329 700.00 | 0.00 |
+| case300_ieee | 300 | 517 352.61 | 517 850.00 | −0.10 | 565 220.11 | 565 220.00 | 0.00 |
 
 Gaps are `(potpourri − reference) / reference`; `0.00` means below 0.005 %
-in magnitude. A dash marks a case where no model could be built (see below).
+in magnitude.
 
 What the table says:
 
-- 15 of the 18 cases solve for both DC and AC. On 14 of them the AC objective
-  is within ±0.05 % of PowerModels.jl; the DC objective is within ±0.07 % on
-  13, with `case30_ieee` at +0.45 %.
-- Every individual `solve()` took less than one second of wall time (Pyomo
-  translation included); the complete run took about 12 s on one core of an
-  Intel Xeon Platinum 8568Y+.
-- The objectives are insensitive to the IPOPT patch level: a second pass with
-  IPOPT 3.14.6 reproduced every value to 1e-9. They also match the run made in
-  August 2026 on pandapower 3.4.0 with the 0.5.0 code, so none of the 0.5.1
-  model fixes (which concern switches, transformer iron losses and storage
-  units) touch these transmission cases.
+- All 18 cases solve for both DC and AC. Every AC objective is within
+  0.02 % of PowerModels.jl (the PGLib references are rounded to five
+  significant digits, so this is the reference's own resolution). The DC
+  objectives are within 0.1 % except `case30_ieee` at +0.45 %.
+- Every individual `solve()` took less than 1.1 s of wall time except
+  `case300_ieee` AC at 4.1 s (Pyomo translation included); the complete run
+  took about 20 s on one core of an Intel Xeon Platinum 8568Y+.
+
+### What it took to get there
+
+The first rerun on 0.5.1 solved 15 of the 18 cases, with `case200_activ`
+14 % and `case240_pserc` 5 % above the reference, and three cases that did
+not even build a model. None of it was the OPF formulation; all of it was in
+how the MATPOWER file became a pandapower network, or in the power flow
+that model construction runs. Each item below is pinned by a unit test in
+`tests/unit_tests/test_pglib_loader.py` and
+`tests/unit_tests/test_base_powerflow_fallback.py`.
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `case162_ieee_dtc`, `case240_pserc`, `case300_ieee` raised `LoadflowNotConverged` before any OPF | With the shipped setpoints the flat-start Newton-Raphson diverges; PYPOWER's NR, fast-decoupled and Gauss-Seidel solvers diverge on the same files | `Basemodel` falls back to a DC power flow for the `ppc` tables and the start and logs a warning |
+| `case200_activ` +14 % on DC and AC alike | The loader dropped 11 out-of-service generators but left `net.poly_cost` untouched: cost curves shifted onto the wrong units, constant terms of dead units kept being charged | Cost rows are dropped and renumbered together with the generator rows |
+| `case240_pserc` +4.9 % | `from_mpc` turns the two buses with negative demand (4.6 GW) into sgens; the loader's dispatch rebalance overwrote their setpoint with 0 because they have no `max_p_mw` | Only sgens with an active-power limit are rebalanced; negative-demand sgens keep their setpoint and are no longer marked controllable |
+| `case162_ieee_dtc`, `case300_ieee` AC-OPF locally infeasible within `[Vmin, Vmax]` | MATPOWER's `TAP` acts on the from bus, `from_mpc` always encodes it on the high-voltage side; for 18 and 16 transformers the from bus is the low-voltage side, so the wrong diagonal of the admittance matrix was divided by `TAP²` (differences of 5–12 p.u.) | `load_pglib_case` sets `tap_side="lv"` on those transformers; the admittance matrix then matches MATPOWER's to 0.01 p.u., and the small residual gaps on `case24`, `case73` and `case89` vanished as well |
 
 The console output for the first cases looks like this:
 
 ```
-case3_lmbd                (    3 buses)  DC:     5693.80 (ref     5695.90,  -0.04%,  0.20s) ✓  AC:     5812.64 (ref     5812.60,  +0.00%,  0.25s) ✓
-case5_pjm                 (    5 buses)  DC:    17479.90 (ref    17480.00,  -0.00%,  0.28s) ✓  AC:    17551.89 (ref    17552.00,  -0.00%,  0.25s) ✓
-case14_ieee               (   14 buses)  DC:     2051.53 (ref     2051.50,  +0.00%,  0.19s) ✓  AC:     2178.08 (ref     2178.10,  -0.00%,  0.25s) ✓
+case3_lmbd                (    3 buses)  DC:     5693.80 (ref     5695.90,  -0.04%,  0.25s) ✓  AC:     5812.64 (ref     5812.60,  +0.00%,  0.35s) ✓
+case5_pjm                 (    5 buses)  DC:    17479.90 (ref    17480.00,  -0.00%,  0.30s) ✓  AC:    17551.89 (ref    17552.00,  -0.00%,  0.28s) ✓
+case14_ieee               (   14 buses)  DC:     2051.53 (ref     2051.50,  +0.00%,  0.24s) ✓  AC:     2178.08 (ref     2178.10,  -0.00%,  0.54s) ✓
 ```
 
 ---
@@ -175,10 +193,14 @@ net = load_pglib_case("case14_ieee")
 
 Converts a PGLib `.m` file into a `pandapowerNet` with:
 
-- All generators flagged `controllable=True`
+- Out-of-service generators removed, with their cost rows, so
+  `net.poly_cost.element` still addresses the right units
+- All generators flagged `controllable=True`; sgens that `from_mpc` created
+  from negative demand stay fixed injections
 - Polynomial cost coefficients in `net.poly_cost`
 - Phase-angle limits (`angmin_degree` / `angmax_degree`) on `net.line` and
   `net.trafo`, read from the MATPOWER `ANGMIN` / `ANGMAX` fields
+- Transformer taps on the side MATPOWER puts them (`align_tap_sides=True`)
 - Initial dispatch rebalanced so the flat-start power flow that model
   construction runs has a chance to converge
 
@@ -209,24 +231,12 @@ print(ref["dc"], ref["ac"])   # 2051.5, 2178.1
 
 ## Known limitations
 
-- **Three cases do not get past model construction.** For `case162_ieee_dtc`,
-  `case240_pserc` and `case300_ieee` the flat-start Newton–Raphson power flow
-  that `Basemodel` runs to obtain the `ppc` tables stops with
-  `Power Flow nr did not converge after 10 iterations!`, so no OPF is
-  attempted. The rebalanced initial dispatch is not enough for these
-  networks; a better starting point (for example a DC power-flow
-  initialisation or more iterations) is the obvious next step.
-- **`case200_activ` is 14 % above the reference for both DC and AC.** The two
-  objectives coincide exactly, so the AC power-flow equations are not the
-  cause; the difference sits in the data translation or the generator and
-  cost bounds. The case has many `net.impedance` rows after `from_mpc`, and
-  PowerModels.jl's input preprocessing (topology simplification, merging of
-  low-impedance branches) has no counterpart in `potpourri`. Not yet
-  explained.
 - **`case30_ieee` DC-OPF is +0.45 % above the reference** while its AC-OPF
-  matches to five digits. DC-OPF in PGLib uses linear costs only;
-  `add_poly_cost_objective(..., allow_quadratic=True)` keeps quadratic terms,
-  which is one candidate for the offset.
+  matches to five digits, and `case300_ieee` DC is −0.10 %. The remaining DC
+  differences are formulation details of the two DC models (PowerModels'
+  `DCPPowerModel` versus `potpourri`'s `DCOPF`, for example how branch
+  limits and quadratic costs enter), not data conversion; the AC agreement
+  shows the networks match.
 - Cases above 300 buses are not part of the default run and have not been
   validated.
 - Only the **Typical Operations (TYP)** baseline is used by default. API and
