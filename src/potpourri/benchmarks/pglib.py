@@ -106,6 +106,10 @@ def load_pglib_case(
     net = from_mpc(str(path), f_hz=f_hz, validate_conversion=False)
     net.name = path.stem
 
+    # Reference bus first: the units it re-creates take part in the
+    # in-service filter below like every other generator.
+    _normalise_reference_bus(net, path)
+
     # potpourri's OPF._calc_opf_parameters() uses net._gen_order slices
     # (which only count in-service gens) against the full net.gen/sgen
     # DataFrames, so a mix of in-service and out-of-service rows triggers
@@ -122,9 +126,6 @@ def load_pglib_case(
             in_service = table.in_service.astype(bool)
             if (~in_service).any():
                 _drop_generation_rows(net, table_name, in_service)
-
-    if net.ext_grid.empty:
-        _add_reference_ext_grid(net, path)
 
     if make_controllable:
         if not net.gen.empty:
@@ -161,26 +162,48 @@ def load_pglib_case(
     return net
 
 
-def _add_reference_ext_grid(net: pp.pandapowerNet, mpc_path: Path) -> int:
-    """Give the network a reference bus when MATPOWER's slack bus carries no
-    generator.
+def _normalise_reference_bus(net: pp.pandapowerNet, mpc_path: Path) -> int:
+    """Guarantee an in-service reference bus without inventing capacity.
 
-    ``from_mpc`` derives ``net.ext_grid`` from the generator at the type-3
-    bus. The RTE cases (``case6468_rte`` … ``case6515_rte``) declare a slack
-    bus without any generator, MATPOWER and PowerModels only use it as the
-    angle reference, and pandapower then has no reference bus at all and
-    refuses to run a power flow. A zero-capacity external grid at that bus
-    restores the angle reference without adding dispatchable power.
+    ``from_mpc`` turns the *first* generator at the MATPOWER type-3 bus into
+    ``net.ext_grid`` and keeps every further unit there as an ``sgen`` with
+    its own cost row, which is a faithful picture. Two situations break it:
 
-    Returns the number of external grids created.
+    * the slack bus carries no generator at all (the eight RTE cases, where
+      MATPOWER and PowerModels use the bus purely as the angle reference):
+      no external grid exists and pandapower cannot run a power flow;
+    * the first unit is out of service (``case2746wop_k``): the external grid
+      is created out of service, so again there is no reference bus, while
+      its capacity and cost row belong to a unit that is not running.
+
+    Both are repaired the same way: an in-service external grid with zero
+    active and reactive capacity and no cost row, i.e. an angle reference
+    only. Everything else stays as ``from_mpc`` made it.
+
+    Returns the number of external grids created or reduced.
     """
+    changed = 0
+    eg = net.ext_grid
+    if not eg.empty:
+        off = ~eg["in_service"].astype(bool)
+        if off.any():
+            for col in ("min_p_mw", "max_p_mw", "min_q_mvar", "max_q_mvar"):
+                eg.loc[off, col] = 0.0
+            eg.loc[off, "in_service"] = True
+            if "poly_cost" in net and not net.poly_cost.empty:
+                drop = (net.poly_cost["et"] == "ext_grid") & net.poly_cost[
+                    "element"
+                ].isin(eg.index[off])
+                net.poly_cost = net.poly_cost.loc[~drop].reset_index(drop=True)
+            changed += int(off.sum())
+        return changed
+
     try:
         from matpowercaseframes import CaseFrames
     except ImportError:
         return 0
     bus = CaseFrames(str(mpc_path)).bus
     slack_ids = bus.loc[bus["BUS_TYPE"].astype(int) == 3, "BUS_I"].astype(int)
-    created = 0
     for bus_id in slack_ids:
         idx = int(bus_id) - 1  # from_mpc numbers pandapower buses as id - 1
         if idx not in net.bus.index:
@@ -195,8 +218,8 @@ def _add_reference_ext_grid(net: pp.pandapowerNet, mpc_path: Path) -> int:
             max_q_mvar=0.0,
             name="angle reference (MATPOWER slack bus without generator)",
         )
-        created += 1
-    return created
+        changed += 1
+    return changed
 
 
 def _drop_generation_rows(

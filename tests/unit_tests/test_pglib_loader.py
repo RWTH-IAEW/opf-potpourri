@@ -65,6 +65,50 @@ def test_out_of_service_generator_takes_its_cost_row_along(tiny_case):
     assert gen_costs.cp1_eur_per_mw.iloc[0] == pytest.approx(30.0)
     assert 40.0 not in net.poly_cost.cp1_eur_per_mw.values
     assert net.poly_cost.cp0_eur.sum() == pytest.approx(300.0)
+    # the in-service slack unit stays the external grid, with its cost row
+    assert len(net.ext_grid) == 1 and bool(net.ext_grid.in_service.iloc[0])
+    assert net.ext_grid.max_p_mw.iloc[0] == 200.0
+    assert (net.poly_cost.et == "ext_grid").sum() == 1
+
+
+# three units at the slack bus, the first out of service: pandapower makes an
+# out-of-service external grid from it (no reference bus) and keeps the other
+# two as sgens with their own cost rows
+MULTI_SLACK_CASE = TINY_CASE.replace(
+    "\t1\t0\t0\t100\t-100\t1\t100\t1\t200\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0;\n",
+    "\t1\t0\t0\t100\t-100\t1\t100\t0\t200\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0;\n"
+    "\t1\t20\t0\t100\t-100\t1\t100\t1\t150\t10\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0;\n"
+    "\t1\t20\t0\t100\t-100\t1\t100\t1\t120\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0;\n",
+).replace(
+    "\t2\t0\t0\t3\t0.01\t20\t100;\n",
+    "\t2\t0\t0\t3\t0.01\t20\t100;\n"
+    "\t2\t0\t0\t3\t0.02\t21\t110;\n"
+    "\t2\t0\t0\t3\t0.03\t22\t120;\n",
+)
+
+
+def test_out_of_service_slack_unit_leaves_an_angle_reference(tmp_path):
+    path = tmp_path / "pglib_opf_tiny_multislack.m"
+    path.write_text(MULTI_SLACK_CASE)
+    net = load_pglib_case(path)
+    eg = net.ext_grid
+    assert len(eg) == 1 and bool(eg.in_service.iloc[0])
+    assert list(
+        eg[["min_p_mw", "max_p_mw", "min_q_mvar", "max_q_mvar"]].iloc[0]
+    ) == [0.0, 0.0, 0.0, 0.0]
+    assert (net.poly_cost.et == "ext_grid").sum() == 0
+    # the two live units are sgens with their own curves, dispatchable
+    units = net.sgen[net.sgen.bus == 0]
+    assert sorted(units.max_p_mw) == [120.0, 150.0]
+    assert units.controllable.all()
+    costs = net.poly_cost[net.poly_cost.et == "sgen"].set_index("element")
+    c1 = {
+        float(net.sgen.at[i, "max_p_mw"]): float(
+            costs.loc[i, "cp1_eur_per_mw"]
+        )
+        for i in units.index
+    }
+    assert c1 == {150.0: 21.0, 120.0: 22.0}
 
 
 def test_negative_demand_stays_a_fixed_injection(tiny_case):

@@ -38,13 +38,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   loader now writes the limits to `net.impedance` and both models enforce
   them; `case60_c__sad` matches the reference and its DC-OPF is infeasible as
   published.
-- **PGLib cases whose slack bus carries no generator now load.** MATPOWER
-  and PowerModels use the type-3 bus only as the angle reference; pandapower
-  derives `net.ext_grid` from the generator sitting there, so the four RTE
-  cases (`case6468_rte` to `case6515_rte`) came out without a reference bus
-  and could not run a power flow. `load_pglib_case` adds a zero-capacity
-  external grid at that bus, which restores the reference without adding
-  dispatchable power.
+- **PGLib cases without a usable slack generator now load.** MATPOWER and
+  PowerModels use the type-3 bus only as the angle reference; pandapower
+  derives `net.ext_grid` from the first generator sitting there. The eight RTE
+  cases have no generator at that bus and came out without a reference bus;
+  in `case2746wop_k` and `case500_goc` the first unit is out of service, so
+  the external grid was created out of service, with the same effect. In both
+  situations `load_pglib_case` now leaves an in-service external grid with
+  zero active and reactive capacity and no cost row, an angle reference only.
+  The other units at the bus, which pandapower keeps as `sgen` rows, are
+  untouched.
 - **The DC power-flow fallback hands the model a start inside the angle
   bounds.** DC angles are unbounded and reached −22 rad on the largest PGLib
   cases; `Basemodel` bounds the angle variables to (−π, π), so Pyomo logged a
