@@ -16,29 +16,32 @@ class DC(Basemodel):
 
     Args:
         net: A pandapower network compatible with pp.runpp().
-        dc_susceptance: Which branch susceptance the DC flow uses.
-            ``"matpower"`` (default): ``-1/x``, the textbook DC power flow
-            and MATPOWER's ``makeBdc``. ``"powermodels"``: ``-x/(r² + x²)``,
-            the series susceptance of the full impedance, as in
+        dc_convention: Which linearisation the DC flow follows.
+            ``"matpower"`` (default): branch susceptance ``-1/x`` and the
+            transformer phase shift in the angle difference, the textbook DC
+            power flow and MATPOWER's ``makeBdc``. ``"powermodels"``: the
+            series susceptance of the full impedance, ``-x/(r² + x²)``, and
+            no phase shift, i.e. ``p = -b (θ_from − θ_to)`` as in
             PowerModels.jl's ``DCPPowerModel`` that produced the PGLib-OPF DC
-            reference values. The two agree where r ≪ x and differ by
-            several percent on high-r/x networks.
+            reference values (neither tap nor shift enter its DC flow). The two
+            agree where r ≪ x and no phase shifters exist, and differ by
+            several percent on high-r/x networks such as the RTE cases.
     """
 
-    DC_SUSCEPTANCES = ("matpower", "powermodels")
+    DC_CONVENTIONS = ("matpower", "powermodels")
 
-    def __init__(self, net, dc_susceptance: str = "matpower"):
-        if dc_susceptance not in self.DC_SUSCEPTANCES:
+    def __init__(self, net, dc_convention: str = "matpower"):
+        if dc_convention not in self.DC_CONVENTIONS:
             raise ValueError(
-                f"dc_susceptance must be one of {self.DC_SUSCEPTANCES}, "
-                f"got {dc_susceptance!r}"
+                f"dc_convention must be one of {self.DC_CONVENTIONS}, "
+                f"got {dc_convention!r}"
             )
-        self.dc_susceptance = dc_susceptance
+        self.dc_convention = dc_convention
         super().__init__(net)
 
         r = self.net._ppc["branch"][:, 2].real
         x = self.net._ppc["branch"][:, 3].real
-        if dc_susceptance == "powermodels":
+        if dc_convention == "powermodels":
             BL = -x / (r**2 + x**2)
         else:
             BL = -1 / x
@@ -60,7 +63,7 @@ class DC(Basemodel):
         # for impedance branches (which carry per-unit r/x referenced to
         # impedance.sn_mva, in actual ohms per the from-bus), we read the
         # per-unit value pandapower already wrote into _ppc['branch'].
-        if dc_susceptance == "powermodels":
+        if dc_convention == "powermodels":
             bl_line = BL[:trafo_start]
         else:
             ZN = self.net.bus.vn_kv**2 / self.baseMVA
@@ -184,13 +187,15 @@ class DC(Basemodel):
         )
 
         # --- phase angle pyo.Constraints ---
+        # PowerModels' DC flow is p = -b (θ_from − θ_to): the transformer
+        # phase shift does not enter it (nor does the tap).
+        use_shift = self.dc_convention != "powermodels"
+
         def phase_angle_diff2(model, l):
-            return (
-                model.deltaLT[l]
-                == model.delta[model.AT[l, 1]]
-                - model.delta[model.AT[l, 2]]
-                - model.shift[l]
-            )
+            diff = model.delta[model.AT[l, 1]] - model.delta[model.AT[l, 2]]
+            if use_shift:
+                diff = diff - model.shift[l]
+            return model.deltaLT[l] == diff
 
         self.model.phase_diff2 = pyo.Constraint(
             self.model.TRANSF, rule=phase_angle_diff2

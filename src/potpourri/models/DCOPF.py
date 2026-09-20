@@ -11,8 +11,8 @@ class DCOPF(DC, OPF):
     """DC OPF model: linearised power flow with generator and thermal limit
     constraints."""
 
-    def __init__(self, net, dc_susceptance: str = "matpower"):
-        super().__init__(net, dc_susceptance=dc_susceptance)
+    def __init__(self, net, dc_convention: str = "matpower"):
+        super().__init__(net, dc_convention=dc_convention)
         self.create_model()
 
     def create_model(self):

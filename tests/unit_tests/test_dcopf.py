@@ -1,5 +1,6 @@
 """Unit and integration tests for the DCOPF model."""
 
+import numpy as np
 import pytest
 import pandapower as pp
 import pyomo.environ as pyo
@@ -83,7 +84,7 @@ def test_dcopf_solves_with_neos():
     assert pyo.check_optimal_termination(dcopf.results)
 
 
-def test_dc_susceptance_conventions():
+def test_dc_conventions():
     """``-1/x`` (MATPOWER, default) versus ``-x/(r²+x²)`` (PowerModels)."""
     import pandapower as pp
     import pytest
@@ -108,9 +109,51 @@ def test_dc_susceptance_conventions():
     zn = 110.0**2 / 100.0  # per-unit base impedance
     r, x = 6.05 / zn, 12.1 / zn
     default = DCOPF(net)
-    powermodels = DCOPF(net, dc_susceptance="powermodels")
+    powermodels = DCOPF(net, dc_convention="powermodels")
     assert default.model.BL[0] == pytest.approx(-1 / x)
     assert powermodels.model.BL[0] == pytest.approx(-x / (r**2 + x**2))
     assert powermodels.model.BL[0] != pytest.approx(default.model.BL[0])
     with pytest.raises(ValueError):
-        DCOPF(net, dc_susceptance="lossless")
+        DCOPF(net, dc_convention="lossless")
+
+
+def test_powermodels_convention_drops_the_phase_shift():
+    """PowerModels' DC flow is p = -b (θ_from − θ_to): no phase shift."""
+    import pandapower as pp
+    import pyomo.environ as pyo
+
+    from potpourri.models.DCOPF import DCOPF
+
+    net = pp.create_empty_network(sn_mva=100.0)
+    hv = pp.create_bus(net, 110.0)
+    lv = pp.create_bus(net, 20.0)
+    pp.create_ext_grid(net, hv)
+    pp.create_transformer_from_parameters(
+        net,
+        hv,
+        lv,
+        sn_mva=40.0,
+        vn_hv_kv=110.0,
+        vn_lv_kv=20.0,
+        vkr_percent=0.3,
+        vk_percent=10.0,
+        pfe_kw=0.0,
+        i0_percent=0.0,
+        shift_degree=30.0,
+    )
+    pp.create_load(net, lv, 10.0, 2.0)
+    default = DCOPF(net)
+    powermodels = DCOPF(net, dc_convention="powermodels")
+    # the transformer's angle-difference constraint carries the shift only
+    # under the MATPOWER convention: with every angle variable at zero its
+    # body reduces to the shift term (deltaLT − (δ_hv − δ_lv − shift) = shift)
+    shift = np.deg2rad(30.0)
+    assert pyo.value(default.model.shift[0]) == pytest.approx(shift)
+    for model in (default.model, powermodels.model):
+        for var in (model.delta, model.deltaLT):
+            for idx in var:
+                var[idx].set_value(0.0)
+    assert pyo.value(default.model.phase_diff2[0].body) == pytest.approx(shift)
+    assert pyo.value(powermodels.model.phase_diff2[0].body) == pytest.approx(
+        0.0
+    )

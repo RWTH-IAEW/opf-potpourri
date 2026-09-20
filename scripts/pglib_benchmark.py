@@ -53,7 +53,7 @@ RUN_AC = True  # include AC-OPF column
 CASES = None  # None → all cases of each group; list of bare names to override
 N_WORKERS = 8  # parallel worker processes (IPOPT is single-threaded)
 TIME_LIMIT_S = 3600  # IPOPT wall-time limit per solve
-DC_SUSCEPTANCE = "powermodels"  # DC branch susceptance convention, see DCOPF
+DC_CONVENTION = "powermodels"  # DC linearisation convention, see DCOPF
 RESULTS_DIR = Path(__file__).parent / "results"
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -169,16 +169,17 @@ def run_dcopf(case_name: str) -> dict:
     """Solve DC-OPF for ``case_name`` (full PGLib name) and return a summary."""
     from potpourri.models.DCOPF import DCOPF
 
-    # The PGLib DC references come from PowerModels' DCPPowerModel, whose
-    # branch susceptance is -x/(r²+x²); potpourri's default is MATPOWER's
-    # -1/x. Using the PowerModels convention here makes the DC column a
-    # like-for-like comparison (it closed gaps of up to 2.8 % on the API
-    # cases and reproduces the SAD infeasibilities).
+    # The PGLib DC references come from PowerModels' DCPPowerModel: branch
+    # susceptance -x/(r²+x²) and no transformer phase shift in the DC flow;
+    # potpourri's default is MATPOWER's -1/x with the shift. Using the
+    # PowerModels convention here makes the DC column a like-for-like
+    # comparison (it closed gaps of up to 2.8 % on the API cases and
+    # reproduces the SAD infeasibilities).
     return _solve(
         DCOPF,
         case_name,
         dict(angle_limits=True),
-        model_kwargs=dict(dc_susceptance=DC_SUSCEPTANCE),
+        model_kwargs=dict(dc_convention=DC_CONVENTION),
     )
 
 
