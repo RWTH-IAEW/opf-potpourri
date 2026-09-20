@@ -69,6 +69,7 @@ def load_pglib_case(
     make_controllable: bool = True,
     rebalance_initial_dispatch: bool = True,
     attach_angle_limits: bool = True,
+    align_tap_sides: bool = True,
 ) -> pp.pandapowerNet:
     """Load a PGLib-OPF benchmark case as a pandapower network.
 
@@ -77,13 +78,25 @@ def load_pglib_case(
             with or without ``.m`` suffix) or a full path to the ``.m`` file.
         f_hz: System frequency (Hz). PGLib cases are MATPOWER cases without
             an explicit frequency; 60 Hz is the conventional default.
-        make_controllable: Flag all generators/sgens/ext_grids as
-            ``controllable=True`` so the OPF optimises them.
+        make_controllable: Flag all generators and ext_grids as
+            ``controllable=True`` so the OPF optimises them, and likewise the
+            sgens that represent MATPOWER generators (those with a cost row
+            or active-power limits). sgens that ``from_mpc`` created from
+            buses with negative demand stay fixed injections.
         rebalance_initial_dispatch: Scale generator ``p_mw`` so the initial
             power flow run inside ``Basemodel.__init__`` converges. Several
             PGLib cases ship a ``mpc.gen.Pg`` setpoint that is far from the
             load total (it's only meant as a flat-start guess), which makes
             Newton-Raphson diverge.
+        attach_angle_limits: Copy MATPOWER ``ANGMIN``/``ANGMAX`` onto
+            ``net.line``/``net.trafo`` (needs ``matpowercaseframes``).
+        align_tap_sides: Put each transformer tap on the side MATPOWER puts
+            it. MATPOWER's ``TAP`` acts on the from bus; ``from_mpc`` always
+            encodes it on the high-voltage side, which distorts the
+            admittance matrix wherever the from bus is the low-voltage one
+            (18 of the 31 transformers in ``case162_ieee_dtc``; the AC-OPF
+            was infeasible within ``[Vmin, Vmax]`` before). Needs
+            ``matpowercaseframes``.
 
     Returns:
         A pandapower network with ``net.poly_cost`` populated (one row per
@@ -93,11 +106,34 @@ def load_pglib_case(
     net = from_mpc(str(path), f_hz=f_hz, validate_conversion=False)
     net.name = path.stem
 
+    # potpourri's OPF._calc_opf_parameters() uses net._gen_order slices
+    # (which only count in-service gens) against the full net.gen/sgen
+    # DataFrames, so a mix of in-service and out-of-service rows triggers
+    # a shape mismatch. Drop out-of-service generation entirely — and carry
+    # the cost tables along: ``net.poly_cost.element`` addresses rows of
+    # ``net.gen``/``net.sgen`` by index, so dropping rows without renumbering
+    # the cost table attaches every later generator's cost curve to the
+    # wrong unit and keeps charging the constant terms of units that no
+    # longer exist (case200_activ: 11 of 49 gens are out of service; the
+    # objective was 14 % above the PGLib reference before this remap).
+    for table_name in ("gen", "sgen"):
+        table = net[table_name]
+        if not table.empty and "in_service" in table.columns:
+            in_service = table.in_service.astype(bool)
+            if (~in_service).any():
+                _drop_generation_rows(net, table_name, in_service)
+
     if make_controllable:
         if not net.gen.empty:
             net.gen["controllable"] = True
         if not net.sgen.empty:
-            net.sgen["controllable"] = True
+            # pandapower's converter turns buses with negative demand into
+            # sgens (case162_ieee_dtc has nine, case300_ieee eight). Those
+            # carry neither active-power limits nor a cost row and are fixed
+            # injections in the PGLib formulation, not dispatchable units;
+            # leaving them controllable hands the OPF free generation with
+            # zero cost and a P bound at the shipped setpoint.
+            net.sgen["controllable"] = _dispatchable_sgens(net)
         if not net.ext_grid.empty:
             net.ext_grid["controllable"] = True
 
@@ -110,24 +146,63 @@ def load_pglib_case(
         if unlimited.any():
             net.line.loc[unlimited, "max_i_ka"] = 1e6
 
-    # potpourri's OPF._calc_opf_parameters() uses net._gen_order slices
-    # (which only count in-service gens) against the full net.gen/sgen
-    # DataFrames, so a mix of in-service and out-of-service rows triggers
-    # a shape mismatch. Drop out-of-service generation entirely.
-    for table_name in ("gen", "sgen"):
-        table = net[table_name]
-        if not table.empty and "in_service" in table.columns:
-            in_service = table.in_service.astype(bool)
-            if (~in_service).any():
-                net[table_name] = table.loc[in_service].reset_index(drop=True)
-
     if attach_angle_limits:
         _attach_branch_angle_limits(net, path)
+
+    if align_tap_sides:
+        _align_transformer_tap_sides(net, path)
 
     if rebalance_initial_dispatch:
         _rebalance_initial_dispatch(net)
 
     return net
+
+
+def _drop_generation_rows(
+    net: pp.pandapowerNet, table_name: str, keep: pd.Series
+) -> None:
+    """Drop the rows of ``net[table_name]`` where ``keep`` is False and
+    renumber the surviving rows *and* their ``poly_cost``/``pwl_cost``
+    entries consistently.
+
+    The cost tables address generators by ``(et, element)``; ``element`` is
+    the row index of the generator table. After ``reset_index`` every row
+    behind a dropped one moves up, so the cost rows must move with them and
+    the cost rows of dropped generators must go.
+    """
+    table = net[table_name]
+    new_index = {old: new for new, old in enumerate(table.index[keep])}
+    for cost_table in ("poly_cost", "pwl_cost"):
+        if cost_table not in net or net[cost_table].empty:
+            continue
+        cost = net[cost_table]
+        is_table = cost["et"] == table_name
+        cost = cost.loc[~is_table | cost["element"].isin(new_index)].copy()
+        is_table = cost["et"] == table_name
+        cost.loc[is_table, "element"] = cost.loc[is_table, "element"].map(
+            new_index
+        )
+        net[cost_table] = cost.reset_index(drop=True)
+    net[table_name] = table.loc[keep].reset_index(drop=True)
+
+
+def _dispatchable_sgens(net: pp.pandapowerNet) -> np.ndarray:
+    """Boolean mask of ``net.sgen`` rows that are generators in the MATPOWER
+    sense: they have a cost row or explicit active-power limits.
+
+    ``from_mpc`` creates sgens for two unrelated things: generators sitting
+    at PQ buses (with ``min_p_mw``/``max_p_mw`` and a ``gencost`` row) and
+    buses with negative demand (neither). Only the former are dispatchable.
+    """
+    sgen = net.sgen
+    costed = np.zeros(len(sgen), dtype=bool)
+    if "poly_cost" in net and not net.poly_cost.empty:
+        elements = net.poly_cost.loc[net.poly_cost["et"] == "sgen", "element"]
+        costed = sgen.index.isin(elements.astype(int))
+    has_limits = np.zeros(len(sgen), dtype=bool)
+    if "max_p_mw" in sgen.columns:
+        has_limits = sgen["max_p_mw"].notna().to_numpy()
+    return costed | has_limits
 
 
 def _attach_branch_angle_limits(net: pp.pandapowerNet, mpc_path: Path) -> None:
@@ -205,6 +280,60 @@ def _attach_branch_angle_limits(net: pp.pandapowerNet, mpc_path: Path) -> None:
         net.trafo["angmax_degree"] = trafo_amax
 
 
+def _align_transformer_tap_sides(net: pp.pandapowerNet, mpc_path: Path) -> int:
+    """Move the tap of every transformer whose MATPOWER from bus is the
+    pandapower ``lv_bus`` to ``tap_side="lv"``.
+
+    MATPOWER models an off-nominal ratio ``TAP`` as an ideal transformer at
+    the from bus (``Yff = ys / TAP²``, ``Ytt = ys``). pandapower's converter
+    keeps the ratio but always writes ``tap_side="hv"``; when the from bus is
+    the low-voltage side that divides the wrong diagonal of the admittance
+    matrix by ``TAP²``. With the tap on the right side the bus admittance
+    matrix built from the pandapower network matches MATPOWER's to the
+    rounding of the transformer parameters (1e-2 p.u. on case162/case300
+    instead of 5–12 p.u.).
+
+    Returns the number of transformers re-encoded. Transformers are matched
+    to MATPOWER branches by their bus pair, like the angle limits.
+    """
+    if net.trafo.empty:
+        return 0
+    try:
+        from matpowercaseframes import CaseFrames
+    except ImportError:
+        return 0
+
+    branch = CaseFrames(str(mpc_path)).branch
+    if "TAP" not in branch.columns:
+        return 0
+    # MATPOWER bus ids are 1-based; pandapower's from_mpc made them 0-based.
+    fr = branch["F_BUS"].astype(int).values - 1
+    to = branch["T_BUS"].astype(int).values - 1
+    tap = branch["TAP"].astype(float).fillna(0.0).values
+
+    hv = net.trafo["hv_bus"].astype(int).values
+    lv = net.trafo["lv_bus"].astype(int).values
+    used = np.zeros(len(net.trafo), dtype=bool)
+    moved = 0
+    for i in range(len(branch)):
+        hit = np.where(
+            ~used
+            & (
+                ((hv == fr[i]) & (lv == to[i]))
+                | ((hv == to[i]) & (lv == fr[i]))
+            )
+        )[0]
+        if not len(hit):
+            continue
+        k = hit[0]
+        used[k] = True
+        if tap[i] in (0.0, 1.0) or hv[k] == fr[i]:
+            continue  # nominal ratio, or the tap already sits on the from bus
+        net.trafo.iat[k, net.trafo.columns.get_loc("tap_side")] = "lv"
+        moved += 1
+    return moved
+
+
 def _rebalance_initial_dispatch(net: pp.pandapowerNet) -> None:
     """Set a balanced initial dispatch so a flat-start power flow converges.
 
@@ -233,12 +362,21 @@ def _rebalance_initial_dispatch(net: pp.pandapowerNet) -> None:
     for table in (net.gen, net.sgen):
         if table.empty or "max_p_mw" not in table.columns:
             continue
-        max_p = table["max_p_mw"].fillna(0).clip(lower=0)
+        # Only rows with an active-power limit are generators. sgens that
+        # ``from_mpc`` made from negative demand have no limit and must keep
+        # their setpoint (case240_pserc carries 4.6 GW of such injections;
+        # zeroing them raised the objective by 4.9 %).
+        dispatchable = table["max_p_mw"].notna()
+        if not dispatchable.any():
+            continue
+        max_p = table.loc[dispatchable, "max_p_mw"].clip(lower=0)
         if "min_p_mw" in table.columns:
-            min_p = table["min_p_mw"].fillna(0)
+            min_p = table.loc[dispatchable, "min_p_mw"].fillna(0)
         else:
             min_p = 0.0
-        table["p_mw"] = (max_p * scale).clip(lower=min_p, upper=max_p)
+        table.loc[dispatchable, "p_mw"] = (max_p * scale).clip(
+            lower=min_p, upper=max_p
+        )
 
 
 def list_available_cases() -> list[str]:

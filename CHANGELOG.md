@@ -17,6 +17,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   flow, which yields identical bus, branch and generator tables with the DC
   angles and flat voltage magnitudes as the start, and logs a warning. The
   multi-period model is unchanged.
+- **PGLib cases are loaded the way MATPOWER describes them.** Four defects in
+  `load_pglib_case` distorted the benchmark networks: out-of-service
+  generators were dropped without renumbering `net.poly_cost`, so cost curves
+  landed on the wrong units and the constant terms of dead units kept being
+  charged (`case200_activ` was 14 % above the PGLib reference); the sgens
+  that `from_mpc` creates from negative demand were rebalanced to zero
+  because they carry no `max_p_mw` (`case240_pserc` lost 4.6 GW of injection,
+  +4.9 %) and were marked controllable although they are fixed injections;
+  and every transformer tap was encoded on the high-voltage side although
+  MATPOWER's `TAP` acts on the from bus, which for 18 transformers in
+  `case162_ieee_dtc` and 16 in `case300_ieee` is the low-voltage side, so the
+  wrong diagonal of the admittance matrix was divided by `TAP²` and the
+  AC-OPF was locally infeasible within `[Vmin, Vmax]`. With the loader
+  fixed (new keyword `align_tap_sides`, default on) all 18 TYP cases up to
+  300 buses solve and every AC objective is within 0.02 % of PowerModels.jl;
+  see `docs/scripts/pglib-validation.md`.
+
 ### Changed
 
 - **Python 3.10 is now the minimum.** `requires-python` declared `>=3.9,<3.13`,
