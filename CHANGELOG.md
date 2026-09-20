@@ -5,6 +5,57 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.1] — 2026-09-20
+
+A patch release: three model fixes found while cross-checking the single-period
+models against pandapower power flows on SimBench networks, and an IPOPT pin.
+No API changes. Results change only on networks that hit one of the bugs below;
+each entry names the affected networks.
+
+10 new regression tests, suite at 352.
+
+### Fixed
+
+- **Single-period models wired branches to the wrong buses on networks with
+  switches or orphan buses.** `Basemodel` keyed its line and transformer
+  endpoint maps by pandapower bus index while `model.B` and the load and
+  generator maps use ppc bus numbers. pandapower moves orphan buses to the end
+  of its numbering and routes branches with an open switch to auxiliary buses,
+  so on `1-MV-rural--0-sw` every line was attached to the wrong bus pair and the
+  AC-OPF was infeasible. Endpoints now come from the ppc branch table, matching
+  the multi-period model, and open line switches are honoured. `preprocess_grid`
+  also left the merged-away bus of a closed bus-bus switch behind as an orphan
+  (the cause of the shifted numbering), did not move switches sitting on it,
+  could pick an already removed bus as survivor in chained merges and skipped
+  switches with `NaN` `z_ohm`; the survivor now inherits the tightest voltage
+  band of the pair. Networks without switches or orphan buses are unaffected.
+- **Transformer iron losses were dropped from the AC models.** The AC
+  power-flow equations read the charging admittance from ppc column `BR_B` only
+  and treated it as purely imaginary, while pandapower stores the shunt
+  conductance from `pfe_kw` in column `BR_G`. The models therefore disagreed
+  with pandapower's own power flow at the slack by the iron loss: 0.46 kW on a
+  160 kVA SimBench LV transformer, 14 kW on a 25 MVA MV one. A new
+  `branch_charging_admittance()` in `basemodel` reads both columns (purely
+  imaginary for MATPOWER-style arrays without `BR_G`) and feeds the single- and
+  multi-period AC models.
+- **Storage reactive power entered the AC reactive balance with the generator
+  sign.** pandapower treats storage `q_mvar` like a load (positive =
+  consumption), and the active-power balance already subtracted `pSTOR`
+  accordingly; the reactive balance added `qSTOR`. A storage unit with
+  `q_mvar = 0.04` therefore injected 40 kvar instead of drawing it. The
+  reactive balance now uses the load convention too. Only networks with
+  storage units carrying a non-zero `q_mvar` are affected.
+
+### Changed
+
+- **IPOPT pinned to 3.14.20** (released 2026-08-27) in `environment.yaml` and
+  the Dockerfile, up from 3.14.19. The README, `CLAUDE.md` and the
+  getting-started guide still quoted 3.14.16 and now name the same version.
+  3.14.20 makes the `max_filter_resets` limit effective (it was silently
+  ignored before), so a run that relied on unlimited filter resets may take a
+  different iteration path; set `max_filter_resets` to a large value to
+  restore the old behaviour.
+
 ## [0.5.0] — 2026-08-03
 
 A minor rather than a patch release: it adds battery reactive-power capability,
