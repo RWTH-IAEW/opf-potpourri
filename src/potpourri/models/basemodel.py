@@ -36,29 +36,7 @@ class Basemodel:
             raise ValueError("Input network must be a pandapower network.")
         # Make sure bus-to-bus switches are handled correctly by merging them
         self.net = preprocess_grid(copy.deepcopy(net))
-        try:
-            pp.runpp(self.net, voltage_depend_loads=False)
-        except pp.LoadflowNotConverged:
-            # The power flow only supplies the ppc tables and a starting
-            # point; the OPF solver finds the operating point itself. When
-            # Newton-Raphson diverges from the flat start (heavily loaded
-            # transmission cases such as PGLib case300_ieee, on which PYPOWER
-            # diverges as well), a DC power flow yields the same bus, branch
-            # and generator tables, with the DC angles and flat voltage
-            # magnitudes as the start.
-            logger.warning(
-                "AC power flow did not converge while building the model; "
-                "using a DC power flow for the network tables and the "
-                "starting point instead."
-            )
-            pp.rundcpp(self.net)
-            # DC angles are unbounded and reach far beyond ±π on heavily
-            # loaded networks; the model bounds delta to (-π, π), so wrap
-            # the start into (-180°, 180°]. Every branch flow depends on the
-            # angle difference only, so wrapping leaves the starting
-            # residuals unchanged.
-            va = self.net._ppc["bus"][:, 8]
-            self.net._ppc["bus"][:, 8] = (va + 180.0) % 360.0 - 180.0
+        self._run_base_power_flow()
 
         # --- pyo.Sets ---
         # Every ppc bus, not the first len(net.bus) rows.  pandapower's ppc
@@ -254,6 +232,68 @@ class Basemodel:
             row = trafo_rows[pos]
             self.bus_trafo_dict[(int(trafo_idx), 1)] = int(hv_bus[row])
             self.bus_trafo_dict[(int(trafo_idx), 2)] = int(lv_bus[row])
+
+    def _run_base_power_flow(self):
+        """Run the power flow that supplies the ``ppc`` tables and the start.
+
+        The OPF solver finds the operating point itself; the power flow here
+        only has to deliver pandapower's bus, branch and generator tables and
+        a starting point. Three levels:
+
+        1. AC power flow (normal case).
+        2. Newton-Raphson diverges from the flat start (heavily loaded
+           transmission cases such as PGLib case300_ieee, on which PYPOWER
+           diverges as well): a DC power flow yields the same tables, with
+           the DC angles and flat voltage magnitudes as the start.
+        3. No power flow can run at all because a branch has zero reactance
+           (PGLib case1803_snem): pandapower's DC initialisation and its DC
+           power flow both divide by ``1/x``. The tables are then built
+           without a power flow and the start is flat.
+        """
+        try:
+            pp.runpp(self.net, voltage_depend_loads=False)
+            return
+        except pp.LoadflowNotConverged:
+            logger.warning(
+                "AC power flow did not converge while building the model; "
+                "using a DC power flow for the network tables and the "
+                "starting point instead."
+            )
+            try:
+                pp.rundcpp(self.net)
+            except FloatingPointError:
+                self._tables_without_power_flow()
+                return
+            # DC angles are unbounded and reach far beyond ±π on heavily
+            # loaded networks; the model bounds delta to (-π, π), so wrap
+            # the start into (-180°, 180°]. Every branch flow depends on the
+            # angle difference only, so wrapping leaves the starting
+            # residuals unchanged.
+            va = self.net._ppc["bus"][:, 8]
+            self.net._ppc["bus"][:, 8] = (va + 180.0) % 360.0 - 180.0
+        except FloatingPointError:
+            self._tables_without_power_flow()
+
+    def _tables_without_power_flow(self):
+        """Build ``net._ppc`` and the lookups without solving anything.
+
+        Used when a zero-reactance branch makes every pandapower power flow
+        divide by zero. ``_pd2ppc`` leaves the flat start (``VM = 1``,
+        ``VA = 0``) in the bus table and does not fill the reference-generator
+        index the power flows set, so that is derived from the external-grid
+        rows, which pandapower places first in the ppc generator table.
+        """
+        from pandapower.pd2ppc import _pd2ppc
+
+        logger.warning(
+            "No power flow could be run while building the model (a branch "
+            "has zero reactance); using pandapower's network tables with a "
+            "flat start instead."
+        )
+        ppc, _ = _pd2ppc(self.net)
+        first, last = self.net._gen_order["ext_grid"]
+        ppc["internal"]["ref_gens"] = np.arange(int(first), int(last))
+        self.net._ppc = ppc
 
     def create_model(self):
         """Create the Pyomo ConcreteModel with sets, parameters, and fixed

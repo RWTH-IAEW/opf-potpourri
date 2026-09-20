@@ -62,6 +62,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   constants are numpy floats, so the equality was a numpy bool that the
   `isinstance(kcl, bool)` guard in the KCL rules did not recognise, and Pyomo
   refused the constraint. The DC and AC rules now skip numpy bools as well.
+- **Networks with a zero-reactance branch build without a power flow.**
+  pandapower's DC initialisation and its DC power flow both divide by `1/x`,
+  so on PGLib `case1803_snem` (two purely resistive ties) neither the AC power
+  flow nor the DC fallback could run and no model could be built. `Basemodel`
+  now falls back a level further and takes pandapower's network tables without
+  solving anything, with a flat start; the OPF solver does the rest.
 
 ## [0.5.2] — 2026-09-20
 

@@ -86,3 +86,52 @@ def test_isolated_bus_gets_no_degenerate_kcl():
         model = builder(net)
         model.add_OPF(**kwargs)
         assert len(model.model.B) == 3
+
+
+def _feeder_with_zero_reactance():
+    net = pp.create_empty_network(sn_mva=100.0)
+    b0 = pp.create_bus(net, 110.0)
+    b1 = pp.create_bus(net, 110.0)
+    b2 = pp.create_bus(net, 110.0)
+    pp.create_ext_grid(net, b0)
+    pp.create_line(net, b0, b1, 10.0, "149-AL1/24-ST1A 110.0")
+    # a purely resistive tie, as PGLib case1803_snem ships two of
+    pp.create_line_from_parameters(
+        net,
+        b1,
+        b2,
+        1.0,
+        r_ohm_per_km=0.5,
+        x_ohm_per_km=0.0,
+        c_nf_per_km=0.0,
+        max_i_ka=1.0,
+    )
+    pp.create_load(net, b2, 5.0, 1.0)
+    return net
+
+
+def test_zero_reactance_breaks_every_pandapower_power_flow():
+    net = _feeder_with_zero_reactance()
+    with pytest.raises(FloatingPointError):
+        pp.runpp(net, voltage_depend_loads=False)
+    with pytest.raises(FloatingPointError):
+        pp.rundcpp(net)
+
+
+def test_basemodel_builds_tables_without_a_power_flow():
+    messages = []
+    logger.enable("potpourri")
+    sink = logger.add(lambda m: messages.append(m), level="WARNING")
+    try:
+        model = Basemodel(_feeder_with_zero_reactance())
+    finally:
+        logger.remove(sink)
+        logger.disable("potpourri")
+    assert any("No power flow could be run" in m for m in messages)
+    assert model.net._ppc["branch"].shape[0] == 2
+    assert np.allclose(model.bus_data.v_m.values, 1.0)
+    assert np.allclose(model.bus_data.v_a_rad.values, 0.0)
+    assert list(model.net._ppc["internal"]["ref_gens"]) == [0]
+    acopf = ACOPF(_feeder_with_zero_reactance())
+    acopf.add_OPF(thermal_limit="mva")
+    assert len(acopf.model.B) == 3
