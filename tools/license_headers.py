@@ -109,6 +109,35 @@ def _git(args: list[str], repo_root: str) -> str:
     return proc.stdout.decode()
 
 
+# Directory names that mean "installed third-party code", and the files
+# that mark a directory as the root of a Python environment. CI builds a
+# conda env *inside* the working tree (.gitlab-ci.yml puts it at
+# $CI_PROJECT_DIR/POTPOURRI), so an un-ignored environment is not
+# hypothetical: without this, discovery would sweep in thousands of
+# installed modules and demand our copyright on them.
+_VENDOR_DIRS = frozenset(
+    {"site-packages", "dist-packages", "site-python", "node_modules"}
+)
+_ENV_MARKERS = ("pyvenv.cfg", "conda-meta")
+
+
+def _in_environment(rel: str, repo_root: str, cache: dict) -> bool:
+    """True if ``rel`` lives inside a Python environment in the tree."""
+    parts = rel.split("/")[:-1]
+    if _VENDOR_DIRS.intersection(parts):
+        return True
+    for depth in range(len(parts)):
+        prefix = "/".join(parts[: depth + 1])
+        if prefix not in cache:
+            base = os.path.join(repo_root, prefix)
+            cache[prefix] = any(
+                os.path.exists(os.path.join(base, m)) for m in _ENV_MARKERS
+            )
+        if cache[prefix]:
+            return True
+    return False
+
+
 def python_files(repo_root: str = REPO_ROOT) -> list[str]:
     """Repo-relative Python files in scope, sorted.
 
@@ -116,14 +145,39 @@ def python_files(repo_root: str = REPO_ROOT) -> list[str]:
     files git does not ignore, so a new module is caught before it is
     recorded.  Files inside submodules are gitlinks to git and are
     therefore never returned.
+
+    Untracked files inside a Python environment that happens to sit in
+    the working tree are skipped: they are installed third-party code,
+    not ours to annotate.  Tracked files are never skipped, whatever
+    directory they are in -- a committed file always gets audited.
     """
     patterns = ["*.py", "*.pyi", "*.pyw"]
-    tracked = _git(["ls-files", "-z", "--", *patterns], repo_root)
-    fresh = _git(
-        ["ls-files", "-z", "--others", "--exclude-standard", "--", *patterns],
-        repo_root,
-    )
-    found = {p for p in (tracked + fresh).split("\0") if p}
+    tracked = {
+        p
+        for p in _git(["ls-files", "-z", "--", *patterns], repo_root).split(
+            "\0"
+        )
+        if p
+    }
+    fresh = {
+        p
+        for p in _git(
+            [
+                "ls-files",
+                "-z",
+                "--others",
+                "--exclude-standard",
+                "--",
+                *patterns,
+            ],
+            repo_root,
+        ).split("\0")
+        if p
+    }
+    cache: dict[str, bool] = {}
+    found = tracked | {
+        p for p in fresh if not _in_environment(p, repo_root, cache)
+    }
     if not found:
         raise DiscoveryError(
             f"no Python files discovered under {repo_root}; refusing to "
@@ -330,16 +384,50 @@ def check_text(path: str, text: str) -> list[str]:
     return problems
 
 
+class DecodeError(RuntimeError):
+    """Raised when a source file cannot be decoded as Python source."""
+
+
+def read_source(full_path: str) -> tuple[str, str]:
+    """Return ``(text, encoding)`` for a Python source file.
+
+    Honours a UTF-8 BOM and a PEP 263 ``coding:`` declaration, so a file
+    that legitimately is not UTF-8 is read correctly -- and written back
+    in the same encoding -- instead of aborting the run.  The BOM is
+    kept in the text as U+FEFF so it survives a rewrite.
+    """
+    data = open(full_path, "rb").read()
+    if data.startswith(b"\xef\xbb\xbf"):
+        return data.decode("utf-8"), "utf-8"
+    encoding = "utf-8"
+    head = data.split(b"\n")[:2]
+    for line in head:
+        match = _CODING_RE.match(line.decode("latin-1"))
+        if match:
+            encoding = match.group(1)
+            break
+    try:
+        return data.decode(encoding), encoding
+    except (UnicodeDecodeError, LookupError) as exc:
+        raise DecodeError(f"cannot decode as {encoding}: {exc}") from exc
+
+
 def read_text(full_path: str) -> str:
-    with open(full_path, encoding="utf-8") as handle:
-        return handle.read()
+    return read_source(full_path)[0]
 
 
 def check_repository(repo_root: str = REPO_ROOT) -> dict[str, list[str]]:
     """Map of repo-relative path -> problems, for every in-scope file."""
     failures = {}
     for rel in python_files(repo_root):
-        problems = check_text(rel, read_text(os.path.join(repo_root, rel)))
+        try:
+            text = read_text(os.path.join(repo_root, rel))
+        except DecodeError as exc:
+            # Report the file, do not abort the scan: one unreadable
+            # file must not hide the state of every other one.
+            failures[rel] = [str(exc)]
+            continue
+        problems = check_text(rel, text)
         if problems:
             failures[rel] = problems
     return failures
@@ -448,13 +536,19 @@ def fix_repository(
     notes = {}
     for rel in python_files(repo_root):
         full = os.path.join(repo_root, rel)
-        original = read_text(full)
+        try:
+            original, encoding = read_source(full)
+        except DecodeError as exc:
+            notes[rel] = f"refused: {exc}"
+            continue
         updated, note = fix_text(rel, original)
         if not note:
             continue
         notes[rel] = note
         if not dry_run and updated != original:
-            with open(full, "w", encoding="utf-8", newline="") as handle:
+            # Write back in the file's own encoding, so a PEP 263
+            # declaration keeps describing the bytes on disk.
+            with open(full, "w", encoding=encoding, newline="") as handle:
                 handle.write(updated)
     return notes
 
