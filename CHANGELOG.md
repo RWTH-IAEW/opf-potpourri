@@ -5,6 +5,37 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Every Python file carries an SPDX licensing header.** pandapower's
+  maintainers asked us to carry proper copyright and licensing information
+  and keep it consistent; none of the tracked Python files had any. Each
+  file now opens with `SPDX-FileCopyrightText` and
+  `SPDX-License-Identifier: MIT` as real comments, with the holder wording
+  taken verbatim from `LICENSE`. The 15 example scripts that already carried
+  a personal `(c) YEAR, ...` notice in their docstring keep it and gain a
+  second copyright line mirroring it, so both holders are recorded and
+  neither replaces the other. `LICENSES/MIT.txt` adds the licence text in
+  the REUSE layout.
+- **A licensing gate runs in pre-commit and CI.** `tools/` holds the policy,
+  a read-only checker, a writer that previews by default, and the inventory
+  generator. The gate covers every tracked and newly added Python file, only
+  counts a notice that is physically in the comment header, validates the
+  expression with `packaging.licenses`, and treats a broken or empty scan as
+  an error rather than a pass. CI never repairs a file. `docs/licensing.md`
+  documents the policy, how to handle copied third-party code, and the
+  ownership questions that remain open; `docs/licensing-inventory.csv` is
+  the per-file record.
+
+### Fixed
+
+- **The build declared a setuptools floor too low for the metadata it
+  uses.** `requires` asked for `setuptools>=69` while `project.license` and
+  `project.license-files` are PEP 639 fields that setuptools only supports
+  from 77.0.0; below that it silently emits legacy `License:` metadata
+  instead of `License-Expression:`. Raised to `>=77` and confirmed against a
+  real build.
+
 ### Changed
 
 - **The issue-16 window converges from the cold start.** A side effect of
