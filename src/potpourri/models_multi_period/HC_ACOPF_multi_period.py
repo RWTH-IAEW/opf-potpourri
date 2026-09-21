@@ -2,8 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Multi-period Hosting Capacity AC OPF for wind generation integration
-studies."""
+"""Multi-period hosting-capacity AC OPF for wind integration."""
 
 import copy
 
@@ -18,8 +17,11 @@ import pandapower as pp
 
 
 class HC_ACOPF_multi_period(ACOPF_multi_period):
-    """Multi-period hosting capacity AC OPF; delegates HC constraints to
-    Windpower_multi_period."""
+    """Multi-period hosting-capacity AC OPF.
+
+    Multi-period hosting capacity AC OPF; delegates HC constraints to
+    Windpower_multi_period.
+    """
 
     def __init__(self, net, toT, fromT=None, pf=1):
         if "wind_hc" not in net.sgen:
@@ -36,7 +38,9 @@ class HC_ACOPF_multi_period(ACOPF_multi_period):
         # noinspection PyProtectedMember
 
     def _calc_opf_parameters(self, SWmax=10000, SWmin=0, **kwargs):
-        """Extend AC-OPF parameters with wind HC apparent power bounds via
+        """Add the wind hosting-capacity apparent-power bounds.
+
+        Extend AC-OPF parameters with wind HC apparent power bounds via
         Windpower_multi_period.
 
         Args:
@@ -61,8 +65,11 @@ class HC_ACOPF_multi_period(ACOPF_multi_period):
             )
 
     def add_OPF(self, **kwargs):
-        """Extend ACOPF.add_OPF() with HC wind constraints and objective via
-        Windpower_multi_period."""
+        """Add the hosting-capacity wind constraints and objective.
+
+        Extend ACOPF.add_OPF() with HC wind constraints and objective via
+        Windpower_multi_period.
+        """
         super().add_OPF(**kwargs)
 
         self.model.name = "HC_ACOPF"
@@ -83,11 +90,22 @@ class HC_ACOPF_multi_period(ACOPF_multi_period):
             windpower_object.unfix_variables(self.model)
 
     def add_loss_obj(self):
-        """Replace default objective with weighted wind-vs-loss objective
-        using mutable eps parameter."""
+        """Replace the objective with a weighted wind-versus-loss one.
+
+        Replace default objective with weighted wind-vs-loss objective
+        using mutable eps parameter.
+        """
         self.model.eps = Param(domain=Reals, initialize=1.0, mutable=True)
 
         def objective_pwind_loss(model):
+            """Weighted trade-off between wind infeed and losses.
+
+            Args:
+                model: The Pyomo model being built.
+
+            Returns:
+                A Pyomo expression.
+            """
             return model.eps * sum(model.psG[w] for w in model.WIND_HC) + (
                 1 - model.eps
             ) * (-sum(model.pLfrom[l] + model.pLto[l] for l in model.L))

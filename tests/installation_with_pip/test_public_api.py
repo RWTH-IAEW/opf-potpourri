@@ -1,8 +1,14 @@
 # SPDX-FileCopyrightText: 2023-2026 Institute for High Voltage Equipment and Grids, Digitalization and Energy Economics (IAEW), RWTH Aachen University
 #
 # SPDX-License-Identifier: MIT
-#
-# tests/installation_with_pip/test_public_api.py
+
+"""The installed distribution must report a coherent version.
+
+Checks that `potpourri.__version__` exists, agrees with the
+distribution metadata, and is not the source-tree fallback sentinel --
+which would mean the check is reading the checkout instead of the
+installed package.
+"""
 
 from importlib.metadata import version
 

@@ -229,7 +229,9 @@ def _normalise_reference_bus(net: pp.pandapowerNet, mpc_path: Path) -> int:
 def _drop_generation_rows(
     net: pp.pandapowerNet, table_name: str, keep: pd.Series
 ) -> None:
-    """Drop the rows of ``net[table_name]`` where ``keep`` is False and
+    """Drop unwanted rows of a table and renumber what survives.
+
+    Drop the rows of ``net[table_name]`` where ``keep`` is False and
     renumber the surviving rows *and* their ``poly_cost``/``pwl_cost``
     entries consistently.
 
@@ -255,7 +257,9 @@ def _drop_generation_rows(
 
 
 def _dispatchable_sgens(net: pp.pandapowerNet) -> np.ndarray:
-    """Boolean mask of ``net.sgen`` rows that are generators in the MATPOWER
+    """Boolean mask of the sgens that are MATPOWER generators.
+
+    Boolean mask of ``net.sgen`` rows that are generators in the MATPOWER
     sense: they have a cost row or explicit active-power limits.
 
     ``from_mpc`` creates sgens for two unrelated things: generators sitting
@@ -274,7 +278,9 @@ def _dispatchable_sgens(net: pp.pandapowerNet) -> np.ndarray:
 
 
 def _attach_branch_angle_limits(net: pp.pandapowerNet, mpc_path: Path) -> None:
-    """Read MATPOWER ``ANGMIN``/``ANGMAX`` from the source ``.m`` file and
+    """Copy MATPOWER angle limits onto the pandapower branch tables.
+
+    Read MATPOWER ``ANGMIN``/``ANGMAX`` from the source ``.m`` file and
     write them to ``angmin_degree`` / ``angmax_degree`` on ``net.line``,
     ``net.trafo`` and ``net.impedance``.
 
@@ -349,7 +355,9 @@ def _attach_branch_angle_limits(net: pp.pandapowerNet, mpc_path: Path) -> None:
 
 
 def _align_transformer_tap_sides(net: pp.pandapowerNet, mpc_path: Path) -> int:
-    """Move the tap of every transformer whose MATPOWER from bus is the
+    """Put each transformer's tap on the side MATPOWER assumes.
+
+    Move the tap of every transformer whose MATPOWER from bus is the
     pandapower ``lv_bus`` to ``tap_side="lv"``.
 
     MATPOWER models an off-nominal ratio ``TAP`` as an ideal transformer at
@@ -416,6 +424,14 @@ def _rebalance_initial_dispatch(net: pp.pandapowerNet) -> None:
         return
 
     def _max(table) -> float:
+        """Element-wise maximum, tolerating a missing column.
+
+        Args:
+            table: The pandapower branch table to read.
+
+        Returns:
+            A Pyomo expression.
+        """
         if table.empty or "max_p_mw" not in table.columns:
             return 0.0
         return float(table["max_p_mw"].fillna(0).clip(lower=0).sum())
@@ -523,6 +539,11 @@ def parse_baseline_md(
 
 
 def _parse_or_empty() -> dict[str, dict[str, dict[str, float]]]:
+    """Parse a value, returning empty on failure.
+
+    Returns:
+        A Pyomo expression.
+    """
     try:
         return parse_baseline_md()
     except FileNotFoundError:

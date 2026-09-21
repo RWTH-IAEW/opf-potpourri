@@ -49,6 +49,11 @@ DRY_RUN = os.environ.get("ZENODO_DRY_RUN", "false").lower() == "true"
 
 
 def log(msg):
+    """Print a progress line, unbuffered so CI interleaves it correctly.
+
+    Args:
+        msg: The message to print.
+    """
     print(msg, flush=True)
 
 
@@ -144,6 +149,18 @@ def latest_version_id():
 
 
 def main():
+    """Archive the tagged release as a new version of the concept record.
+
+    Reads its configuration from the environment (see the module
+    docstring) and reports what it did on standard output.
+
+    Publishing mints a DOI and cannot be undone, so set
+    ``ZENODO_DRY_RUN=true`` first when changing this script.
+
+    Raises:
+        SystemExit: If a required environment variable is missing, or
+            the Zenodo API rejects a step.
+    """
     if not TOKEN:
         raise SystemExit("ZENODO_TOKEN is not set")
     if not TAG:

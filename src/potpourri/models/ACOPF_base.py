@@ -386,27 +386,27 @@ class ACOPF(AC, OPF):
         """Attach AC-OPF sets, parameters, and constraints to ``self.model``.
 
         Extends :meth:`OPF.add_OPF` with bus voltage bounds (Vmin, Vmax),
-        apparent-power thermal limits on lines and transformers, reactive
-        power bounds for static generators, external grids and controllable
-        loads, the wind Q-P / Q-U capability constraints for sgens with
-        ``var_q`` set, and optionally the same Q(P)/Q(U) grid-code constraints
-        for PV-type sgens via ``pv_q_control``.
+        apparent-power thermal limits on lines and transformers, reactive power
+        bounds for static generators, external grids and controllable loads,
+        the wind Q-P / Q-U capability constraints for sgens with ``var_q`` set,
+        and optionally the same Q(P)/Q(U) grid-code constraints for PV-type
+        sgens via ``pv_q_control``.
 
         Args:
-            pv_q_control: VDE-AR-N 4105 Q-control mode for controllable
-                PV-type sgens (``type == "PV"`` and ``var_q`` set in
-                ``net.sgen``).  Accepted values:
+            pv_q_control: VDE-AR-N 4105 Q-control mode for controllable PV-type
+                sgens (``type == "PV"`` and ``var_q`` set in ``net.sgen``).
+                Accepted values:
 
-                * ``None`` or ``False`` — no Q-control (default)
-                * ``"qp"`` — Q(P) characteristic only
-                * ``"qu"`` — Q(U) droop only (requires AC model with ``v``)
-                * ``"both"`` or ``True`` — Q(P) and Q(U) combined
+                * ``None`` or ``False`` — no Q-control (default) * ``"qp"`` —
+                Q(P) characteristic only * ``"qu"`` — Q(U) droop only (requires
+                AC model with ``v``) * ``"both"`` or ``True`` — Q(P) and Q(U)
+                combined
             inverter_s2: When ``True``, add the apparent-power circle
                 constraint ``psG[g]² + qsG[g]² ≤ S_inv[g]²`` for every
                 controllable sgen with a finite ``net.sgen.sn_mva``.  The
                 rating ``S_inv = sn_mva * converter_sizing_pu / baseMVA``
-                (``converter_sizing_pu`` defaults to 1.0 when absent).
-                Defaults to ``False`` (opt-in).
+                (``converter_sizing_pu`` defaults to 1.0 when absent). Defaults
+                to ``False`` (opt-in).
             cos_phi_min: Minimum power factor for the cos(φ) cone constraint
                 ``|qsG[g]| ≤ psG[g] · tan(arccos(cos_phi_min))``, applied to
                 every sgen in ``sGinv``.  Combined with ``psG ≥ 0`` this
@@ -418,63 +418,62 @@ class ACOPF(AC, OPF):
                 ``inverter_s2=True`` and ``sn_mva`` is present.
             thermal_limit: ``"current"`` enforces ``|S|² ≤ SLmax² · v²``
                 (current-limit form, physically meaningful for distribution
-                conductors). ``"mva"`` enforces ``|S|² ≤ SLmax²``
-                (constant-MVA limit, matches MATPOWER / PGLib-OPF). Defaults
-                to ``"current"`` for backward compatibility.
+                conductors). ``"mva"`` enforces ``|S|² ≤ SLmax²`` (constant-MVA
+                limit, matches MATPOWER / PGLib-OPF). Defaults to ``"current"``
+                for backward compatibility.
             free_slack_vm: When ``True`` (default), the slack-bus voltage
                 magnitude floats within ``[Vmin, Vmax]``. The reference angle
                 stays fixed. Set ``False`` to reproduce the legacy AC-PF
                 behaviour where the slack ``vm`` is pinned to the base-case
                 value (e.g. for redispatch studies around a fixed slack).
-            fix_hv_buses: When ``True``, pin the voltage magnitude of every
-                bus with ``vn_kv == hv_bus_kv`` to its base-case voltage.
-                Disabled by default. The historical 110 kV pinning in
-                German distribution studies can be re-enabled by setting
+            fix_hv_buses: When ``True``, pin the voltage magnitude of every bus
+                with ``vn_kv == hv_bus_kv`` to its base-case voltage. Disabled
+                by default. The historical 110 kV pinning in German
+                distribution studies can be re-enabled by setting
                 ``fix_hv_buses=True``.
             hv_bus_kv: Voltage level (kV) used by ``fix_hv_buses``.
-            pu_curtail: When ``True``, add the P(U) active-power curtailment
-                constraint for controllable PV-type sgens (VDE-AR-N 4105
-                §8.5).  Above a voltage threshold the allowed active-power
-                output is reduced linearly to zero:
-                ``psG[g] · ΔV ≤ P_inst[g] · (V_max − v[bus[g]])``.
-                Per-sgen thresholds are read from ``net.sgen.v_curtail_pu``
-                (default 1.06 p.u.) and ``net.sgen.v_max_curtail_pu``
-                (default 1.10 p.u.).  Requires ``net.sgen.p_inst_mw``
-                (falls back to ``net.sgen.p_mw``).  Only active in AC models.
-            fixed_cos_phi: Fixed power-factor equality
-                ``qsG[g] == psG[g] · tan(arccos(cos_phi))`` applied to every
-                controllable sgen.  Supply a scalar to apply one value to all
-                sgens, or set ``net.sgen["fixed_cos_phi"]`` per-row (takes
-                precedence).  Defaults to ``None`` (disabled).
-            cos_phi_p_profile: When ``True``, add the VDE-AR-N 4105
-                cos(φ)(P) profile as a quadratic equality
-                ``qsG · (Pn − Pt) == tan_phi · psG · (psG − Pt)``.
-                Reads ``net.sgen.cos_phi_min`` (power factor at full output),
-                ``net.sgen.p_inst_mw`` (installed capacity Pn), and
-                optionally ``net.sgen.cpp_p_threshold_pu`` (default 0.2).
-                Requires IPOPT or another NLP solver.
+            pu_curtail: When ``True``, add the P(U) active-power
+                curtailment constraint for controllable PV-type sgens
+                (VDE-AR-N 4105 §8.5). Above a voltage threshold the
+                allowed active-power output is reduced linearly to
+                zero: ``psG[g] · ΔV ≤ P_inst[g] · (V_max − v[bus[g]])``.
+                Per-sgen thresholds are read from
+                ``net.sgen.v_curtail_pu`` (default 1.06 p.u.) and
+                ``net.sgen.v_max_curtail_pu`` (default 1.10 p.u.).
+                Requires ``net.sgen.p_inst_mw`` (falls back to
+                ``net.sgen.p_mw``).
+                    Only active in AC models.
+            fixed_cos_phi: Fixed power-factor equality ``qsG[g] == psG[g] ·
+                tan(arccos(cos_phi))`` applied to every controllable sgen.
+                Supply a scalar to apply one value to all sgens, or set
+                ``net.sgen["fixed_cos_phi"]`` per-row (takes precedence).
+                Defaults to ``None`` (disabled).
+            cos_phi_p_profile: When ``True``, add the VDE-AR-N 4105 cos(φ)(P)
+                profile as a quadratic equality ``qsG · (Pn − Pt) == tan_phi ·
+                psG · (psG − Pt)``. Reads ``net.sgen.cos_phi_min`` (power
+                factor at full output), ``net.sgen.p_inst_mw`` (installed
+                capacity Pn), and optionally ``net.sgen.cpp_p_threshold_pu``
+                (default 0.2). Requires IPOPT or another NLP solver.
             angle_limits: When ``True``, enforce branch phase-angle-difference
                 constraints ``angmin ≤ δ_from − δ_to ≤ angmax`` using
                 ``net.line.angmin_degree`` / ``net.line.angmax_degree`` (and
                 the transformer equivalent if present). Defaults disabled to
                 preserve previous behaviour.
-            sgen_types: sgen ``type`` values treated as PV by
-                ``pv_q_control``.  Defaults to
-                :data:`DEFAULT_PV_SGEN_TYPES` (``("PV", "PV_MV", "pv")``).
-                Matching is exact, so a network whose sgens use other
+            sgen_types: sgen ``type`` values treated as PV by ``pv_q_control``.
+                Defaults to :data:`DEFAULT_PV_SGEN_TYPES` (``("PV", "PV_MV",
+                "pv")``). Matching is exact, so a network whose sgens use other
                 category names needs them listed here — for example
-                ``sgen_types=("PV", "PV_MV", "pv", "lv_RES")`` to include
-                the aggregated LV-renewable units.  Wind categories do not
-                belong here: they are handled by ``wind_sgen_types`` below,
-                and listing them in both places makes an sgen match both
-                paths, which emits
-                :class:`~potpourri.technologies.q_control.SgenTypeOverlapWarning`
-                and leaves it to the wind path.  Note the multi-period model
-                applies no type filter at all (it keys purely off
-                ``var_q``).
+                ``sgen_types=("PV", "PV_MV", "pv", "lv_RES")`` to include the
+                aggregated LV-renewable units.  Wind categories do
+                not belong here: they are handled by ``wind_sgen_types`` below,
+                    and listing them in both places makes an sgen match both
+                    paths, which emits
+                    :class:`~potpourri.technologies.q_control.SgenTypeOverlapWarning`
+                    and leaves it to the wind path.  Note the multi-period
+                    model applies no type filter at all (it keys purely off
+                    ``var_q``).
             wind_sgen_types: sgen ``type`` values treated as wind by the wind
-                Q-control path (``model.WIND`` / ``model.WINDc``).  Defaults
-                to
+                Q-control path (``model.WIND`` / ``model.WINDc``).  Defaults to
                 :data:`~potpourri.technologies.q_control.DEFAULT_WIND_SGEN_TYPES`
                 (``("Wind", "Wind_MV", "wind onshore", "wind offshore")``),
                 covering every SimBench spelling.  Matching is exact.
@@ -484,23 +483,22 @@ class ACOPF(AC, OPF):
                 capability envelope and the P(U) / cos(phi)(P) thresholds.
                 Accepts ``None`` (VDE-AR-N 4120, the default), a short name
                 such as ``"4105"``, ``"4110"`` or ``"4120"``, or a
-                :class:`~potpourri.technologies.q_control.GridCode`.
-                Note that ``var_q`` must index a variant the selected code
-                defines: 4105 has two, 4110 one and 4120 three.
+                :class:`~potpourri.technologies.q_control.GridCode`. Note that
+                ``var_q`` must index a variant the selected code defines: 4105
+                    has two, 4110 one and 4120 three.
             qu_deadband: Replace the Q(U) capability *area* with a Q(U)
-                *characteristic* that has a dead band, pinning Q to a curve
-                of voltage instead of bounding it.  ``None`` keeps the area;
-                ``True`` uses the grid code's own QV plateau as the dead
-                band; a ``(v_low, v_high)`` pair sets it explicitly; a
-                :class:`~potpourri.technologies.q_control.QVCurve` is used
-                as given.
+                *characteristic* that has a dead band, pinning Q to a curve of
+                voltage instead of bounding it.  ``None`` keeps the area;
+                ``True`` uses the grid code's own QV plateau as the dead band;
+                a ``(v_low, v_high)`` pair sets it explicitly; a
+                :class:`~potpourri.technologies.q_control.QVCurve` is used as
+                given.
 
-                The feasible set pinches to Q = 0 inside the dead band and
-                is therefore **not convex**, so this builds an integer
-                piecewise block and needs a MIP-capable solver (MindtPy,
-                CBC, GLPK, Gurobi).  IPOPT alone cannot solve it.
-                Selecting a grid code whose parameters are still
-                placeholders emits a
+                The feasible set pinches to Q = 0 inside the dead band and is
+                therefore **not convex**, so this builds an integer piecewise
+                block and needs a MIP-capable solver (MindtPy, CBC, GLPK,
+                Gurobi).  IPOPT alone cannot solve it. Selecting a grid code
+                whose parameters are still placeholders emits a
                 :class:`~potpourri.technologies.q_control.ProvisionalGridCodeWarning`.
             **kwargs: Forwarded to :meth:`_calc_opf_parameters`.
         """
@@ -615,24 +613,82 @@ class ACOPF(AC, OPF):
             # |S|^2 ≤ SLmax^2 · v^2 (i.e. |I| ≤ I_max). Physically meaningful
             # for thermal current rating; varies with voltage.
             def line_lim_from_def(model, l):
+                r"""Thermal limit at the from end of line `l`, as a current.
+
+                $p^2 + q^2 \le S_{max}^2 v^2$, i.e. $|I| \le I_{max}$.
+                Dividing through by $v^2$ recovers the current magnitude, so
+                the admissible power falls as the terminal voltage sags --
+                the physically meaningful form for a conductor's thermal
+                rating.
+
+                Args:
+                    model: The Pyomo model being built.
+                    l: Line index from `model.L`.
+
+                Returns:
+                    A Pyomo inequality expression.
+
+                """
                 return (
                     model.pLfrom[l] ** 2 + model.qLfrom[l] ** 2
                     <= model.SLmax[l] ** 2 * model.v[model.A[l, 1]] ** 2
                 )
 
             def line_lim_to_def(model, l):
+                r"""Thermal limit at the to end of line `l`, as a current.
+
+                $p^2 + q^2 \le S_{max}^2 v^2$, i.e. $|I| \le I_{max}$.
+                Dividing through by $v^2$ recovers the current magnitude, so
+                the admissible power falls as the terminal voltage sags --
+                the physically meaningful form for a conductor's thermal
+                rating.
+
+                Args:
+                    model: The Pyomo model being built.
+                    l: Line index from `model.L`.
+
+                Returns:
+                    A Pyomo inequality expression.
+
+                """
                 return (
                     model.pLto[l] ** 2 + model.qLto[l] ** 2
                     <= model.SLmax[l] ** 2 * model.v[model.A[l, 2]] ** 2
                 )
 
             def transf_lim1_def(model, l):
+                r"""HV-side thermal limit of transformer `l`, as a current.
+
+                $p^2 + q^2 \le S_{max}^2 v^2$ at the HV terminal, so the
+                admissible power follows that winding's voltage.
+
+                Args:
+                    model: The Pyomo model being built.
+                    l: Transformer index from `model.TRANSF`.
+
+                Returns:
+                    A Pyomo inequality expression.
+
+                """
                 return (
                     model.pThv[l] ** 2 + model.qThv[l] ** 2
                     <= model.SLmaxT[l] ** 2 * model.v[model.AT[l, 1]] ** 2
                 )
 
             def transf_lim2_def(model, l):
+                r"""LV-side thermal limit of transformer `l`, as a current.
+
+                $p^2 + q^2 \le S_{max}^2 v^2$ at the LV terminal, so the
+                admissible power follows that winding's voltage.
+
+                Args:
+                    model: The Pyomo model being built.
+                    l: Transformer index from `model.TRANSF`.
+
+                Returns:
+                    A Pyomo inequality expression.
+
+                """
                 return (
                     model.pTlv[l] ** 2 + model.qTlv[l] ** 2
                     <= model.SLmaxT[l] ** 2 * model.v[model.AT[l, 2]] ** 2
@@ -641,24 +697,82 @@ class ACOPF(AC, OPF):
             # |S|^2 ≤ SLmax^2 (constant-MVA limit, matches MATPOWER /
             # PowerModels' constraint_thermal_limit_* and PGLib-OPF rate_a).
             def line_lim_from_def(model, l):
+                r"""Apparent-power thermal limit at the from end of line `l`.
+
+                $p^2 + q^2 \le S_{max}^2$: a constant-MVA rating that
+                ignores the terminal voltage. Chosen by
+                `thermal_limit="mva"` because it is what MATPOWER,
+                PowerModels and the PGLib-OPF `rate_a` data mean, so
+                benchmark objective values are comparable.
+
+                Args:
+                    model: The Pyomo model being built.
+                    l: Line index from `model.L`.
+
+                Returns:
+                    A Pyomo inequality expression.
+
+                """
                 return (
                     model.pLfrom[l] ** 2 + model.qLfrom[l] ** 2
                     <= model.SLmax[l] ** 2
                 )
 
             def line_lim_to_def(model, l):
+                r"""Apparent-power thermal limit at the to end of line `l`.
+
+                $p^2 + q^2 \le S_{max}^2$: a constant-MVA rating that
+                ignores the terminal voltage. Chosen by
+                `thermal_limit="mva"` because it is what MATPOWER,
+                PowerModels and the PGLib-OPF `rate_a` data mean, so
+                benchmark objective values are comparable.
+
+                Args:
+                    model: The Pyomo model being built.
+                    l: Line index from `model.L`.
+
+                Returns:
+                    A Pyomo inequality expression.
+
+                """
                 return (
                     model.pLto[l] ** 2 + model.qLto[l] ** 2
                     <= model.SLmax[l] ** 2
                 )
 
             def transf_lim1_def(model, l):
+                r"""HV-side thermal limit of transformer `l`, as MVA.
+
+                $p^2 + q^2 \le S_{max}^2$, the constant-MVA form; see
+                `line_lim_from_def` for why this variant exists.
+
+                Args:
+                    model: The Pyomo model being built.
+                    l: Transformer index from `model.TRANSF`.
+
+                Returns:
+                    A Pyomo inequality expression.
+
+                """
                 return (
                     model.pThv[l] ** 2 + model.qThv[l] ** 2
                     <= model.SLmaxT[l] ** 2
                 )
 
             def transf_lim2_def(model, l):
+                r"""LV-side thermal limit of transformer `l`, as MVA.
+
+                $p^2 + q^2 \le S_{max}^2$, the constant-MVA form; see
+                `line_lim_from_def` for why this variant exists.
+
+                Args:
+                    model: The Pyomo model being built.
+                    l: Transformer index from `model.TRANSF`.
+
+                Returns:
+                    A Pyomo inequality expression.
+
+                """
                 return (
                     model.pTlv[l] ** 2 + model.qTlv[l] ** 2
                     <= model.SLmaxT[l] ** 2
@@ -680,6 +794,23 @@ class ACOPF(AC, OPF):
 
         # --- static generation reactive power limits ---
         def static_generation_reactive_power_bounds(model, g):
+            r"""Free static-generator reactive power within its limits.
+
+            Two things happen here, and the side effect is the important one:
+            the rule **unfixes** `qsG[g]` before returning, so the value the
+            base model pinned becomes a decision variable. Without that the
+            bounds would apply to a variable the solver cannot move.
+
+            Args:
+                model: The Pyomo model being built.
+                g: Static-generator index from `model.sGc`, the
+                    controllable subset. Bounds are p.u.
+
+            Returns:
+                The Pyomo ranged-constraint 3-tuple `(lower, expression,
+                upper)` -- not a relational expression -- which Pyomo reads as
+                $lower \le expr \le upper$.
+            """
             model.qsG[g].unfix()
             return model.QsGmin[g], model.qsG[g], model.QsGmax[g]
 
@@ -694,6 +825,22 @@ class ACOPF(AC, OPF):
 
         # --- reactive generator power limits ---
         def reactive_power_bounds(model, g):
+            r"""Free generator reactive power within its limits.
+
+            Two things happen here, and the side effect is the important one:
+            the rule **unfixes** `qG[g]` before returning, so the value
+            the base model pinned becomes a decision variable. Without that the
+            bounds would apply to a variable the solver cannot move.
+
+            Args:
+                model: The Pyomo model being built.
+                g: Generator index from `model.G`. Bounds are p.u.
+
+            Returns:
+                The Pyomo ranged-constraint 3-tuple
+                `(lower, expression, upper)` -- not a relational expression --
+                which Pyomo reads as $lower \le expr \le upper$.
+            """
             model.qG[g].unfix()
             return model.QGmin[g], model.qG[g], model.QGmax[g]
 
@@ -703,6 +850,23 @@ class ACOPF(AC, OPF):
 
         # --- reactive demand limits ---
         def reactive_demand_bounds(model, d):
+            r"""Free reactive demand within its limits.
+
+            Two things happen here, and the side effect is the important one:
+            the rule **unfixes** `qD[d]` before returning, so the value the
+            base model pinned becomes a decision variable. Without that the
+            bounds would apply to a variable the solver cannot move.
+
+            Args:
+                model: The Pyomo model being built.
+                d: Load index from `model.Dc`, the controllable
+                    subset. Bounds are p.u.
+
+            Returns:
+                The Pyomo ranged-constraint 3-tuple `(lower, expression,
+                upper)` -- not a relational expression -- which Pyomo reads as
+                $lower \le expr \le upper$.
+            """
             model.qD[d].unfix()
             return model.QDmin[d], model.qD[d], model.QDmax[d]
 
@@ -721,6 +885,24 @@ class ACOPF(AC, OPF):
                 self.model.v[b0].unfix()
 
         def v_bounds(model, b):
+            r"""Bound the voltage magnitude at bus `b` to its limits.
+
+            $V_{min,b} \le v_b \le V_{max,b}$, taken from `net.bus.min_vm_pu` /
+            `max_vm_pu`. Indexed over `model.Bpd` rather than `model.B`: the
+            auxiliary buses pandapower inserts for node-node switches carry no
+            user voltage limits.
+
+            Unlike the generator bounds above this rule does **not** unfix
+            anything -- `v` is already free, except at a reference bus, which
+            `free_slack_vm` controls.
+
+            Args:
+                model: The Pyomo model being built.
+                b: Bus index from `model.Bpd`.
+
+            Returns:
+                The Pyomo 3-tuple `(Vmin, v, Vmax)`.
+            """
             return model.Vmin[b], model.v[b], model.Vmax[b]
 
         self.model.v_pyo = pyo.Constraint(self.model.Bpd, rule=v_bounds)
@@ -739,6 +921,20 @@ class ACOPF(AC, OPF):
         self.model.Bfix = pyo.Set(initialize=fixed_buses)
 
         def fixed_v_rule(model, b):
+            """Pin bus `b` to its base-case voltage magnitude.
+
+            Used only for the opt-in `fix_hv_buses` behaviour, which holds
+            every bus at a chosen nominal voltage level at the value the base
+            power flow produced. A constraint rather than a `fix()` so the rest
+            of the model still sees `v[b]` as a variable.
+
+            Args:
+                model: The Pyomo model being built.
+                b: Bus index from `model.Bfix`.
+
+            Returns:
+                A Pyomo equality expression.
+            """
             return model.v[b] == float(self.bus_data.loc[b, "v_m"])
 
         self.model.v_fixed = pyo.Constraint(self.model.Bfix, rule=fixed_v_rule)
@@ -779,6 +975,27 @@ class ACOPF(AC, OPF):
             )
 
         def QW_pos(model, w, k):
+            r"""Upper Q(P) capability piece `k` for wind generator `w`.
+
+            The grid-code capability area is a piecewise-linear envelope, so
+            the upper bound becomes the pointwise minimum of its affine pieces:
+            one inequality $q \le m \, p + b \, P_{inst}$ per piece. A single
+            line could not represent the saturation shelf.
+
+            The intercept scales with `PsG_inst` (installed capacity, p.u.)
+            because the code states the envelope relative to rated power.
+
+            Args:
+                model: The Pyomo model being built.
+                w: Wind-generator index from `model.WINDc`.
+                k: Piece index from `model.QP_PIECE`.
+
+            Returns:
+                A Pyomo inequality expression, or `Constraint.Skip` when this
+                generator's envelope has fewer than `k + 1` pieces -- the piece
+                set is sized for the worst case and is shared by all
+                generators.
+            """
             pieces = pq_area.upper_pieces(
                 int(pyo.value(model.var_q[w])), DEFAULT_P_RANGE_PU
             )
@@ -788,6 +1005,21 @@ class ACOPF(AC, OPF):
             return model.qsG[w] <= m * model.psG[w] + b * model.PsG_inst[w]
 
         def QW_neg(model, w, k):
+            r"""Lower Q(P) capability piece `k` for wind generator `w`.
+
+            The mirror of `QW_pos`: the lower bound is the pointwise maximum of
+            the envelope's affine pieces, so each becomes
+            $q \ge m \, p + b \, P_{inst}$.
+
+            Args:
+                model: The Pyomo model being built.
+                w: Wind-generator index from `model.WINDc`.
+                k: Piece index from `model.QP_PIECE`.
+
+            Returns:
+                A Pyomo inequality expression, or `Constraint.Skip` when this
+                generator has no piece `k`.
+            """
             pieces = pq_area.lower_pieces(
                 int(pyo.value(model.var_q[w])), DEFAULT_P_RANGE_PU
             )
@@ -834,6 +1066,26 @@ class ACOPF(AC, OPF):
             )
 
         def QV_min(model, w, k):
+            r"""Lower Q(U) capability piece `k` for wind generator `w`.
+
+            The grid-code Q(U) envelope is piecewise linear in the *terminal
+            voltage*, so each affine piece becomes $q \ge (m \, v_b + b) \,
+            P_{inst}$ at the generator's own bus. Together the pieces form the
+            pointwise maximum of the envelope.
+
+            Only added when no Q(U) dead band was requested: a dead band makes
+            the feasible set non-convex, and is handled by pinning $q$ to the
+            characteristic instead (see `resolve_qu_curve`).
+
+            Args:
+                model: The Pyomo model being built.
+                w: Wind-generator index from `model.WINDc`.
+                k: Piece index from `model.QU_PIECE`.
+
+            Returns:
+                A Pyomo inequality expression, or `Constraint.Skip` if the
+                generator has no bus in `model.sGbs` or no piece `k`.
+            """
             if w not in sGbs_lookup:
                 return pyo.Constraint.Skip
             pieces = qv_area.lower_pieces(
@@ -851,6 +1103,26 @@ class ACOPF(AC, OPF):
             )
 
         def QV_max(model, w, k):
+            r"""Upper Q(U) capability piece `k` for wind generator `w`.
+
+            The grid-code Q(U) envelope is piecewise linear in the *terminal
+            voltage*, so each affine piece becomes $q \le (m \, v_b + b) \,
+            P_{inst}$ at the generator's own bus. Together the pieces form the
+            pointwise minimum of the envelope.
+
+            Only added when no Q(U) dead band was requested: a dead band makes
+            the feasible set non-convex, and is handled by pinning $q$ to the
+            characteristic instead (see `resolve_qu_curve`).
+
+            Args:
+                model: The Pyomo model being built.
+                w: Wind-generator index from `model.WINDc`.
+                k: Piece index from `model.QU_PIECE`.
+
+            Returns:
+                A Pyomo inequality expression, or `Constraint.Skip` if the
+                generator has no bus in `model.sGbs` or no piece `k`.
+            """
             if w not in sGbs_lookup:
                 return pyo.Constraint.Skip
             pieces = qv_area.upper_pieces(
@@ -926,6 +1198,25 @@ class ACOPF(AC, OPF):
                 if _pv_mode in ("qp", "both"):
 
                     def PV_QP_pos(model, g, k):
+                        r"""Upper Q(P) piece `k` for PV sgen `g`.
+
+                        The PV counterpart of `QW_pos`: $q \le m \, p + b \,
+                        P_{inst}$ for each affine piece of the grid-code Q(P)
+                        envelope, scaled by the installed capacity in
+                        `PV_p_inst`.
+
+                        Added only when `pv_q_control` selects `"qp"` or
+                        `"both"`.
+
+                        Args:
+                            model: The Pyomo model being built.
+                            g: PV static-generator index from `model.PVc`.
+                            k: Piece index from `model.QP_PIECE`.
+
+                        Returns:
+                            A Pyomo inequality expression, or `Constraint.Skip`
+                            when the envelope has fewer than `k + 1` pieces.
+                        """
                         v = int(pyo.value(model.PV_var_q[g]))
                         pieces = pq_area.upper_pieces(v, DEFAULT_P_RANGE_PU)
                         if k >= len(pieces):
@@ -937,6 +1228,25 @@ class ACOPF(AC, OPF):
                         )
 
                     def PV_QP_neg(model, g, k):
+                        r"""Lower Q(P) piece `k` for PV sgen `g`.
+
+                        The PV counterpart of `QW_neg`: $q \ge m \, p + b \,
+                        P_{inst}$ for each affine piece of the grid-code Q(P)
+                        envelope, scaled by the installed capacity in
+                        `PV_p_inst`.
+
+                        Added only when `pv_q_control` selects `"qp"` or
+                        `"both"`.
+
+                        Args:
+                            model: The Pyomo model being built.
+                            g: PV static-generator index from `model.PVc`.
+                            k: Piece index from `model.QP_PIECE`.
+
+                        Returns:
+                            A Pyomo inequality expression, or `Constraint.Skip`
+                            when the envelope has fewer than `k + 1` pieces.
+                        """
                         v = int(pyo.value(model.PV_var_q[g]))
                         pieces = pq_area.lower_pieces(v, DEFAULT_P_RANGE_PU)
                         if k >= len(pieces):
@@ -958,6 +1268,23 @@ class ACOPF(AC, OPF):
                     sGbs_lookup_pv = {g: b for (g, b) in self.model.sGbs}
 
                     def PV_QU_min(model, g, k):
+                        r"""Lower Q(U) piece `k` for PV sgen `g`.
+
+                        As `QV_min` but for PV-type static generators: $q \ge
+                        (m \, v_b + b) \, P_{inst}$ at the generator's bus.
+
+                        Added only when `pv_q_control` selects `"qu"` or
+                        `"both"`.
+
+                        Args:
+                            model: The Pyomo model being built.
+                            g: PV static-generator index from `model.PVc`.
+                            k: Piece index from `model.QU_PIECE`.
+
+                        Returns:
+                            A Pyomo inequality expression, or `Constraint.Skip`
+                            if the generator has no bus entry or no piece `k`.
+                        """
                         if g not in sGbs_lookup_pv:
                             return pyo.Constraint.Skip
                         v = int(pyo.value(model.PV_var_q[g]))
@@ -972,6 +1299,23 @@ class ACOPF(AC, OPF):
                         )
 
                     def PV_QU_max(model, g, k):
+                        r"""Upper Q(U) piece `k` for PV sgen `g`.
+
+                        As `QV_max` but for PV-type static generators: $q \le
+                        (m \, v_b + b) \, P_{inst}$ at the generator's bus.
+
+                        Added only when `pv_q_control` selects `"qu"` or
+                        `"both"`.
+
+                        Args:
+                            model: The Pyomo model being built.
+                            g: PV static-generator index from `model.PVc`.
+                            k: Piece index from `model.QU_PIECE`.
+
+                        Returns:
+                            A Pyomo inequality expression, or `Constraint.Skip`
+                            if the generator has no bus entry or no piece `k`.
+                        """
                         if g not in sGbs_lookup_pv:
                             return pyo.Constraint.Skip
                         v = int(pyo.value(model.PV_var_q[g]))
@@ -1037,6 +1381,19 @@ class ACOPF(AC, OPF):
                 )
 
                 def sgen_inverter_s2_rule(model, g):
+                    r"""Inverter apparent-power circle for sgen `g`.
+
+                    $p^2 + q^2 \le S_{inv}^2$: the converter rating bounds
+                    active and reactive power *jointly*, so reactive support is
+                    only available with headroom left over from active power.
+
+                    Args:
+                        model: The Pyomo model being built.
+                        g: Static-generator index from `model.sGinv`.
+
+                    Returns:
+                        A Pyomo inequality expression.
+                    """
                     return (
                         model.psG[g] ** 2 + model.qsG[g] ** 2
                         <= model.S_inv[g] ** 2
@@ -1068,9 +1425,33 @@ class ACOPF(AC, OPF):
                     )
 
                     def sgen_cos_phi_upper(model, g):
+                        r"""Upper power-factor bound for static generator `g`.
+
+                        $q \le \tan(\arccos(\cos\varphi_{min})) \, p$, the
+                        upper half of a symmetric cone about the real axis.
+
+                        Args:
+                            model: The Pyomo model being built.
+                            g: Static-generator index from `model.sGpf`.
+
+                        Returns:
+                            A Pyomo inequality expression.
+                        """
                         return model.qsG[g] <= model.tan_phi[g] * model.psG[g]
 
                     def sgen_cos_phi_lower(model, g):
+                        r"""Lower power-factor bound for static generator `g`.
+
+                        The mirror of `sgen_cos_phi_upper`: $q \ge
+                        -\tan(\arccos(\cos\varphi_{min})) \, p$.
+
+                        Args:
+                            model: The Pyomo model being built.
+                            g: Static-generator index from `model.sGpf`.
+
+                        Returns:
+                            A Pyomo inequality expression.
+                        """
                         return model.qsG[g] >= -model.tan_phi[g] * model.psG[g]
 
                     self.model.sgen_cos_phi_upper = pyo.Constraint(
@@ -1099,6 +1480,18 @@ class ACOPF(AC, OPF):
                 )
 
                 def _v_curtail(g):
+                    """Voltage at which curtailment starts for sgen `g`.
+
+                    Per-generator `net.sgen.v_curtail_pu` wins over the grid
+                    code's default, so a study can override a single unit
+                    without changing the code object.
+
+                    Args:
+                        g: Static-generator index.
+
+                    Returns:
+                        Voltage in p.u. as a float.
+                    """
                     if "v_curtail_pu" in self.net.sgen:
                         v = self.net.sgen.at[g, "v_curtail_pu"]
                         if pd.notna(v):
@@ -1106,6 +1499,18 @@ class ACOPF(AC, OPF):
                     return code.vpu_v_curtail
 
                 def _v_max_curtail(g):
+                    """Voltage at which generator `g` is fully curtailed.
+
+                    Same precedence as `_v_curtail`: the per-generator
+                    `net.sgen.v_max_curtail_pu` column overrides the grid-code
+                    default.
+
+                    Args:
+                        g: Static-generator index.
+
+                    Returns:
+                        Voltage in p.u. as a float.
+                    """
                     if "v_max_curtail_pu" in self.net.sgen:
                         v = self.net.sgen.at[g, "v_max_curtail_pu"]
                         if pd.notna(v):
@@ -1130,6 +1535,25 @@ class ACOPF(AC, OPF):
                 sGbs_lookup_pu = {g: b for (g, b) in self.model.sGbs}
 
                 def sgen_pu_curtail_rule(model, g):
+                    r"""P(U) curtailment ramp for sgen `g`.
+
+                    Above $V_{curtail}$ the admissible active power falls
+                    linearly to zero at $V_{max}$. Written as
+
+                    $$p \, (V_{max} - V_{curt}) \le P_{inst} (V_{max} - v_b)$$
+
+                    rather than dividing by the voltage span, which keeps the
+                    constraint linear in $v_b$ and avoids a division by zero
+                    when a grid code sets the two voltages equal.
+
+                    Args:
+                        model: The Pyomo model being built.
+                        g: Static-generator index from `model.sGpu`.
+
+                    Returns:
+                        A Pyomo inequality expression, or `Constraint.Skip` if
+                        the generator has no bus entry in `model.sGbs`.
+                    """
                     if g not in sGbs_lookup_pu:
                         return pyo.Constraint.Skip
                     b = sGbs_lookup_pu[g]
@@ -1163,6 +1587,20 @@ class ACOPF(AC, OPF):
             )
 
             def sgen_fixed_cos_phi_rule(model, g):
+                r"""Fixed power factor for sgen `g`.
+
+                An *equality*, unlike the `sgen_cos_phi_*` cone: the unit is
+                operated at exactly $\cos\varphi$, so $q =
+                \tan(\arccos(\cos\varphi)) \, p$ and its reactive power stops
+                being an independent decision.
+
+                Args:
+                    model: The Pyomo model being built.
+                    g: Static-generator index from `model.sGfcf`.
+
+                Returns:
+                    A Pyomo equality expression.
+                """
                 return model.qsG[g] == model.fixed_tan_phi[g] * model.psG[g]
 
             self.model.sgen_fixed_cos_phi = pyo.Constraint(
@@ -1225,6 +1663,25 @@ class ACOPF(AC, OPF):
                 )
 
                 def sgen_cpp_rule(model, g):
+                    r"""cos(phi)(P) characteristic for static generator `g`.
+
+                    Ties reactive power to active power along the grid code's
+                    cos(phi)(P) ramp, as an equality:
+
+                    $$q \,(P_n - P_t) = \tan\varphi \; p \,(p - P_t)$$
+
+                    Multiplied through by $(P_n - P_t)$ rather than
+                    dividing, so the expression stays polynomial. Note it is
+                    **quadratic in `psG`**, which makes this constraint
+                    nonconvex.
+
+                    Args:
+                        model: The Pyomo model being built.
+                        g: Static-generator index from `model.sGcpp`.
+
+                    Returns:
+                        A Pyomo equality expression.
+                    """
                     dPn = model.cpp_Pn[g] - model.cpp_P_thresh[g]
                     return model.qsG[g] * dPn == model.cpp_tan_phi[g] * (
                         model.psG[g] * (model.psG[g] - model.cpp_P_thresh[g])
@@ -1246,6 +1703,20 @@ class ACOPF(AC, OPF):
         """
 
         def _bounds(table, idx_set, hv_col, lv_col):
+            """Collect finite angle bounds for one branch table.
+
+            Args:
+                table: `net.line`, `net.trafo` or `net.impedance`.
+                idx_set: Pyomo set of model indices for that table.
+                hv_col: Column naming the from/HV bus.
+                lv_col: Column naming the to/LV bus.
+
+            Returns:
+                Mapping of model branch index to `(from_bus, to_bus,
+                angmin_rad, angmax_rad)`, empty when the table carries no angle
+                columns. Branches whose bounds are infinite or missing are left
+                out, so no constraint is created for them.
+            """
             angmin_col = "angmin_degree"
             angmax_col = "angmax_degree"
             if (
@@ -1305,6 +1776,20 @@ class ACOPF(AC, OPF):
             self.model.LineAngleSet = pyo.Set(initialize=line_idx)
 
             def _line_angle_rule(model, l):
+                r"""Phase-angle-difference limit on line `l`.
+
+                $\alpha_{min} \le \theta_f - \theta_t \le \alpha_{max}$, in
+                radians, following the PowerModels.jl sign convention (from bus
+                minus to bus).
+
+                Args:
+                    model: The Pyomo model being built.
+                    l: Index from `model.LineAngleSet`, which holds only the
+                        branches that actually carry finite angle bounds.
+
+                Returns:
+                    The Pyomo ranged 3-tuple `(amin, delta_f - delta_t, amax)`.
+                """
                 f, t, amin, amax = line_bounds[l]
                 return amin, model.delta[f] - model.delta[t], amax
 
@@ -1317,6 +1802,20 @@ class ACOPF(AC, OPF):
             self.model.TrafoAngleSet = pyo.Set(initialize=tr_idx)
 
             def _trafo_angle_rule(model, l):
+                r"""Phase-angle-difference limit on transformer `l`.
+
+                $\alpha_{min} \le \theta_f - \theta_t \le \alpha_{max}$, in
+                radians, following the PowerModels.jl sign convention (from bus
+                minus to bus).
+
+                Args:
+                    model: The Pyomo model being built.
+                    l: Index from `model.TrafoAngleSet`, which holds only the
+                        branches that actually carry finite angle bounds.
+
+                Returns:
+                    The Pyomo ranged 3-tuple `(amin, delta_f - delta_t, amax)`.
+                """
                 f, t, amin, amax = trafo_bounds[l]
                 return amin, model.delta[f] - model.delta[t], amax
 
@@ -1325,8 +1824,7 @@ class ACOPF(AC, OPF):
             )
 
     def add_voltage_deviation_objective(self):
-        """Set objective to minimise sum of squared voltage deviations from
-        1 p.u.
+        """Minimise the summed squared voltage deviation from 1 p.u.
 
         Minimises Σ (v[b] - 1)² over non-slack buses and
         Σ (v[b] - v_b0[b])² over slack buses.
@@ -1336,6 +1834,18 @@ class ACOPF(AC, OPF):
         )
 
         def voltage_deviation_objective(model):
+            r"""Summed squared voltage deviation.
+
+            $\sum_{b \notin b_0} (v_b - 1)^2 + \sum_{b \in b_0} (v_b -
+            v_{b0})^2$: non-reference buses are pulled towards 1 p.u.,
+            reference buses towards their own set point rather than towards 1.
+
+            Args:
+                model: The Pyomo model.
+
+            Returns:
+                A Pyomo expression to minimise.
+            """
             return sum(
                 (model.v[b] - 1.0) ** 2 for b in model.B - model.b0
             ) + sum((model.v[b] - model.v_b0[b]) ** 2 for b in model.b0)
@@ -1345,6 +1855,33 @@ class ACOPF(AC, OPF):
         )
 
     def add_active_change_objective(self):
+        """Set up and minimise redispatch away from the base dispatch.
+
+        A redispatch study rather than an economic dispatch: the
+        question is how little the operating point has to move, not what
+        it costs. The method does three things, in order.
+
+        1. **Re-fixes and frees generators.** Generators in `model.gG`
+           go back to their original dispatch `PG`; those in `model.eG`
+           are unfixed.
+        2. **Classifies static generators** into renewable (from the
+           `net.sgen.type` text), dispatchable (controllable and not
+           renewable) and fixed. Renewables are freed but bounded to
+           `[0, p_available]`, so they can only be curtailed downwards.
+        3. **Adds the objective and a soft balance.** Creates
+           `obj_loading` and the `total_injection_soft` constraint with
+           its `inj_mismatch_pos` / `inj_mismatch_neg` slacks.
+
+        Side effects on `self.net`: adds a `p_avail_mw` column to
+        `net.sgen`. Side effects on `self.model`: changes which
+        variables are fixed, and adds an objective plus a constraint.
+
+        Calling this twice would add a second objective of the same
+        name, which Pyomo rejects -- build a new model instead.
+
+        Returns:
+            None. The objective is reachable as `self.model.obj_loading`.
+        """
         for g in self.model.gG:
             self.model.pG[g].fix(self.model.PG[g])  # back to original dispatch
         for g in self.model.eG:
@@ -1364,6 +1901,19 @@ class ACOPF(AC, OPF):
 
         # define RES set: wind/solar
         def is_res(g):
+            """Whether static generator `g` is a renewable unit.
+
+            Classified from the free-text `net.sgen.type` column by substring:
+            wind, solar or pv. Returns False when the network has no `type`
+            column at all, so on such a network every sgen counts as
+            dispatchable.
+
+            Args:
+                g: Static-generator index.
+
+            Returns:
+                True if the unit looks renewable.
+            """
             if sgen_type is None:
                 return False
             t = str(self.net.sgen.at[g, "type"]).lower()
@@ -1419,6 +1969,25 @@ class ACOPF(AC, OPF):
         self.model.inj_mismatch_neg = pyo.Var(domain=pyo.NonNegativeReals)
 
         def active_change_objective(model):
+            """Redispatch cost with soft balance and small regularisers.
+
+            Sums, in order: the squared active redispatch of dispatchable
+            units; a large penalty ($10^4$) on the slack variables that absorb
+            a total-injection imbalance, which keeps the problem feasible
+            rather than letting it fail; and three small ($10^{-6}$ to
+            $10^{-4}$) regularisers on reactive generation, storage reactive
+            power and storage throughput that pick a well-defined point among
+            otherwise equivalent optima.
+
+            The regulariser weights are numerical, not economic -- they are
+            small enough not to compete with the redispatch term.
+
+            Args:
+                model: The Pyomo model.
+
+            Returns:
+                A Pyomo expression to minimise.
+            """
             disp_term = sum(
                 (model.psG[g] - model.PsG[g]) ** 2 for g in DISPATCH
             )
@@ -1445,6 +2014,19 @@ class ACOPF(AC, OPF):
         )
 
         def total_injection_mismatch_rule(model):
+            r"""Tie the injection-mismatch slacks to the actual imbalance.
+
+            $\sum p^{sgen} - \sum p^{stor}$ may drift from its reference; the
+            difference is taken up by the non-negative pair `inj_mismatch_pos`
+            / `inj_mismatch_neg`, which the objective then penalises. A scalar
+            constraint, not indexed.
+
+            Args:
+                model: The Pyomo model.
+
+            Returns:
+                A Pyomo equality expression.
+            """
             total_ref = sum(model.PsG[g] for g in model.sG) - sum(
                 model.STOR_P0[s] for s in model.STOR
             )
@@ -1467,6 +2049,14 @@ class ACOPF(AC, OPF):
         """
 
         def reactive_objective(model):
+            """Total squared reactive generation of static generators.
+
+            Args:
+                model: The Pyomo model.
+
+            Returns:
+                A Pyomo expression to minimise.
+            """
             # Minimize the reactive power
             return sum(model.qsG[g] ** 2 for g in model.sG)
 

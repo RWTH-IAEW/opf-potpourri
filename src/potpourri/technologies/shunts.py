@@ -2,16 +2,18 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Shunt mix-in: attaches shunt conductance sets and parameters to a
-multi-period model."""
+"""Shunt mix-in: shunt conductance over a horizon."""
 
 import pyomo.environ as pyo
 from potpourri.technologies.flexibility import Flexibility_multi_period
 
 
 class Shunts_multi_period(Flexibility_multi_period):
-    """Multi-period shunt device module; reads shunt data from the pandapower
-    network."""
+    """Multi-period shunts, read from the network.
+
+    Multi-period shunt device module; reads shunt data from the pandapower
+    network.
+    """
 
     def __init__(self, net, T=None, scenario=None):
         super().__init__(net, T, scenario)
@@ -33,6 +35,13 @@ class Shunts_multi_period(Flexibility_multi_period):
         """No-op placeholder for the OPF mix-in interface."""
 
     def get_all_acopf(self, model):
+        """Attach the AC OPF layer for this device.
+
+        Adds the reactive-power bounds on top of the active-power ones.
+
+        Returns:
+                None. The components are added to `model` in place.
+        """
         pass
 
     def get_sets(self, model):

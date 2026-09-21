@@ -2,8 +2,11 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Base mix-in class for all multi-period flexibility device modules
-(batteries, heat pumps, PV, demand, etc.)."""
+"""Base mix-in for every multi-period device module.
+
+Base mix-in class for all multi-period flexibility device modules
+(batteries, heat pumps, PV, demand, etc.).
+"""
 
 import pandas as pd
 import pyomo.environ as pyo
@@ -18,7 +21,9 @@ DEFAULT_PLACEMENT_SEED = 42
 
 
 class Flexibility_multi_period:
-    """Base class for technology mix-in objects that attach Pyomo components
+    """Base class for devices that attach themselves to a model.
+
+    Base class for technology mix-in objects that attach Pyomo components
     to a multi-period model.
 
     Reads network topology and profile data from *net* in ``__init__``.
@@ -143,6 +148,7 @@ class Flexibility_multi_period:
         """Register a real-power contribution to the nodal balance.
 
         Args:
+            model: The multi-period model whose balance is extended.
             term: ``(model, b, t) -> expression`` giving this device's net
                 real power at ppc bus *b* and time *t*, in the **load sign
                 convention**: positive is consumption, negative is injection.
@@ -194,6 +200,16 @@ class Flexibility_multi_period:
             by_ppc_bus.setdefault(ppc_bus, []).append(device)
 
         def term(model, b, t):
+            """Contribution of this device at one bus and time.
+
+            Args:
+                model: The Pyomo model being built.
+                b: Bus index (a ppc bus number).
+                t: Time index.
+
+            Returns:
+                A Pyomo expression.
+            """
             devices = by_ppc_bus.get(b)
             if not devices:
                 return 0
@@ -203,7 +219,9 @@ class Flexibility_multi_period:
         return term
 
     def get_sets(self, model):
-        """Initialise (or re-initialise) the bus set B on the Pyomo model
+        """Build or rebuild the bus set from the network topology.
+
+        Initialise (or re-initialise) the bus set B on the Pyomo model
         from network topology.
 
         Also defines ``Bpd``, the buses that a pandapower bus maps onto —
@@ -224,31 +242,32 @@ class Flexibility_multi_period:
         return True
 
     def make_to_dict(self, model_obj, model_time, data, time_dependent=True):
-        """Convert data into a ``{(object_index, time_index): value}`` dict
-        and a matching list of index tuples for Pyomo Param initialisation.
+        """Spread per-object data over the time index for a Pyomo Param.
+
+        Produces a ``{(object_index, time_index): value}`` mapping and
+        the matching list of index tuples.
 
         Args:
             model_obj: Iterable of object indices (e.g. a Pyomo Set).
             model_time: Iterable of time indices (e.g. ``model.T``).
             data: Data values.  Accepted types:
 
-                * ``np.ndarray`` — indexed by object index.
-                * ``pd.Series`` — indexed by time (``time_dependent=True``)
-                  or by object index (``time_dependent=False``).
-                * ``dict`` — ``{obj: value}`` (time-independent) or
-                  ``{obj: {t: value}}`` (time-dependent).
-                * ``list`` — same layout as ndarray.
-                * ``float`` / ``int`` — scalar, broadcast to all (obj, t).
-                * ``pd.DataFrame`` — calls ``.to_dict()`` internally.
+                * ``np.ndarray`` — indexed by object index. * ``pd.Series`` —
+                indexed by time (``time_dependent=True``) or by object index
+                (``time_dependent=False``). * ``dict`` — ``{obj: value}``
+                (time-independent) or ``{obj: {t: value}}`` (time-dependent). *
+                ``list`` — same layout as ndarray. * ``float`` / ``int`` —
+                scalar, broadcast to all (obj, t). * ``pd.DataFrame`` — calls
+                ``.to_dict()`` internally.
 
-            time_dependent: When ``True`` (default) the same value is
-                repeated for every time step for each object.  When
-                ``False`` the data varies only over objects (not time).
+            time_dependent: When ``True`` (default) the same value is repeated
+                for every time step for each object.  When ``False`` the data
+                varies only over objects (not time).
 
         Returns:
-            tuple: ``(data_dict, tuple_list)`` where *data_dict* maps
-            ``(obj, t)`` → value and *tuple_list* is the ordered list of
-            index pairs.
+            tuple: ``(data_dict, tuple_list)`` where *data_dict* maps ``(obj,
+                t)`` → value and *tuple_list* is the ordered list of index
+                pairs.
         """
         tuple_list = [(o, t) for o in model_obj for t in model_time]
 

@@ -2,8 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""DC Optimal Power Flow model combining linearised DC power flow and OPF
-limits."""
+"""DC Optimal Power Flow: linearised flow plus operating limits."""
 
 import numpy as np
 import pyomo.environ as pyo
@@ -12,8 +11,10 @@ from potpourri.models.OPF import OPF
 
 
 class DCOPF(DC, OPF):
-    """DC OPF model: linearised power flow with generator and thermal limit
-    constraints."""
+    """DC OPF model.
+
+    Linearised power flow with generator and thermal limit constraints.
+    """
 
     def __init__(self, net, dc_convention: str = "matpower"):
         super().__init__(net, dc_convention=dc_convention)
@@ -45,9 +46,27 @@ class DCOPF(DC, OPF):
         # --- line power limits (check sending end; DC is approximately
         # lossless) ---
         def line_lim_upper(model, l):
+            """Upper branch-flow limit on line `l`.
+
+            Args:
+                model: The Pyomo model being built.
+                l: Branch index.
+
+            Returns:
+                A Pyomo expression.
+            """
             return model.pLfrom[l] <= model.SLmax[l]
 
         def line_lim_lower(model, l):
+            """Lower branch-flow limit on line `l`.
+
+            Args:
+                model: The Pyomo model being built.
+                l: Branch index.
+
+            Returns:
+                A Pyomo expression.
+            """
             return model.pLfrom[l] >= -model.SLmax[l]
 
         self.model.line_lim_from = pyo.Constraint(
@@ -59,9 +78,27 @@ class DCOPF(DC, OPF):
 
         # --- transformer power limits ---
         def transf_lim_upper(model, l):
+            """Upper branch-flow limit on transformer `l`.
+
+            Args:
+                model: The Pyomo model being built.
+                l: Branch index.
+
+            Returns:
+                A Pyomo expression.
+            """
             return model.pThv[l] <= model.SLmaxT[l]
 
         def transf_lim_lower(model, l):
+            """Lower branch-flow limit on transformer `l`.
+
+            Args:
+                model: The Pyomo model being built.
+                l: Branch index.
+
+            Returns:
+                A Pyomo expression.
+            """
             return model.pThv[l] >= -model.SLmaxT[l]
 
         self.model.transf_lim1 = pyo.Constraint(
@@ -84,6 +121,17 @@ class DCOPF(DC, OPF):
         """
 
         def _bounds(table, idx_set, hv_col, lv_col):
+            """Collect the finite angle bounds for a branch table.
+
+            Args:
+                table: The pandapower branch table to read.
+                idx_set: Pyomo set of model indices for that table.
+                hv_col: Column naming the from/HV bus.
+                lv_col: Column naming the to/LV bus.
+
+            Returns:
+                A Pyomo expression.
+            """
             if (
                 "angmin_degree" not in table.columns
                 or "angmax_degree" not in table.columns
@@ -141,6 +189,18 @@ class DCOPF(DC, OPF):
             self.model.LineAngleSet = pyo.Set(initialize=line_idx)
 
             def _line_angle_rule(model, l):
+                r"""Phase-angle-difference limit on line `l`.
+
+                $\alpha_{min} \le \theta_f - \theta_t \le \alpha_{max}$, in
+                radians.
+
+                Args:
+                    model: The Pyomo model being built.
+                    l: Branch index.
+
+                Returns:
+                    A Pyomo expression.
+                """
                 f, t, amin, amax = line_bounds[l]
                 return amin, model.delta[f] - model.delta[t], amax
 
@@ -153,6 +213,15 @@ class DCOPF(DC, OPF):
             self.model.TrafoAngleSet = pyo.Set(initialize=tr_idx)
 
             def _trafo_angle_rule(model, l):
+                """Phase-angle-difference limit on transformer `l`.
+
+                Args:
+                    model: The Pyomo model being built.
+                    l: Branch index.
+
+                Returns:
+                    A Pyomo expression.
+                """
                 f, t, amin, amax = trafo_bounds[l]
                 return amin, model.delta[f] - model.delta[t], amax
 

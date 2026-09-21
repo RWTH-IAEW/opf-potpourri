@@ -175,6 +175,17 @@ class Envelope:
     q_max: np.ndarray
 
     def __post_init__(self):
+        """Validate and normalise the Q(P) envelope on construction.
+
+        Coerces the point arrays to float, promotes a single-variant envelope
+        to 2-D so every consumer can index by variant, and rejects a
+        non-monotonic abscissa, which would make the piecewise interpolation
+        ambiguous.
+
+        Raises:
+            ValueError: If the points are not strictly increasing or the bound
+                arrays disagree in shape.
+        """
         x = np.asarray(self.x_points, dtype=float)
         lo = np.atleast_2d(np.asarray(self.q_min, dtype=float))
         hi = np.atleast_2d(np.asarray(self.q_max, dtype=float))
@@ -305,6 +316,11 @@ class Envelope:
         return all(np.diff(upper) <= 1e-12) and all(np.diff(lower) >= -1e-12)
 
     def _check_variant(self, variant):
+        """Reject an out-of-range grid-code variant.
+
+        Returns:
+            A Pyomo expression.
+        """
         # Reject fractional values rather than truncating them: silently
         # rounding var_q would select a neighbouring capability column.
         if not float(variant).is_integer():
@@ -322,7 +338,7 @@ class Envelope:
 
 @dataclass(frozen=True, eq=False)
 class QVCurve:
-    """Piecewise-linear Q(U) **setpoint** characteristic, with dead band.
+    r"""Piecewise-linear Q(U) **setpoint** characteristic, with dead band.
 
     Mirrors ``QVCurve`` in
     :mod:`pandapower.control.controller.DERController.DERBasics`.
@@ -332,11 +348,11 @@ class QVCurve:
 
         Q/Pn
           |
-      q_max +-------\\
-          |          \\
-        0 +           \\________            <- dead band, Q = 0
-          |                     \\
-      q_min|                      \\-------
+      q_max +-------\
+          |          \
+        0 +           \________            <- dead band, Q = 0
+          |                     \
+      q_min|                      \-------
           +---+------+--------+------+----> V [p.u.]
              V1     V2       V3     V4
 
@@ -355,6 +371,15 @@ class QVCurve:
     q_points_pu: np.ndarray
 
     def __post_init__(self):
+        """Validate and normalise the Q(U) envelope on construction.
+
+        As the Q(P) validator, for a characteristic in voltage: the voltage
+        points must be strictly increasing.
+
+        Raises:
+            ValueError: If the voltage points are not strictly increasing or
+                the bound arrays disagree in shape.
+        """
         v = np.asarray(self.v_points_pu, dtype=float)
         q = np.atleast_2d(np.asarray(self.q_points_pu, dtype=float))
         if np.any(np.diff(v) <= 0):
@@ -487,6 +512,16 @@ class GridCode:
     provisional_note: str = ""
 
     def __post_init__(self):
+        """Check that the grid code's two envelopes agree.
+
+        A code carries a Q(P) and a Q(U) area, and both must describe the same
+        set of operating variants -- otherwise `var_q` would select different
+        behaviour in each.
+
+        Raises:
+            ValueError: If the two areas declare a different number of
+                variants.
+        """
         if self.pq_area.n_variants != self.qv_area.n_variants:
             raise ValueError(
                 f"{self.title}: PQ area has {self.pq_area.n_variants} "
@@ -928,6 +963,11 @@ def attach_deadband_qu(
     v_pts = [float(x) for x in curve.v_points_pu]
 
     def _key(args):
+        """Cache key for a resolved capability curve.
+
+        Returns:
+            A Pyomo expression.
+        """
         return args[0] if len(args) == 1 else tuple(args)
 
     tupled = isinstance(keys[0], tuple)
@@ -949,10 +989,20 @@ def attach_deadband_qu(
     model.add_component(f"{name}_q_pu", q_aux)
 
     def _link_v(_m, *args):
+        """Tie the voltage slacks to the voltage deviation.
+
+        Returns:
+            A Pyomo expression.
+        """
         k = _key(args)
         return v_aux[k] == v_of(k)
 
     def _link_q(_m, *args):
+        """Tie the reactive slacks to the reactive dispatch.
+
+        Returns:
+            A Pyomo expression.
+        """
         k = _key(args)
         return q_of(k) == q_aux[k] * pn_of(k)
 
@@ -960,6 +1010,11 @@ def attach_deadband_qu(
     model.add_component(f"{name}_q_link", pyo.Constraint(idx, rule=_link_q))
 
     def _f_rule(_m, *args):
+        """One piece of the piecewise characteristic.
+
+        Returns:
+            A Pyomo expression.
+        """
         *key_parts, x = args
         return float(curve.step(x, variant_of(_key(tuple(key_parts)))))
 

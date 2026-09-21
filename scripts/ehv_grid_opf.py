@@ -83,6 +83,15 @@ def configure_for_opf(net) -> None:
 
 
 def print_network_stats(net) -> None:
+    """Print a size summary of the network.
+
+    Args:
+        net: The pandapower network to describe.
+        label: Heading printed above the counts.
+
+    Returns:
+        None. Writes to standard output.
+    """
     print(f"  Buses       : {len(net.bus)}")
     print(f"  Lines       : {len(net.line)}")
     print(f"  Transformers: {len(net.trafo)}")
@@ -172,6 +181,16 @@ def run_acopf(net_template) -> dict:
 
 
 def main() -> None:
+    """Run the analysis this script demonstrates.
+
+    Configuration comes from the module-level constants above, not from the
+    command line. Edit those, or import and call this function, to change what
+    is run.
+
+    Returns:
+        None. Results are printed, and written to the paths named in the
+        configuration block where the script produces files.
+    """
     print(f"Network: {NET_NAME}")
     print(f"Snapshot: profile index {PROFILE_IDX}  (summer midday)\n")
 

@@ -2,8 +2,11 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Generator mix-in: attaches external grid and generator variables and OPF
-limits to a multi-period model."""
+"""Generator mix-in: external grid and generator dispatch.
+
+Attaches the generator and external-grid variables, and their
+OPF limits, to a multi-period model.
+"""
 
 import pandas as pd
 import pyomo.environ as pyo
@@ -13,8 +16,11 @@ from potpourri.technologies.flexibility import Flexibility_multi_period
 
 
 class Generator_multi_period(Flexibility_multi_period):
-    """Multi-period generator device module for external grids and PV
-    generators."""
+    """Multi-period generators and external grids.
+
+    Multi-period generator device module for external grids and PV
+    generators.
+    """
 
     def __init__(self, net, T=None, scenario=None):
         super().__init__(net, T, scenario)
@@ -52,22 +58,49 @@ class Generator_multi_period(Flexibility_multi_period):
         self.generation_data["v"] = self.net._ppc["gen"][:, 5]
 
     def get_all(self, model):
-        """Attach generator sets, parameters, variables and fix non-slack
-        generators."""
+        """Attach the generators and fix the non-slack ones.
+
+        Attach generator sets, parameters, variables and fix non-slack
+        generators.
+        """
         self.get_sets(model)
         self.get_parameters(model)
         self.get_variables(model)
         self.fix_variables(model)
 
     def get_all_opf(self, model):
+        """Attach the OPF layer for this device.
+
+        Runs the OPF sets, parameters and constraints in the order they depend
+        on each other.
+
+        Returns:
+                None. The components are added to `model` in place.
+        """
         self.get_opf_parameters(model)
         self.get_all_Constraints_opf(model)
 
     def get_all_acopf(self, model):
+        """Attach the AC OPF layer for this device.
+
+        Adds the reactive-power bounds on top of the active-power ones.
+
+        Returns:
+                None. The components are added to `model` in place.
+        """
         self.get_acopf_parameters(model)
         self.get_all_Constraints_acopf(model)
 
     def get_sets(self, model):
+        """Add this device's index sets to `model`.
+
+        Extends the base sets with the device's own element set and its
+        element-to-bus mapping.
+
+        Returns:
+                True, so a caller can chain the lifecycle steps. The real
+                result is the components added to `model`.
+        """
         # external grids and generators
         model.G = pyo.Set(
             initialize=self.generation_data.index[
@@ -102,7 +135,6 @@ class Generator_multi_period(Flexibility_multi_period):
 
     def get_opf_parameters(self, model):
         """Create PGmax and PGmin parameters for OPF real-power limits."""
-
         self.Pgmax_data_dict, self.Pgmax_tuple = self.make_to_dict(
             model.G, model.T, self.generation_data["max_p"], False
         )
@@ -121,8 +153,11 @@ class Generator_multi_period(Flexibility_multi_period):
         )
 
     def get_acopf_parameters(self, model):
-        """Create QGmax and QGmin parameters for AC OPF reactive-power
-        limits."""
+        """Attach the reactive-power limit parameters.
+
+        Create QGmax and QGmin parameters for AC OPF reactive-power
+        limits.
+        """
         # create dict and tuple for reactive power limits multi period
         self.QGmax_data_dict, self.QGmax_tuple = self.make_to_dict(
             model.G, model.T, self.generation_data["max_q"], False
@@ -140,8 +175,11 @@ class Generator_multi_period(Flexibility_multi_period):
         )
 
     def get_variables(self, model):
-        """Create pG variable for real power injection over all generators
-        and time steps."""
+        """Attach the active-power variable over generators and time.
+
+        Create pG variable for real power injection over all generators
+        and time steps.
+        """
         model.pG = pyo.Var(
             self.PG_tuple, domain=pyo.Reals
         )  # real power injection from static generators
@@ -153,8 +191,11 @@ class Generator_multi_period(Flexibility_multi_period):
                 model.pG[(g, t)].fix(model.PG[(g, t)])
 
     def generation_real_power_limits_opf(self, model):
-        """Compute per-generator real-power limits and store in
-        generation_data."""
+        """Derive the per-generator active-power limits.
+
+        Compute per-generator real-power limits and store in
+        generation_data.
+        """
         max_p = np.full(len(self.generation_data), 1e9) / self.baseMVA
         min_p = np.full(len(self.generation_data), -1e9) / self.baseMVA
 
@@ -194,8 +235,11 @@ class Generator_multi_period(Flexibility_multi_period):
         self.generation_data["min_p"] = min_p
 
     def generation_reactive_power_limits_acopf(self):
-        """Compute per-generator reactive-power limits and store in
-        generation_data."""
+        """Derive the per-generator reactive-power limits.
+
+        Compute per-generator reactive-power limits and store in
+        generation_data.
+        """
         max_q = np.full(len(self.generation_data), 1e9) / self.baseMVA
         min_q = np.full(len(self.generation_data), -1e9) / self.baseMVA
 
@@ -215,22 +259,48 @@ class Generator_multi_period(Flexibility_multi_period):
         self.generation_data["min_q"] = min_q
 
     def get_all_Constraints_opf(self, model):
-        """Add real-power bound constraints for all generators over all
-        time steps."""
+        """Add the generator active-power bounds over time.
+
+        Add real-power bound constraints for all generators over all
+        time steps.
+        """
 
         # --- generation real power limits ---
         # PG Constraint
         @model.Constraint(model.G, model.T)
         def real_power_bounds(model, g, t):
+            """Bound a generator's active power, freeing it first.
+
+            Args:
+                model: The Pyomo model being built.
+                g: Generator or static-generator index.
+                t: Time index.
+
+            Returns:
+                A Pyomo expression.
+            """
             model.pG[(g, t)].unfix()
             return model.PGmin[(g, t)], model.pG[(g, t)], model.PGmax[(g, t)]
 
     def get_all_Constraints_acopf(self, model):
-        """Add reactive-power bound constraints for all generators over all
-        time steps."""
+        """Add the generator reactive-power bounds over time.
+
+        Add reactive-power bound constraints for all generators over all
+        time steps.
+        """
 
         # --- reactive generator power limits ---
         @model.Constraint(model.G, model.T)
         def reactive_power_bounds(model, g, t):
+            """Bound a generator's reactive power, freeing it first.
+
+            Args:
+                model: The Pyomo model being built.
+                g: Generator or static-generator index.
+                t: Time index.
+
+            Returns:
+                A Pyomo expression.
+            """
             model.qG[(g, t)].unfix()
             return model.QGmin[(g, t)], model.qG[(g, t)], model.QGmax[(g, t)]

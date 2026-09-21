@@ -2,8 +2,11 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Heat pump mix-in: attaches heat pump sets, parameters, variables, and
-constraints to a multi-period model."""
+"""Heat pump mix-in.
+
+Attaches heat pump sets, parameters, variables, and constraints to a
+multi-period model.
+"""
 
 import numpy as np
 import pyomo.environ as pyo
@@ -149,8 +152,11 @@ class Heatpump_multi_period(Flexibility_multi_period):
         self.heat_load = self.heat_scaling_fac * load_profile_pu
 
     def get_all(self, model):
-        """Attach heat pump sets, parameters, variables, and constraints, and
-        couple the electrical power into the nodal balance."""
+        """Attach the heat pump and couple it to the balance.
+
+        Attach heat pump sets, parameters, variables, and constraints, and
+        couple the electrical power into the nodal balance.
+        """
         self.get_sets(model)
         self.get_parameters(model)
         self.get_variables(model)
@@ -176,8 +182,11 @@ class Heatpump_multi_period(Flexibility_multi_period):
         return True
 
     def get_parameters(self, model):
-        """Attach power limits, temperature bounds, CoP, thermal capacity,
-        and heat-loss profile."""
+        """Attach the power, temperature, CoP and heat-loss data.
+
+        Attach power limits, temperature bounds, CoP, thermal capacity,
+        and heat-loss profile.
+        """
         model.HP_Pmax = pyo.Param(
             model.HP, within=pyo.Reals, initialize=self.hp_power_max
         )
@@ -214,7 +223,9 @@ class Heatpump_multi_period(Flexibility_multi_period):
         return True
 
     def get_variables(self, model):
-        """Create hp_p (electrical power) and temp (indoor temperature)
+        """Attach the electrical-power and indoor-temperature variables.
+
+        Create hp_p (electrical power) and temp (indoor temperature)
         variables.
 
         ``temp`` starts mid-band rather than at Pyomo's default of 0, which
@@ -233,10 +244,19 @@ class Heatpump_multi_period(Flexibility_multi_period):
         return True
 
     def get_all_constraints(self, model):
-        """Add power-bound, temperature-bound, and thermal-update
-        constraints."""
+        """Add the power, temperature and thermal-update constraints."""
 
         def hp_power_rule(model, h, t):
+            """Bound the heat pump's electrical power.
+
+            Args:
+                h: Heat-pump index.
+                model: The Pyomo model being built.
+                t: Time index.
+
+            Returns:
+                A Pyomo expression.
+            """
             return model.HP_Pmin[h], model.hp_p[h, t], model.HP_Pmax[h]
 
         model.hp_power_con = pyo.Constraint(
@@ -244,6 +264,16 @@ class Heatpump_multi_period(Flexibility_multi_period):
         )
 
         def hp_temp_rule(model, h, t):
+            """Keep the indoor temperature inside its band.
+
+            Args:
+                h: Heat-pump index.
+                model: The Pyomo model being built.
+                t: Time index.
+
+            Returns:
+                A Pyomo expression.
+            """
             return model.TempMin[h], model.temp[h, t], model.TempMax[h]
 
         model.hp_temp_con = pyo.Constraint(
@@ -251,6 +281,20 @@ class Heatpump_multi_period(Flexibility_multi_period):
         )
 
         def hp_temp_update_rule(model, h, t):
+            """Carry the indoor temperature from one step to the next.
+
+            The thermal analogue of a storage balance: the building's heat
+            capacity couples the time steps, so the heat pump can shift
+            consumption the way a battery shifts energy.
+
+            Args:
+                h: Heat-pump index.
+                model: The Pyomo model being built.
+                t: Time index.
+
+            Returns:
+                A Pyomo expression.
+            """
             if t == model.T.at(1):
                 return pyo.Constraint.Skip
             return (

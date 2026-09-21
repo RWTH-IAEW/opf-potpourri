@@ -113,8 +113,11 @@ def _net_with_impedance():
 
 
 def test_mp_ac_includes_impedance_branch_in_L():
-    """Multi-period AC OPF must put net.impedance rows into model.L at
-    synthetic indices >= len(net.line) (mirror of the single-period fix)."""
+    """Multi-period AC OPF includes impedance rows in model.L.
+
+    Multi-period AC OPF must put net.impedance rows into model.L at
+    synthetic indices >= len(net.line) (mirror of the single-period fix).
+    """
     net = _net_with_impedance()
     n_line = len(net.line)
     opf = ACOPF_multi_period(net, toT=2)
@@ -127,7 +130,9 @@ def test_mp_ac_includes_impedance_branch_in_L():
 
 
 def test_mp_basemodel_includes_impedance_branch_in_line_data():
-    """Multi-period ``Basemodel_multi_period`` must register impedance rows
+    """The multi-period base model registers impedance rows.
+
+    Multi-period ``Basemodel_multi_period`` must register impedance rows
     in ``line_data`` and ``bus_line_dict``. This is the shared shim both
     ``AC_multi_period`` and ``DC_multi_period`` rely on.
     """
@@ -145,7 +150,9 @@ def test_mp_basemodel_includes_impedance_branch_in_line_data():
 
 
 def test_mp_dc_constructs_with_time_steps():
-    """``DC_multi_period`` must construct cleanly in the time-variant path
+    """DC_multi_period builds in the time-variant path.
+
+    ``DC_multi_period`` must construct cleanly in the time-variant path
     (where ``self.model.T`` is the Pyomo Set and all branch / shunt
     parameters use the single-period indexing they were declared with).
     Regression test for the prior `self.T` int-vs-Set confusion and the
@@ -168,8 +175,11 @@ def test_mp_dc_constructs_with_time_steps():
 
 
 def test_mp_dc_includes_impedance_branch_in_L():
-    """``DC_multi_period`` must include net.impedance in model.L (mirror of
-    the single-period DC fix)."""
+    """DC_multi_period includes impedance rows in model.L.
+
+    ``DC_multi_period`` must include net.impedance in model.L (mirror of
+    the single-period DC fix).
+    """
     from potpourri.models_multi_period.DC_multi_period import DC_multi_period
 
     net = _net_with_impedance()
@@ -193,7 +203,6 @@ def test_mp_dcopf_add_opf_does_not_raise(lv_net):
       it from the DC OPF path therefore raised an ``AttributeError``. Q
       parameters are now in a separate ``get_acopf_parameters`` hook.
     """
-
     dcopf = DCOPF_multi_period(lv_net, toT=4)
     dcopf.add_OPF()
     n_l = len(list(dcopf.model.L))
@@ -203,9 +212,12 @@ def test_mp_dcopf_add_opf_does_not_raise(lv_net):
 
 
 def test_mp_acopf_add_opf_does_not_raise(lv_net):
-    """``ACOPF_multi_period`` must still construct AND ``add_OPF`` after the
+    """ACOPF_multi_period still builds after the Q-parameter split.
+
+    ``ACOPF_multi_period`` must still construct AND ``add_OPF`` after the
     sgens Q-parameter split (regression check that we didn't break the AC
-    path while fixing DC)."""
+    path while fixing DC).
+    """
     opf = ACOPF_multi_period(lv_net, toT=4)
     opf.add_OPF()
     # AC must keep its reactive-power bounds

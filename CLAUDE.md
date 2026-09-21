@@ -79,6 +79,13 @@ Device modules (all suffixed `_multi_period`, in `src/potpourri/technologies/`):
   writes **one** time step — the last of the horizon — because `net.res_*` has
   no time dimension; use `map_to_net(t)` for any other step.
 - Example scripts in `scripts/` are the primary usage examples (see `scripts/README.md`).
+- **Docstrings are Google-style Markdown**, rendered by mkdocstrings —
+  `$v_b$` for maths, `` [`X`][potpourri.a.b.X] `` for cross-references,
+  never reStructuredText roles. Document units, sign conventions, ppc-vs-
+  pandapower indexing, side effects on `self.model`/`self.net`, and what a
+  Pyomo rule returns (an expression or a `(lo, expr, hi)` tuple, never a
+  bool). Enforced by `interrogate src/potpourri` and `ruff check`; the full
+  policy is in `docs/contributing-docs.md`.
 - **Every Python file needs an SPDX header** — an `SPDX-FileCopyrightText`
   line plus an `SPDX-License-Identifier` line naming MIT, as real comments at
   the very top, new files included. Enforced in pre-commit and CI by

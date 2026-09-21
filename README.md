@@ -1,5 +1,7 @@
 # potpourri
 
+![docs coverage](docs/assets/interrogate_badge.svg)
+
 **Multi-Period Optimal Power Flow for Distribution Grids with Storage Application**
 
 > *Potpourri — piece of music composed from various popular smaller works or melodies*

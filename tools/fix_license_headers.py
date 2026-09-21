@@ -37,6 +37,15 @@ from license_headers import (  # noqa: E402
 
 
 def main(repo_root: str = REPO_ROOT, apply: bool = APPLY) -> int:
+    """Write, or preview, the first-party headers.
+
+    Args:
+        repo_root: Repository to act on. Defaults to this checkout.
+        apply: False previews the change set without writing.
+
+    Returns:
+        Process exit status: 1 if any file was refused, else 0.
+    """
     try:
         notes = fix_repository(repo_root, dry_run=not apply)
     except DiscoveryError as exc:

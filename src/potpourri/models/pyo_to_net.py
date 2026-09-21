@@ -2,8 +2,12 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Post-processing: reads Pyomo solution variables and writes results to
-net.res_* DataFrames."""
+"""Write a solved Pyomo model back into pandapower result tables.
+
+Reads the solution variables and fills the ``net.res_*``
+DataFrames, so results can be inspected and plotted with the
+ordinary pandapower tooling.
+"""
 
 import numpy as np
 import pandas as pd
@@ -55,6 +59,19 @@ def pyo_sol_to_net_res(net, model):
 
 
 def _bus_voltage_results_to_net(net, model):
+    """Write bus voltages into `net.res_bus`.
+
+    Magnitudes in p.u. and angles in degrees (the model holds radians). On a DC
+    model there are no magnitudes to read, so the generator and external-grid
+    set points are written and every other bus is left at 1.0 p.u.
+
+    Args:
+        net: The network to write results into.
+        model: The solved Pyomo model to read.
+
+    Returns:
+        None. The result tables are filled in place.
+    """
     bus_lookup = net._pd2ppc_lookups["bus"]
     bus_idx = bus_lookup[net.bus.index.values]
 
@@ -76,6 +93,17 @@ def _bus_voltage_results_to_net(net, model):
 
 
 def _get_bus_power_results(net):
+    """Aggregate element powers onto their buses.
+
+    Sums load, sgen, gen, ext_grid and shunt results per bus, so `res_bus.p_mw`
+    reports the net injection there.
+
+    Args:
+        net: The network to write results into.
+
+    Returns:
+        None. The result tables are filled in place.
+    """
     bus_pq = np.zeros(shape=(len(net["bus"].index), 2), dtype=np.float64)
 
     elements = ["load", "sgen", "gen", "ext_grid", "shunt"]
@@ -117,6 +145,20 @@ def _get_bus_power_results(net):
 
 
 def _line_results_to_net(net, model):
+    """Write line flows and loading into `net.res_line`.
+
+    Fills both ends, the loss (`p_from + p_to`, which is what is left in the
+    branch) and the loading percentage. Rows that the model carries as
+    synthetic lines for `net.impedance` are written to `net.res_impedance`
+    instead.
+
+    Args:
+        net: The network to write results into.
+        model: The solved Pyomo model to read.
+
+    Returns:
+        None. The result tables are filled in place.
+    """
     # model.L includes both net.line rows (indices < n_line) and any
     # net.impedance rows (indices >= n_line). pyo_to_net writes line flows
     # back to net.res_line for the native lines only; impedance results are
@@ -140,6 +182,17 @@ def _line_results_to_net(net, model):
     # Index by net.line.index so out-of-service lines (absent from model.L)
     # get filled with 0.
     def _series_for_lines(d):
+        """Per-line Series from a model value dict, in MW or MVAr.
+
+        Missing entries become 0.0, which is what an out-of-service line
+        contributes.
+
+        Args:
+            d: Mapping of model index to value, in p.u.
+
+        Returns:
+            The converted values.
+        """
         return pd.Series(
             [d.get(int(idx), 0.0) * base for idx in net.line.index],
             index=net.line.index,
@@ -193,6 +246,17 @@ def _line_results_to_net(net, model):
     if imp is not None and not imp.empty:
         # impedance synthetic indices in model.L start at n_line
         def _imp_series(d):
+            """Per-impedance-row values from a model value dict.
+
+            The model keeps `net.impedance` rows as synthetic lines at indices
+            past the real ones, so they are offset by the line count here.
+
+            Args:
+                d: Mapping of model index to value, in p.u.
+
+            Returns:
+                The converted values.
+            """
             return [
                 d.get(int(n_line + i), 0.0) * base for i in range(len(imp))
             ]
@@ -219,6 +283,15 @@ def _line_results_to_net(net, model):
 
 
 def _generation_results_to_net(net, model):
+    """Write the external-grid dispatch into `net.res_ext_grid`.
+
+    Args:
+        net: The network to write results into.
+        model: The solved Pyomo model to read.
+
+    Returns:
+        None. The result tables are filled in place.
+    """
     pg = model.pG.get_values()
     qg = model.qG.get_values() if _is_ac(model) else None
     base = model.baseMVA.value
@@ -240,6 +313,18 @@ def _generation_results_to_net(net, model):
 
 
 def _load_results_to_net(net, model):
+    """Write the load dispatch into `net.res_load`.
+
+    A controllable load may differ from its set point; a fixed one reproduces
+    it.
+
+    Args:
+        net: The network to write results into.
+        model: The solved Pyomo model to read.
+
+    Returns:
+        None. The result tables are filled in place.
+    """
     net.res_load = pd.DataFrame(
         columns=["p_mw", "q_mvar"], index=net.load.index, dtype=float
     )
@@ -259,6 +344,17 @@ def _load_results_to_net(net, model):
 
 
 def _sgen_results_to_net(net, model):
+    """Write the static-generator dispatch into `net.res_sgen`.
+
+    Generator sign convention: positive is injection.
+
+    Args:
+        net: The network to write results into.
+        model: The solved Pyomo model to read.
+
+    Returns:
+        None. The result tables are filled in place.
+    """
     net.res_sgen = pd.DataFrame(
         columns=["p_mw", "q_mvar"], index=net.sgen.index, dtype=float
     )
@@ -298,6 +394,17 @@ def _sgen_results_to_net(net, model):
 
 
 def _trafo_results_to_net(net, model):
+    """Write transformer flows and loading into `net.res_trafo`.
+
+    Both windings, plus the loading percentage against the nameplate rating.
+
+    Args:
+        net: The network to write results into.
+        model: The solved Pyomo model to read.
+
+    Returns:
+        None. The result tables are filled in place.
+    """
     net.res_trafo.p_hv_mw = model.pThv.get_values()
     net.res_trafo.p_hv_mw *= model.baseMVA.value
     net.res_trafo.p_lv_mw = model.pTlv.get_values()
@@ -360,6 +467,18 @@ def _trafo_results_to_net(net, model):
 
 
 def _shunt_results_to_net(net, model):
+    """Write shunt consumption into `net.res_shunt`.
+
+    Computed from the solved bus voltage and the shunt's admittance, so it
+    follows $v^2$ rather than the set point.
+
+    Args:
+        net: The network to write results into.
+        model: The solved Pyomo model to read.
+
+    Returns:
+        None. The result tables are filled in place.
+    """
     for s in model.SHUNT:
         net.res_shunt.loc[s, "p_mw"] = (
             model.GB[s]

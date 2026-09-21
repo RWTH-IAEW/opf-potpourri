@@ -214,10 +214,13 @@ def test_d9_out_of_service_gen_q_limits_filtered():
 
 
 def test_d4_degenerate_gen_range_pins_variable():
-    """A gen with Pmin == Pmax must not contribute a range constraint
+    """A generator with Pmin == Pmax gets no range constraint.
+
+    A gen with Pmin == Pmax must not contribute a range constraint
     (would trip IPOPT TOO_FEW_DOF) and the variable must be pinned via
     tight bounds, not Var.fix() (which would eliminate the var from the
-    NL file and again reduce degrees of freedom)."""
+    NL file and again reduce degrees of freedom).
+    """
     net = _toy_two_bus_net()
     pp.create_gen(
         net,
@@ -380,9 +383,12 @@ def test_d10_sgen_min_p_explicit_value_respected():
 
 
 def test_d10_sgen_min_p_falls_back_to_zero_when_missing():
-    """When min_p_mw is missing entirely (e.g. converted PGLib networks
+    """A missing min_p_mw column must not break the bounds.
+
+    When min_p_mw is missing entirely (e.g. converted PGLib networks
     that don't carry the column on sgen), keep the historical 0-floor
-    convention so OPF doesn't accidentally pin sgens to their setpoint."""
+    convention so OPF doesn't accidentally pin sgens to their setpoint.
+    """
     net = _toy_two_bus_net()
     pp.create_sgen(
         net,
@@ -442,9 +448,12 @@ def test_d14_pyo_to_net_smoke():
 
 
 def test_impedance_branch_included_in_model_L():
-    """A net.impedance row must show up in model.L at index >= len(net.line)
+    """An impedance row appears in model.L with its constraints.
+
+    A net.impedance row must show up in model.L at index >= len(net.line)
     with KVL constraints attached. Previously Basemodel only iterated
-    net.line + net.trafo."""
+    net.line + net.trafo.
+    """
     net = _toy_two_bus_net()
     # Add a third bus that is only reachable via an impedance branch
     b2 = pp.create_bus(net, vn_kv=33.0, max_vm_pu=1.1, min_vm_pu=0.9)
@@ -475,9 +484,12 @@ def test_impedance_branch_included_in_model_L():
 @pytest.mark.integration
 @requires_pglib_submodule
 def test_pglib_case118_ieee_no_longer_isolated_bus():
-    """case118 has an impedance branch (67↔115) that previously left bus 115
+    """case118's impedance branch leaves no bus infeasible.
+
+    case118 has an impedance branch (67↔115) that previously left bus 115
     KCL-infeasible. With impedance branches included, AC OPF must converge
-    within 1 % of the published reference."""
+    within 1 % of the published reference.
+    """
     from potpourri.benchmarks import load_pglib_case, PGLIB_BASELINE_TYP
 
     net = load_pglib_case("case118_ieee")

@@ -2,8 +2,11 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Hosting Capacity AC OPF model for sizing wind generation in distribution
-grids."""
+"""Hosting-capacity AC OPF for siting wind generation.
+
+Hosting Capacity AC OPF model for sizing wind generation in distribution
+grids.
+"""
 
 import copy
 
@@ -138,6 +141,21 @@ class HC_ACOPF(ACOPF):
         )
 
         def obj_wind_loss_rule(model):
+            r"""Wind infeed minus network losses.
+
+            $\sum_w p_w - \sum_l (p^{from}_l + p^{to}_l) - \sum_t (p^{hv}_t +
+            p^{lv}_t)$. Each branch's two end injections sum to that branch's
+            loss, so subtracting them from the infeed leaves the power that
+            actually reaches the rest of the system. Maximised, so the
+            objective rewards hosting capacity and penalises the losses needed
+            to carry it.
+
+            Args:
+                model: The Pyomo model being built.
+
+            Returns:
+                A Pyomo expression to maximise.
+            """
             return (
                 sum(model.psG[w] for w in model.WIND_HC)
                 - sum(model.pLfrom[l] + model.pLto[l] for l in model.L)
@@ -149,12 +167,39 @@ class HC_ACOPF(ACOPF):
         )
 
         def SW_max(model, w):
+            r"""Upper apparent-power limit of candidate wind unit `w`.
+
+            $p^2 + q^2 \le S_{max}^2 y_w$ with $y_w$ binary: when the unit is
+            not selected ($y_w = 0$) the right-hand side collapses to zero and
+            forces both powers to zero. This is what makes the hosting-capacity
+            model a **MINLP** rather than an NLP.
+
+            Args:
+                model: The Pyomo model being built.
+                w: Candidate index from `model.WIND_HC`.
+
+            Returns:
+                A Pyomo inequality expression.
+            """
             return (
                 model.psG[w] ** 2 + model.qsG[w] ** 2
                 <= model.SWmax[w] ** 2 * model.y[w]
             )
 
         def SW_min(model, w):
+            r"""Lower apparent-power limit of candidate wind unit `w`.
+
+            $p^2 + q^2 \ge S_{min}^2 y_w$: a selected unit must run at or above
+            a minimum size, while $y_w = 0$ makes the bound vacuous. Together
+            with `SW_max` this is a semi-continuous sizing.
+
+            Args:
+                model: The Pyomo model being built.
+                w: Candidate index from `model.WIND_HC`.
+
+            Returns:
+                A Pyomo inequality expression.
+            """
             return (
                 model.psG[w] ** 2 + model.qsG[w] ** 2
                 >= model.SWmin[w] ** 2 * model.y[w]
@@ -174,9 +219,33 @@ class HC_ACOPF(ACOPF):
 
         # HC Q-P bounds (VDE-AR-N 4105; configurable via qp_min / qp_max)
         def QW_min(model, w):
+            r"""Lower Q(P) bound for candidate `w`.
+
+            $q \ge \underline{m} \, p$, the simplified straight-line form of
+            the grid-code Q(P) envelope used for hosting capacity (slope from
+            `qp_min`).
+
+            Args:
+                model: The Pyomo model being built.
+                w: Candidate index from `model.WIND_HC`.
+
+            Returns:
+                A Pyomo inequality expression.
+            """
             return model.qsG[w] >= self.qp_min * model.psG[w]
 
         def QW_max(model, w):
+            r"""Upper Q(P) bound for candidate `w`.
+
+            $q \le \overline{m} \, p$, the mirror of `QW_min`.
+
+            Args:
+                model: The Pyomo model being built.
+                w: Candidate index from `model.WIND_HC`.
+
+            Returns:
+                A Pyomo inequality expression.
+            """
             return model.qsG[w] <= self.qp_max * model.psG[w]
 
         self.model.QW_min_constraint = pyo.Constraint(
@@ -189,6 +258,20 @@ class HC_ACOPF(ACOPF):
         hc_sGbs_lookup = {g: b for (g, b) in self.model.sGbs}
 
         def QU_min_hc(model, w):
+            r"""Lower Q(U) bound for candidate `w`.
+
+            $q \ge (m \, v_b + c) \, p$ at the candidate's own bus: the
+            reactive floor follows the terminal voltage and scales with the
+            active output. Bilinear in $v_b$ and $p$, hence nonconvex.
+
+            Args:
+                model: The Pyomo model being built.
+                w: Candidate index from `model.WIND_HC`.
+
+            Returns:
+                A Pyomo inequality expression, or `Constraint.Skip` if the
+                candidate has no bus entry in `model.sGbs`.
+            """
             if w not in hc_sGbs_lookup:
                 return pyo.Constraint.Skip
             b = hc_sGbs_lookup[w]
@@ -202,6 +285,18 @@ class HC_ACOPF(ACOPF):
         )
 
         def QU_max_hc(model, w):
+            r"""Upper Q(U) bound for candidate `w`.
+
+            The mirror of `QU_min_hc`: $q \le (m \, v_b + c) \, p$.
+
+            Args:
+                model: The Pyomo model being built.
+                w: Candidate index from `model.WIND_HC`.
+
+            Returns:
+                A Pyomo inequality expression, or `Constraint.Skip` if the
+                candidate has no bus entry.
+            """
             if w not in hc_sGbs_lookup:
                 return pyo.Constraint.Skip
             b = hc_sGbs_lookup[w]
@@ -217,6 +312,18 @@ class HC_ACOPF(ACOPF):
         if "windpot_p_mw" in self.net.bus:
 
             def PW_max(model, w):
+                """Cap candidate `w` at the bus's wind potential.
+
+                Added only when `net.bus` carries a `windpot_p_mw` column,
+                which records how much wind the site could physically host.
+
+                Args:
+                    model: The Pyomo model being built.
+                    w: Candidate index from `model.WIND_HC`.
+
+                Returns:
+                    A Pyomo inequality expression.
+                """
                 return model.psG[w] <= model.pWmax[w]
 
             self.model.PW_max_constraint = pyo.Constraint(
@@ -236,6 +343,14 @@ class HC_ACOPF(ACOPF):
         )
 
         def objective_pwind_loss(model):
+            """Weighted trade-off between wind infeed and network losses.
+
+            Args:
+                model: The Pyomo model being built.
+
+            Returns:
+                A Pyomo expression; see `add_loss_obj` for the weighting.
+            """
             return model.eps * sum(model.psG[w] for w in model.WIND_HC) + (
                 1 - model.eps
             ) * (-sum(model.pLfrom[l] + model.pLto[l] for l in model.L))

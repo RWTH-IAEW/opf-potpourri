@@ -387,6 +387,16 @@ def _describe(row: dict, tag: str) -> str:
 
 
 def main():
+    """Run the analysis this script demonstrates.
+
+    Configuration comes from the module-level constants above, not from the
+    command line. Edit those, or import and call this function, to change what
+    is run.
+
+    Returns:
+        None. Results are printed, and written to the paths named in the
+        configuration block where the script produces files.
+    """
     jobs = []
     for group in GROUPS:
         for full_name, nodes in _select_cases(group, CASES, MAX_BUSES):

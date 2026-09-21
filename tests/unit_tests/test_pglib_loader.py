@@ -142,8 +142,11 @@ def test_transformer_tap_sits_on_matpower_from_bus(tiny_case):
 def test_loaded_case_runs_a_power_flow_that_matches_matpower_admittance(
     tiny_case,
 ):
-    """With the tap on the right side the diagonal of Ybus follows MATPOWER:
-    the LV bus sees ys / TAP², the HV bus sees ys."""
+    """The Ybus diagonal follows MATPOWER when the tap is right.
+
+    With the tap on the right side the diagonal of Ybus follows MATPOWER:
+    the LV bus sees ys / TAP², the HV bus sees ys.
+    """
     from pandapower.pypower.makeYbus import makeYbus
 
     net = load_pglib_case(tiny_case)
@@ -161,8 +164,11 @@ def test_loaded_case_runs_a_power_flow_that_matches_matpower_admittance(
 
 
 def test_baseline_parser_keeps_rows_powermodels_found_infeasible(tmp_path):
-    """Most SAD rows carry ``inf.`` in the DC column; their AC reference must
-    survive parsing and the DC value must come back as ``inf``."""
+    """An 'inf.' DC reference must not break parsing.
+
+    Most SAD rows carry ``inf.`` in the DC column; their AC reference must
+    survive parsing and the DC value must come back as ``inf``.
+    """
     import math
 
     from potpourri.benchmarks.pglib import parse_baseline_md

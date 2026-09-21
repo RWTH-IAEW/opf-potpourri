@@ -324,6 +324,7 @@ def _pinned_snapshot(lv_net, dispatch=None):
     comparison between two runs is not a reliable probe of coupling.
 
     Args:
+        lv_net: The low-voltage pandapower network to solve.
         dispatch: ``None`` for no battery, else ``(p_chg, p_dis, q)`` bounds to
             hold the battery at. Bounds rather than ``fix()``, so the
             capability constraints keep at least one free variable and the NL

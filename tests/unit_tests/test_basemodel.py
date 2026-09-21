@@ -89,7 +89,7 @@ def test_dcopf_line_limits_non_negative(four_bus):
 
 
 def test_acopf_basemva_positive(four_bus):
-    """baseMVA must be a positive scalar."""
+    """BaseMVA must be a positive scalar."""
     acopf = ACOPF(four_bus)
     assert pyo.value(acopf.model.baseMVA) > 0
 

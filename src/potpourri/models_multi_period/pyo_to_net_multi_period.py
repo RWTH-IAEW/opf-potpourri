@@ -2,8 +2,10 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Post-processing for multi-period models: reads Pyomo solution at time t
-into net.res_* DataFrames."""
+"""Post-processing for multi-period models.
+
+Reads Pyomo solution at time t into net.res_* DataFrames.
+"""
 
 import numpy as np
 import pandas as pd
@@ -46,6 +48,21 @@ def pyo_sol_to_net_res(net, model, t):
 
 
 def _bus_voltage_results_to_net(net, model, t):
+    """Write bus voltages into `net.res_bus`.
+
+    Magnitudes in p.u. and angles in degrees (the model holds radians). On a DC
+    model there are no magnitudes to read, so the generator and external-grid
+    set points are written and every other bus is left at 1.0 p.u.
+
+    Args:
+        net: The network to write results into.
+        model: The solved Pyomo model to read.
+        t: Time step to write. `net.res_*` has no time dimension, so one step
+            is written at a time.
+
+    Returns:
+        None. The result tables are filled in place.
+    """
     bus_lookup = net._pd2ppc_lookups["bus"]
     bus_idx = bus_lookup[net.bus.index.values]
 
@@ -70,6 +87,17 @@ def _bus_voltage_results_to_net(net, model, t):
 
 
 def _get_bus_power_results(net):
+    """Aggregate element powers onto their buses.
+
+    Sums load, sgen, gen, ext_grid and shunt results per bus, so `res_bus.p_mw`
+    reports the net injection there.
+
+    Args:
+        net: The network to write results into.
+
+    Returns:
+        None. The result tables are filled in place.
+    """
     bus_pq = np.zeros(shape=(len(net["bus"].index), 2), dtype=np.float64)
     elements = ["load", "sgen", "gen", "ext_grid", "shunt"]
 
@@ -111,6 +139,22 @@ def _get_bus_power_results(net):
 
 
 def _line_results_to_net(net, model, t):
+    """Write line flows and loading into `net.res_line`.
+
+    Fills both ends, the loss (`p_from + p_to`, which is what is left in the
+    branch) and the loading percentage. Rows that the model carries as
+    synthetic lines for `net.impedance` are written to `net.res_impedance`
+    instead.
+
+    Args:
+        net: The network to write results into.
+        model: The solved Pyomo model to read.
+        t: Time step to write. `net.res_*` has no time dimension, so one step
+            is written at a time.
+
+    Returns:
+        None. The result tables are filled in place.
+    """
     # --- lines ---
     # voltage on lines
     net.res_line.vm_from_pu = pd.Series(
@@ -186,6 +230,17 @@ def _line_results_to_net(net, model, t):
 
 
 def _ext_grid_results_to_net(net, model, t):
+    """Write the external-grid dispatch into `net.res_ext_grid`.
+
+    Args:
+        net: The network to write results into.
+        model: The solved Pyomo model to read.
+        t: Time step to write. `net.res_*` has no time dimension, so one step
+            is written at a time.
+
+    Returns:
+        None. The result tables are filled in place.
+    """
     # --- external grid ---
     net.res_ext_grid.p_mw = pd.Series(
         model.peG[:, t].get_values(), index=net.ext_grid.index
@@ -198,6 +253,17 @@ def _ext_grid_results_to_net(net, model, t):
 
 
 def _generation_results_to_net(net, model, t):
+    """Write the external-grid dispatch into `net.res_ext_grid`.
+
+    Args:
+        net: The network to write results into.
+        model: The solved Pyomo model to read.
+        t: Time step to write. `net.res_*` has no time dimension, so one step
+            is written at a time.
+
+    Returns:
+        None. The result tables are filled in place.
+    """
     pg = model.pG.get_values()
     for gen, ord in net._gen_order.items():
         net["res_" + gen].p_mw = [pg[i, t] for i in range(ord[0], ord[1])]
@@ -217,6 +283,20 @@ def _generation_results_to_net(net, model, t):
 
 
 def _load_results_to_net(net, model, t):
+    """Write the load dispatch into `net.res_load`.
+
+    A controllable load may differ from its set point; a fixed one reproduces
+    it.
+
+    Args:
+        net: The network to write results into.
+        model: The solved Pyomo model to read.
+        t: Time step to write. `net.res_*` has no time dimension, so one step
+            is written at a time.
+
+    Returns:
+        None. The result tables are filled in place.
+    """
     net.res_load = pd.DataFrame(
         columns=["p_mw", "q_mvar"], index=net.load.index, dtype=float
     )
@@ -243,6 +323,19 @@ def _load_results_to_net(net, model, t):
 
 
 def _sgen_results_to_net(net, model, t):
+    """Write the static-generator dispatch into `net.res_sgen`.
+
+    Generator sign convention: positive is injection.
+
+    Args:
+        net: The network to write results into.
+        model: The solved Pyomo model to read.
+        t: Time step to write. `net.res_*` has no time dimension, so one step
+            is written at a time.
+
+    Returns:
+        None. The result tables are filled in place.
+    """
     # --- sgen ---
     net.res_sgen = pd.DataFrame(
         columns=["p_mw", "q_mvar"], index=net.sgen.index, dtype=float
@@ -285,6 +378,17 @@ def _sgen_results_to_net(net, model, t):
 
 
 def _gen_results_to_net(net, model, t):
+    """Write the generator dispatch into `net.res_gen`.
+
+    Args:
+        net: The network to write results into.
+        model: The solved Pyomo model to read.
+        t: Time step to write. `net.res_*` has no time dimension, so one step
+            is written at a time.
+
+    Returns:
+        None. The result tables are filled in place.
+    """
     # --- gen ---
     net.res_gen = pd.DataFrame(
         columns=["p_mw", "q_mvar", "va_degree", "vm_pu"],
@@ -304,6 +408,19 @@ def _gen_results_to_net(net, model, t):
 
 
 def _trafo_results_to_net(net, model, t):
+    """Write transformer flows and loading into `net.res_trafo`.
+
+    Both windings, plus the loading percentage against the nameplate rating.
+
+    Args:
+        net: The network to write results into.
+        model: The solved Pyomo model to read.
+        t: Time step to write. `net.res_*` has no time dimension, so one step
+            is written at a time.
+
+    Returns:
+        None. The result tables are filled in place.
+    """
     net.res_trafo.p_hv_mw = pd.Series(
         [model.pThv[i, t].value for i in net.trafo.index],
         index=net.trafo.index,
@@ -391,6 +508,20 @@ def _trafo_results_to_net(net, model, t):
 
 
 def _shunt_results_to_net(net, model, t):
+    """Write shunt consumption into `net.res_shunt`.
+
+    Computed from the solved bus voltage and the shunt's admittance, so it
+    follows $v^2$ rather than the set point.
+
+    Args:
+        net: The network to write results into.
+        model: The solved Pyomo model to read.
+        t: Time step to write. `net.res_*` has no time dimension, so one step
+            is written at a time.
+
+    Returns:
+        None. The result tables are filled in place.
+    """
     for s in model.SHUNT:
         net.res_shunt.loc[s, "p_mw"] = (
             model.GB[s, t]

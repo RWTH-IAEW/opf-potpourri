@@ -2,8 +2,10 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Multi-period DC power flow mixin: adds linearised DC equations indexed
-over time steps."""
+"""Multi-period DC power flow mixin.
+
+Adds linearised DC equations indexed over time steps.
+"""
 
 import numpy as np
 import pandas as pd
@@ -66,7 +68,9 @@ class DC_multi_period(Basemodel_multi_period):
         self.create_model()
 
     def create_model(self):
-        """Build the multi-period DC Pyomo model with susceptance parameters
+        """Build the multi-period DC model, in place.
+
+        Build the multi-period DC Pyomo model with susceptance parameters
         and time-variant KCL/KVL constraints.
 
         Conventions
@@ -111,24 +115,74 @@ class DC_multi_period(Basemodel_multi_period):
         # --- KVL on lines + impedance branches ---
         @self.model.Constraint(self.model.L, self.model.T)
         def KVL_real_fromend(model, l, t):
+            """Active power entering line `l` at its from bus.
+
+            Args:
+                model: The Pyomo model being built.
+                l: Branch index.
+                t: Time index.
+
+            Returns:
+                A Pyomo expression.
+            """
             return model.pLfrom[l, t] == (-model.BL[l]) * model.deltaL[l, t]
 
         @self.model.Constraint(self.model.L, self.model.T)
         def KVL_real_toend(model, l, t):
+            """Active power entering line `l` at its to bus.
+
+            Args:
+                model: The Pyomo model being built.
+                l: Branch index.
+                t: Time index.
+
+            Returns:
+                A Pyomo expression.
+            """
             return model.pLto[l, t] == (model.BL[l]) * model.deltaL[l, t]
 
         # --- KVL on transformers ---
         @self.model.Constraint(self.model.TRANSF, self.model.T)
         def KVL_trans_fromend(model, l, t):
+            """Active power entering transformer `l` at its HV bus.
+
+            Args:
+                model: The Pyomo model being built.
+                l: Branch index.
+                t: Time index.
+
+            Returns:
+                A Pyomo expression.
+            """
             return model.pThv[l, t] == (-model.BLT[l]) * model.deltaLT[l, t]
 
         @self.model.Constraint(self.model.TRANSF, self.model.T)
         def KVL_trans_toend(model, l, t):
+            """Active power entering transformer `l` at its LV bus.
+
+            Args:
+                model: The Pyomo model being built.
+                l: Branch index.
+                t: Time index.
+
+            Returns:
+                A Pyomo expression.
+            """
             return model.pTlv[l, t] == (model.BLT[l]) * model.deltaLT[l, t]
 
         # --- angle-difference identities ---
         @self.model.Constraint(self.model.L, self.model.T)
         def phase_angle_diff1(model, l, t):
+            """Upper bound on a branch's angle difference.
+
+            Args:
+                model: The Pyomo model being built.
+                l: Branch index.
+                t: Time index.
+
+            Returns:
+                A Pyomo expression.
+            """
             return (
                 model.deltaL[l, t]
                 == model.delta[model.A[l, 1], t]
@@ -137,6 +191,16 @@ class DC_multi_period(Basemodel_multi_period):
 
         @self.model.Constraint(self.model.TRANSF, self.model.T)
         def phase_angle_diff2(model, l, t):
+            """Lower bound on a branch's angle difference.
+
+            Args:
+                model: The Pyomo model being built.
+                l: Branch index.
+                t: Time index.
+
+            Returns:
+                A Pyomo expression.
+            """
             return (
                 model.deltaLT[l, t]
                 == model.delta[model.AT[l, 1], t]
@@ -148,6 +212,16 @@ class DC_multi_period(Basemodel_multi_period):
     KCL_CONSTRAINTS = ("KCL_def",)
 
     def _kcl_def_rule(self, model, b, t):
+        """Active-power balance at bus `b`.
+
+        Args:
+            model: The Pyomo model being built.
+            b: Bus index (a ppc bus number).
+            t: Time index.
+
+        Returns:
+            A Pyomo expression.
+        """
         kcl = sum(
             model.psG[g, t] for g in model.sG if (g, b) in model.sGbs
         ) + sum(model.pG[g, t] for g in model.G if (g, b) in model.Gbs) == sum(

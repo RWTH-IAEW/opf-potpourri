@@ -2,8 +2,11 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Plotting utilities for pandapower networks and OPF results (wind HC,
-PQ/QU grid codes, generation bars)."""
+"""Plots of networks, grid-code envelopes and OPF results.
+
+Plotting utilities for pandapower networks and OPF results (wind HC,
+PQ/QU grid codes, generation bars).
+"""
 
 import pandapower as pp
 import numpy as np
@@ -11,8 +14,11 @@ import matplotlib.pyplot as plt
 
 
 def set_plt_config():
-    """Configure matplotlib rcParams with RWTH Aachen corporate-design
-    colours and fonts."""
+    """Apply the RWTH Aachen corporate-design matplotlib style.
+
+    Configure matplotlib rcParams with RWTH Aachen corporate-design
+    colours and fonts.
+    """
     config = {}
     config["textbreite"] = 16
     config["textbreite"] = config["textbreite"] / 2.54  # Umrechnung inches
@@ -83,8 +89,11 @@ def set_plt_config():
 
 
 def plot_wind_potential(net):
-    """Plot a network map with marker size scaled to windpot_p_mw bus
-    attribute."""
+    """Network map with markers scaled by wind potential.
+
+    Plot a network map with marker size scaled to windpot_p_mw bus
+    attribute.
+    """
     # create marker trace with marker size scaled according to wind generation
     wind_pot_trace = pp.plotting.create_weighted_marker_trace(
         net,
@@ -218,8 +227,11 @@ def plot_sgen_load(net):
 
 
 def plot_pq_gridcodes():
-    """Plot P(Q) grid-code characteristic curves for wind generator
-    variants 1-3."""
+    """Grid-code P(Q) envelopes for wind variants 1-3.
+
+    Plot P(Q) grid-code characteristic curves for wind generator
+    variants 1-3.
+    """
     clrs = [
         "#00549F",
         "#000000",
@@ -271,8 +283,11 @@ def plot_pq_gridcodes():
 
 
 def plot_pq_res(nets, labels=None):
-    """Scatter plot of P/Q operating points for HC and regular wind generators
-    across nets."""
+    """Scatter of P/Q operating points across networks.
+
+    Scatter plot of P/Q operating points for HC and regular wind generators
+    across nets.
+    """
     clrs = [
         "#00549F",
         "#E30066",
@@ -370,8 +385,11 @@ def plot_pq_res(nets, labels=None):
 
 
 def plot_qu_gridcodes():
-    """Plot Q(U) grid-code characteristic curves for wind generator
-    variants 1-3."""
+    """Grid-code Q(U) envelopes for wind variants 1-3.
+
+    Plot Q(U) grid-code characteristic curves for wind generator
+    variants 1-3.
+    """
     clrs = [
         "#00549F",
         "#000000",
@@ -417,8 +435,11 @@ def plot_qu_gridcodes():
 
 
 def plot_qu_res(nets, labels=None):
-    """Scatter plot of Q/V operating points for HC and regular wind generators
-    across nets."""
+    """Scatter of Q/V operating points across networks.
+
+    Scatter plot of Q/V operating points for HC and regular wind generators
+    across nets.
+    """
     # values for variant 1
     m_qu = (0.48 + 0.23) / (96 - 103) * 110
     m_qu_min = (0.33 + 0.41) / (96 - 103) * 110
@@ -504,8 +525,11 @@ def plot_qu_res(nets, labels=None):
 
 
 def plot_all_pG(hcs):  # noqa: F811 — intentional override below
-    """Bar plot of wind generator active power across multiple HC solution
-    objects (dict-based version)."""
+    """Bar chart of wind active power, from a dict of solutions.
+
+    Bar plot of wind generator active power across multiple HC solution
+    objects (dict-based version).
+    """
     # Initialize an empty dictionary to store the values
     values = {}
     # Exclude list
@@ -553,8 +577,11 @@ def plot_all_pG(hcs):  # noqa: F811 — intentional override below
 
 
 def plot_all_pG(hcs):  # noqa: F811
-    """Bar plot of wind generator active power across multiple HC solution
-    objects (list-based version)."""
+    """Bar chart of wind active power, from a list of solutions.
+
+    Bar plot of wind generator active power across multiple HC solution
+    objects (list-based version).
+    """
     # Initialize an empty dictionary to store the values
     values = [[] for _ in range(len(hcs[0].model.WIND))]
     ws = list(hcs[0].model.WIND)

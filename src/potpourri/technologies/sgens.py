@@ -2,8 +2,10 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Static generator (sgen) mix-in: attaches sgen profiles and OPF limits to
-a multi-period model."""
+"""Static generator (sgen) mix-in.
+
+Attaches sgen profiles and OPF limits to a multi-period model.
+"""
 
 import warnings
 
@@ -34,8 +36,11 @@ class SgenMinPAboveProfileWarning(UserWarning):
 
 
 class Sgens_multi_period(Flexibility_multi_period):
-    """Multi-period static generator device module; reads sgen profiles from
-    net.profiles."""
+    """Multi-period static generators, driven by profiles.
+
+    Multi-period static generator device module; reads sgen profiles from
+    net.profiles.
+    """
 
     def __init__(self, net, T=None, scenario=None):
         super().__init__(net, T, scenario)
@@ -64,22 +69,30 @@ class Sgens_multi_period(Flexibility_multi_period):
         )
 
     def get_all(self, model):
-        """Attach sets, parameters, and variables; fix all sgen variables to
-        profile values."""
+        """Attach the sgens and fix them to their profiles.
+
+        Attach sets, parameters, and variables; fix all sgen variables to
+        profile values.
+        """
         self.get_sets(model)
         self.get_parameters(model)
         self.get_variables(model)
         self.fix_variables(model)
 
     def get_all_opf(self, model):
-        """Attach OPF sets, parameters, and real-power bound constraints for
-        controllable sgens."""
+        """Attach the sgen OPF bounds for controllable units.
+
+        Attach OPF sets, parameters, and real-power bound constraints for
+        controllable sgens.
+        """
         self.get_opf_sets(model)
         self.get_opf_parameters(model)
         self.get_all_Constraints_opf(model)
 
     def get_all_acopf(self, model):
-        """Attach AC-specific OPF parameters (reactive-power limits) and the
+        """Attach the reactive-power limits and their constraints.
+
+        Attach AC-specific OPF parameters (reactive-power limits) and the
         corresponding range constraints. Separated from ``get_all_opf`` so
         that the DC OPF path can ignore Q entirely.
 
@@ -106,6 +119,15 @@ class Sgens_multi_period(Flexibility_multi_period):
             self._add_sgen_cpp_mp(model)
 
     def get_sets(self, model):
+        """Add this device's index sets to `model`.
+
+        Extends the base sets with the device's own element set and its
+        element-to-bus mapping.
+
+        Returns:
+                True, so a caller can chain the lifecycle steps. The real
+                result is the components added to `model`.
+        """
         super().get_sets(model)
         # list, no set, because list is ordered data source, set is not
         self.sgens_in_service_list = np.where(
@@ -121,6 +143,14 @@ class Sgens_multi_period(Flexibility_multi_period):
         return True
 
     def get_opf_sets(self, model):
+        """Add the controllable subset of this device to `model`.
+
+        Only the elements flagged controllable in the pandapower table get
+        operating bounds; the rest stay at their profile.
+
+        Returns:
+                None. The components are added to `model` in place.
+        """
         # list, no set, because list is ordered data source, set is not
         self.sgens_controllable_list = np.where(
             self.static_generation_data["controllable"]
@@ -136,6 +166,15 @@ class Sgens_multi_period(Flexibility_multi_period):
         )  # static generators that are controllable and in service
 
     def get_parameters(self, model):
+        """Add the device's active-power parameters to `model`.
+
+        Values are spread over the time index by `make_to_dict`, so each
+        parameter is keyed by `(element, time)` and carried in per unit.
+
+        Returns:
+                True, so a caller can chain the lifecycle steps. The real
+                result is the components added to `model`.
+        """
         self.PsG_data_dict, self.PsG_tuple = self.make_to_dict(
             model.sG, model.T, self.static_generation_data["p"]
         )
@@ -149,7 +188,9 @@ class Sgens_multi_period(Flexibility_multi_period):
         return True
 
     def get_opf_parameters(self, model):
-        """Attach the OPF parameters that are common to AC and DC: the
+        """Attach the OPF parameters shared by AC and DC.
+
+        Attach the OPF parameters that are common to AC and DC: the
         controllable-sgen real-power bounds. The reactive-power bounds
         (`QsGmax` / `QsGmin`) are AC-specific and live in
         :meth:`get_acopf_parameters`; calling ``get_opf_parameters`` from the
@@ -267,6 +308,20 @@ class Sgens_multi_period(Flexibility_multi_period):
 
         @model.Constraint(model.sGqc, model.T, model.sG_QP_PIECE)
         def sG_QP_pos(model, g, t, k):
+            """Upper Q(P) capability piece for sgen `g` at time `t`.
+
+            One affine piece of the grid-code envelope; together the pieces
+            form its pointwise minimum.
+
+            Args:
+                model: The Pyomo model being extended.
+                g: Static-generator index.
+                t: Time index from `model.T`.
+                k: Piece index of the piecewise envelope.
+
+            Returns:
+                A Pyomo expression.
+            """
             pieces = pq_area.upper_pieces(var_q[g], DEFAULT_P_RANGE_PU)
             if k >= len(pieces):
                 return pyo.Constraint.Skip
@@ -275,6 +330,19 @@ class Sgens_multi_period(Flexibility_multi_period):
 
         @model.Constraint(model.sGqc, model.T, model.sG_QP_PIECE)
         def sG_QP_neg(model, g, t, k):
+            """Lower Q(P) capability piece for sgen `g` at time `t`.
+
+            The mirror of `sG_QP_pos`, forming the pointwise maximum.
+
+            Args:
+                model: The Pyomo model being extended.
+                g: Static-generator index.
+                t: Time index from `model.T`.
+                k: Piece index of the piecewise envelope.
+
+            Returns:
+                A Pyomo expression.
+            """
             pieces = pq_area.lower_pieces(var_q[g], DEFAULT_P_RANGE_PU)
             if k >= len(pieces):
                 return pyo.Constraint.Skip
@@ -317,6 +385,20 @@ class Sgens_multi_period(Flexibility_multi_period):
 
         @model.Constraint(model.sGqc, model.T, model.sG_QU_PIECE)
         def sG_QU_min(model, g, t, k):
+            """Lower Q(U) capability piece for sgen `g` at time `t`.
+
+            Evaluated at the generator's own bus voltage, so this needs an AC
+            model.
+
+            Args:
+                model: The Pyomo model being extended.
+                g: Static-generator index.
+                t: Time index from `model.T`.
+                k: Piece index of the piecewise envelope.
+
+            Returns:
+                A Pyomo expression.
+            """
             if g not in sGbs_lookup:
                 return pyo.Constraint.Skip
             pieces = qv_area.lower_pieces(var_q[g], v_span)
@@ -328,6 +410,19 @@ class Sgens_multi_period(Flexibility_multi_period):
 
         @model.Constraint(model.sGqc, model.T, model.sG_QU_PIECE)
         def sG_QU_max(model, g, t, k):
+            """Upper Q(U) capability piece for sgen `g` at time `t`.
+
+            The mirror of `sG_QU_min`.
+
+            Args:
+                model: The Pyomo model being extended.
+                g: Static-generator index.
+                t: Time index from `model.T`.
+                k: Piece index of the piecewise envelope.
+
+            Returns:
+                A Pyomo expression.
+            """
             if g not in sGbs_lookup:
                 return pyo.Constraint.Skip
             pieces = qv_area.upper_pieces(var_q[g], v_span)
@@ -411,6 +506,18 @@ class Sgens_multi_period(Flexibility_multi_period):
 
         @model.Constraint(model.sGinv, model.T)
         def sgen_inverter_s2(model, g, t):
+            r"""Inverter apparent-power circle for sgen `g` at time `t`.
+
+            $p^2 + q^2 \le S_{inv}^2$: reactive support costs active headroom.
+
+            Args:
+                model: The Pyomo model being extended.
+                g: Static-generator index.
+                t: Time index from `model.T`.
+
+            Returns:
+                A Pyomo expression.
+            """
             return (
                 model.psG[g, t] ** 2 + model.qsG[g, t] ** 2
                 <= model.S_inv[g] ** 2
@@ -427,16 +534,62 @@ class Sgens_multi_period(Flexibility_multi_period):
 
             @model.Constraint(model.sGpf, model.T)
             def sgen_cos_phi_upper(model, g, t):
+                """Upper power-factor bound for sgen `g` at time `t`.
+
+                Args:
+                    model: The Pyomo model being extended.
+                    g: Static-generator index.
+                    t: Time index from `model.T`.
+
+                Returns:
+                    A Pyomo expression.
+                """
                 return model.qsG[g, t] <= model.tan_phi[g] * model.psG[g, t]
 
             @model.Constraint(model.sGpf, model.T)
             def sgen_cos_phi_lower(model, g, t):
+                """Lower power-factor bound for sgen `g` at time `t`.
+
+                Args:
+                    model: The Pyomo model being extended.
+                    g: Static-generator index.
+                    t: Time index from `model.T`.
+
+                Returns:
+                    A Pyomo expression.
+                """
                 return model.qsG[g, t] >= -model.tan_phi[g] * model.psG[g, t]
 
     def get_all_Constraints_opf(self, model):
+        """Add the active-power bound constraints for static gens.
+
+        Each rule unfixes `psG` before returning Pyomo's `(lower, expr, upper)`
+        ranged form, so a controllable static generator becomes dispatchable
+        between its limits.
+
+        Args:
+            model: The multi-period model being extended.
+
+        Returns:
+            None. The constraints are added to `model`.
+        """
+
         # psG Constraint
         @model.Constraint(model.sGc, model.T)
         def static_generation_real_power_bounds(model, g, t):
+            """Bound the active power of sgen `g` at time `t`.
+
+            Unfixes `psG` before returning the bounds, so a controllable unit
+            becomes dispatchable.
+
+            Args:
+                model: The Pyomo model being extended.
+                g: Static-generator index.
+                t: Time index from `model.T`.
+
+            Returns:
+                A Pyomo expression.
+            """
             model.psG[(g, t)].unfix()
             return (
                 model.sPGmin[(g, t)],
@@ -445,6 +598,14 @@ class Sgens_multi_period(Flexibility_multi_period):
             )
 
     def get_variables(self, model):
+        """Add the device's active-power variables to `model`.
+
+        Indexed by `(element, time)`, in per unit.
+
+        Returns:
+                True, so a caller can chain the lifecycle steps. The real
+                result is the components added to `model`.
+        """
         # --- Variables ---
         model.psG = pyo.Var(
             self.PsG_tuple, domain=pyo.Reals
@@ -456,6 +617,13 @@ class Sgens_multi_period(Flexibility_multi_period):
         return True
 
     def unfix_variables(self, model):
+        """Release the device's power so the solver may choose it.
+
+        The inverse of `fix_variables`.
+
+        Returns:
+                None. The components are added to `model` in place.
+        """
         # unfix the static generation values
         for g in model.sG:
             for t in model.T:
@@ -463,6 +631,14 @@ class Sgens_multi_period(Flexibility_multi_period):
         return True
 
     def fix_variables(self, model):
+        """Pin the device's power to its profile.
+
+        Fixes each variable at the corresponding parameter value, so the device
+        behaves as a fixed injection until an OPF layer frees it again.
+
+        Returns:
+                None. The components are added to `model` in place.
+        """
         # fix the static generation values
         for g in model.sG:
             for t in model.T:
@@ -475,6 +651,19 @@ class Sgens_multi_period(Flexibility_multi_period):
     #     return True
 
     def static_generation_real_power_limits(self, model):
+        """Work out the active-power limits of static generators.
+
+        Controllable units get bounds from the network's `max_p_mw` /
+        `min_p_mw` columns; the rest keep their profile value. Results are
+        stored on `self.static_generation_data` for the parameter builders to
+        pick up.
+
+        Args:
+            model: The multi-period model being extended.
+
+        Returns:
+            None. Stores its results on `self`.
+        """
         if "controllable" in self.net.sgen:
             self.static_generation_data["controllable"] = (
                 self.net.sgen.controllable.values
@@ -563,6 +752,17 @@ class Sgens_multi_period(Flexibility_multi_period):
         )
 
     def static_generation_reactive_power_limits(self, model):
+        """Work out the reactive-power limits of static generators.
+
+        The reactive counterpart of `static_generation_real_power_limits`; AC
+        models only.
+
+        Args:
+            model: The multi-period model being extended.
+
+        Returns:
+            None. Stores its results on `self`.
+        """
         if "controllable" in self.net.sgen:
             self.static_generation_data["controllable"] = (
                 self.net.sgen.controllable.values
@@ -626,9 +826,33 @@ class Sgens_multi_period(Flexibility_multi_period):
                     self.QsGmin_data_dict[key] = lo
 
     def get_all_Constraints_acopf(self, model):
+        """Add the reactive-power bound constraints for static gens.
+
+        As `get_all_Constraints_opf`, for reactive power: the rule unfixes
+        `qsG` and returns a ranged constraint.
+
+        Args:
+            model: The multi-period model being extended.
+
+        Returns:
+            None. The constraints are added to `model`.
+        """
+
         # QsG_Constraint
         @model.Constraint(model.sGc, model.T)
         def static_generation_reactive_power_bounds(model, g, t):
+            """Bound the reactive power of sgen `g` at time `t`.
+
+            Unfixes `qsG` before returning the bounds.
+
+            Args:
+                model: The Pyomo model being extended.
+                g: Static-generator index.
+                t: Time index from `model.T`.
+
+            Returns:
+                A Pyomo expression.
+            """
             model.qsG[(g, t)].unfix()
             return (
                 model.QsGmin[(g, t)],
@@ -727,6 +951,20 @@ class Sgens_multi_period(Flexibility_multi_period):
 
         @model.Constraint(model.sGpu, model.T)
         def sgen_pu_curtail(model, g, t):
+            """P(U) curtailment ramp for sgen `g` at time `t`.
+
+            Above a voltage threshold the admissible active power falls
+            linearly to zero. Written multiplied through by the voltage span so
+            it stays linear and cannot divide by zero.
+
+            Args:
+                model: The Pyomo model being extended.
+                g: Static-generator index.
+                t: Time index from `model.T`.
+
+            Returns:
+                A Pyomo expression.
+            """
             if g not in sGbs_lookup:
                 return pyo.Constraint.Skip
             b = sGbs_lookup[g]
@@ -784,6 +1022,18 @@ class Sgens_multi_period(Flexibility_multi_period):
 
         @model.Constraint(model.sGfcf, model.T)
         def sgen_fixed_cos_phi(model, g, t):
+            """Fixed power factor for sgen `g` at time `t`.
+
+            An equality, so reactive power stops being an independent decision.
+
+            Args:
+                model: The Pyomo model being extended.
+                g: Static-generator index.
+                t: Time index from `model.T`.
+
+            Returns:
+                A Pyomo expression.
+            """
             return model.qsG[g, t] == model.fixed_tan_phi[g] * model.psG[g, t]
 
     # ------------------------------------------------------------------
@@ -892,6 +1142,18 @@ class Sgens_multi_period(Flexibility_multi_period):
 
         @model.Constraint(model.sGcpp, model.T)
         def sgen_cpp(model, g, t):
+            """cos(phi)(P) characteristic for sgen `g` at time `t`.
+
+            Quadratic in the active power, hence nonconvex.
+
+            Args:
+                model: The Pyomo model being extended.
+                g: Static-generator index.
+                t: Time index from `model.T`.
+
+            Returns:
+                A Pyomo expression.
+            """
             dPn = model.cpp_Pn[g] - model.cpp_P_thresh[g]
             return model.qsG[g, t] * dPn == model.cpp_tan_phi[g] * model.psG[
                 g, t

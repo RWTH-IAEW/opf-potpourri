@@ -2,7 +2,9 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Storage reactive power must follow pandapower's load convention in the
+"""Storage reactive power follows pandapower's load convention.
+
+Storage reactive power must follow pandapower's load convention in the
 AC balance (positive q_mvar = consumption), like its active power.
 
 Before the fix ``KCL_reactive`` added ``qSTOR`` on the generation side while

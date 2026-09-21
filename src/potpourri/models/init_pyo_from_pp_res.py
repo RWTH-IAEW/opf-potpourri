@@ -2,6 +2,23 @@
 #
 # SPDX-License-Identifier: MIT
 
+"""Warm-start a single-period model from a pandapower power flow.
+
+A cold AC OPF starts from a flat profile -- every voltage at 1 p.u.,
+every angle and branch flow at zero -- which satisfies none of the
+power-flow equations, so the solver spends its first iterations simply
+finding a feasible point. Seeding the variables with a converged
+pandapower result starts it near the manifold instead.
+
+This only sets starting values. It changes no bound, fixes nothing, and
+has no effect on the optimum a solver should find -- only on how
+quickly, and on which local optimum a nonconvex problem lands in.
+
+See Also:
+    `potpourri.models_multi_period.init_pyo_from_pp_res_multi_period`:
+        the same idea applied per time step.
+"""
+
 import math
 import pandapower as pp
 

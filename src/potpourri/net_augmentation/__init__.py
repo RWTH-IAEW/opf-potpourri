@@ -2,5 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Network augmentation utilities: load case scaling and pandapower network
-preparation helpers."""
+"""Network augmentation utilities.
+
+Load case scaling and pandapower network preparation helpers.
+"""

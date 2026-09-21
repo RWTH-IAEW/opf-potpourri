@@ -2,8 +2,11 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Battery mix-in: attaches battery storage sets, parameters, variables,
-and constraints to a multi-period model."""
+"""Battery mix-in.
+
+Attaches battery storage sets, parameters, variables, and constraints to a
+multi-period model.
+"""
 
 import math
 
@@ -214,8 +217,11 @@ class Battery_multi_period(Flexibility_multi_period):
             )
 
     def get_all(self, model):
-        """Attach battery sets, parameters, variables, and constraints to the
-        model, and couple its power into the nodal balance."""
+        """Attach the battery to a model and couple it to the balance.
+
+        Attach battery sets, parameters, variables, and constraints to the
+        model, and couple its power into the nodal balance.
+        """
         self.get_sets(model)
         self.get_parameters(model)
         self.get_variables(model)
@@ -253,8 +259,7 @@ class Battery_multi_period(Flexibility_multi_period):
         return True
 
     def get_parameters(self, model):
-        """Attach battery power, SOC bounds, capacity, and efficiency
-        parameters."""
+        """Attach the battery power, SOC, capacity and efficiency data."""
         model.BAT_Pmax = pyo.Param(
             model.BAT, within=pyo.Reals, initialize=self.bat_power
         )
@@ -329,6 +334,20 @@ class Battery_multi_period(Flexibility_multi_period):
         )
 
         def bat_injection_rule(model, b, t):
+            """Net active power of battery `b` at time `t`.
+
+            $P_{chg} - P_{dis}$, in the **load** convention: positive while
+            charging. An `Expression`, not a variable, so it carries no
+            constraint of its own.
+
+            Args:
+                model: The multi-period model being extended.
+                b: Battery index from `model.BAT`.
+                t: Time index from `model.T`.
+
+            Returns:
+                A Pyomo expression in p.u.
+            """
             return model.BAT_Pchg[b, t] - model.BAT_Pdis[b, t]
 
         model.BAT_P = pyo.Expression(
@@ -358,9 +377,29 @@ class Battery_multi_period(Flexibility_multi_period):
         """Add power-bound, SOC-bound, SOC-update and terminal constraints."""
 
         def bat_chg_limit_rule(model, b, t):
+            r"""Cap the charging power of battery `b` at time `t`.
+
+            Args:
+                model: The multi-period model being extended.
+                b: Battery index from `model.BAT`.
+                t: Time index from `model.T`.
+
+            Returns:
+                A Pyomo inequality, $P_{chg} \le P_{max}$ (p.u.).
+            """
             return model.BAT_Pchg[b, t] <= model.BAT_Pmax[b]
 
         def bat_dis_limit_rule(model, b, t):
+            r"""Cap the discharging power of battery `b` at time `t`.
+
+            Args:
+                model: The multi-period model being extended.
+                b: Battery index from `model.BAT`.
+                t: Time index from `model.T`.
+
+            Returns:
+                A Pyomo inequality, $P_{dis} \le P_{max}$ (p.u.).
+            """
             # BAT_Pmin is the (negative) discharge limit on the signed
             # injection, so its magnitude bounds the discharge leg.
             return model.BAT_Pdis[b, t] <= -model.BAT_Pmin[b]
@@ -373,6 +412,21 @@ class Battery_multi_period(Flexibility_multi_period):
         )
 
         def bat_power_rule(model, b, t):
+            r"""Discourage charging and discharging `b` at the same time.
+
+            $P_{chg} + P_{dis} \le P_{max}$: the convex relaxation of the
+            charge-or-discharge disjunction. It does not forbid doing both --
+            that needs a binary and a MINLP -- so a solver can still split the
+            rating if the objective happens to reward the resulting losses.
+
+            Args:
+                model: The multi-period model being extended.
+                b: Battery index from `model.BAT`.
+                t: Time index from `model.T`.
+
+            Returns:
+                A Pyomo inequality expression.
+            """
             # Converter throughput limit. Also the convex relaxation of "not
             # both legs at once": without it the optimiser can charge and
             # discharge simultaneously to burn energy through the efficiency
@@ -387,6 +441,21 @@ class Battery_multi_period(Flexibility_multi_period):
         )
 
         def bat_soc_rule(model, b, t):
+            """Pin the initial state of charge, bound it afterwards.
+
+            At the first step the SOC is fixed to `BAT_SOC_init`, which is what
+            anchors the whole trajectory; at every later step it is only
+            required to stay inside $[SOC_{min}, SOC_{max}]$.
+
+            Args:
+                model: The multi-period model being extended.
+                b: Battery index from `model.BAT`.
+                t: Time index from `model.T`.
+
+            Returns:
+                An equality at the first time step, otherwise the ranged
+                3-tuple `(SOCmin, SOC, SOCmax)`. SOC is a fraction in $[0, 1]$.
+            """
             if t == model.T.at(1):
                 return model.BAT_SOC[b, t] == model.BAT_SOC_init[b]
             return (
@@ -400,6 +469,28 @@ class Battery_multi_period(Flexibility_multi_period):
         )
 
         def bat_soc_update_rule(model, b, t):
+            r"""Carry the state of charge from one step to the next.
+
+            $$SOC_t = SOC_{t-1} + \frac{\Delta t\,
+            (\eta P_{chg,t} - P_{dis,t} / \eta)}{E_{max}}$$
+
+            This is the constraint that couples the time steps, and the reason
+            a battery cannot be modelled one snapshot at a time. Note $\eta$ is
+            the **one-way** efficiency: a full cycle returns $\eta^2$.
+
+            Units: SOC is a fraction, powers are p.u., $\Delta t$ is in hours,
+            so the quotient is dimensionless.
+
+            Args:
+                model: The multi-period model being extended.
+                b: Battery index from `model.BAT`.
+                t: Time index from `model.T`.
+
+            Returns:
+                A Pyomo equality expression, or `Constraint.Skip` at the first
+                step, which has no predecessor and is pinned by `bat_soc_rule`
+                instead.
+            """
             if t == model.T.at(1):
                 return pyo.Constraint.Skip
             # η on the way in, 1/η on the way out: a charge/discharge cycle
@@ -422,6 +513,24 @@ class Battery_multi_period(Flexibility_multi_period):
         if self.bat_terminal_soc is not None:
 
             def bat_terminal_soc_rule(model, b):
+                """Impose the terminal state of charge of battery `b`.
+
+                Added only when `bat_terminal_soc` was given. `"cyclic"` closes
+                the horizon by requiring the final SOC to equal the initial
+                one, so the schedule can be repeated; a float pins it to that
+                value.
+
+                Without this the optimiser will happily empty the battery by
+                the last step, since stored energy has no value at the
+                horizon's end.
+
+                Args:
+                    model: The multi-period model being extended.
+                    b: Battery index from `model.BAT`.
+
+                Returns:
+                    A Pyomo equality expression on the last time step.
+                """
                 last = model.T.last()
                 if self.bat_terminal_soc == "cyclic":
                     return model.BAT_SOC[b, last] == model.BAT_SOC_init[b]
@@ -458,6 +567,19 @@ class Battery_multi_period(Flexibility_multi_period):
 
         @model.Constraint(model.BAT, model.T)
         def bat_inverter_s2(model, b, t):
+            r"""Converter apparent-power limit of battery `b` at time `t`.
+
+            $P^2 + Q^2 \le S_{inv}^2$, so reactive support competes with active
+            throughput for the same rating.
+
+            Args:
+                model: The multi-period model being extended.
+                b: Battery index from `model.BAT`.
+                t: Time index from `model.T`.
+
+            Returns:
+                A Pyomo inequality expression.
+            """
             return (
                 model.BAT_P[b, t] ** 2 + model.BAT_Q[b, t] ** 2
                 <= model.BAT_Sinv[b] ** 2
@@ -470,12 +592,32 @@ class Battery_multi_period(Flexibility_multi_period):
 
             @model.Constraint(model.BAT, model.T)
             def bat_cos_phi_upper(model, b, t):
+                """Upper power-factor bound for battery `b` at time `t`.
+
+                Args:
+                    model: The multi-period model being extended.
+                    b: Battery index from `model.BAT`.
+                    t: Time index from `model.T`.
+
+                Returns:
+                    A Pyomo inequality expression.
+                """
                 return model.BAT_Q[b, t] <= model.BAT_tan_phi[b] * (
                     model.BAT_Pchg[b, t] + model.BAT_Pdis[b, t]
                 )
 
             @model.Constraint(model.BAT, model.T)
             def bat_cos_phi_lower(model, b, t):
+                """Lower power-factor bound for battery `b` at time `t`.
+
+                Args:
+                    model: The multi-period model being extended.
+                    b: Battery index from `model.BAT`.
+                    t: Time index from `model.T`.
+
+                Returns:
+                    A Pyomo inequality expression.
+                """
                 return model.BAT_Q[b, t] >= -model.BAT_tan_phi[b] * (
                     model.BAT_Pchg[b, t] + model.BAT_Pdis[b, t]
                 )
@@ -493,6 +635,20 @@ class Battery_multi_period(Flexibility_multi_period):
 
             @model.Constraint(model.BAT, model.T, range(len(pq_hi)))
             def bat_QP_pos(model, b, t, k):
+                """Upper Q(P) capability piece `k` for battery `b` at time `t`.
+
+                One affine piece of the grid-code envelope; together the pieces
+                form its pointwise minimum.
+
+                Args:
+                    model: The multi-period model being extended.
+                    b: Battery index from `model.BAT`.
+                    t: Time index from `model.T`.
+                    k: Piece index.
+
+                Returns:
+                    A Pyomo inequality expression.
+                """
                 m, c = pq_hi[k]
                 return (
                     model.BAT_Q[b, t]
@@ -501,6 +657,17 @@ class Battery_multi_period(Flexibility_multi_period):
 
             @model.Constraint(model.BAT, model.T, range(len(pq_lo)))
             def bat_QP_neg(model, b, t, k):
+                """Lower Q(P) capability piece `k` for battery `b` at time `t`.
+
+                Args:
+                    model: The multi-period model being extended.
+                    b: Battery index from `model.BAT`.
+                    t: Time index from `model.T`.
+                    k: Piece index.
+
+                Returns:
+                    A Pyomo inequality expression.
+                """
                 m, c = pq_lo[k]
                 return (
                     model.BAT_Q[b, t]
@@ -518,6 +685,20 @@ class Battery_multi_period(Flexibility_multi_period):
 
             @model.Constraint(model.BAT, model.T, range(len(qv_lo)))
             def bat_QU_min(model, b, t, k):
+                """Lower Q(U) capability piece `k` for battery `b` at time `t`.
+
+                Evaluated at the battery's own bus voltage, so this piece needs
+                an AC model; a DC model has no `v` to read.
+
+                Args:
+                    model: The multi-period model being extended.
+                    b: Battery index from `model.BAT`.
+                    t: Time index from `model.T`.
+                    k: Piece index.
+
+                Returns:
+                    A Pyomo inequality expression.
+                """
                 m, c = qv_lo[k]
                 bus = bat_bus[b]
                 return (
@@ -527,6 +708,17 @@ class Battery_multi_period(Flexibility_multi_period):
 
             @model.Constraint(model.BAT, model.T, range(len(qv_hi)))
             def bat_QU_max(model, b, t, k):
+                """Upper Q(U) capability piece `k` for battery `b` at time `t`.
+
+                Args:
+                    model: The multi-period model being extended.
+                    b: Battery index from `model.BAT`.
+                    t: Time index from `model.T`.
+                    k: Piece index.
+
+                Returns:
+                    A Pyomo inequality expression.
+                """
                 m, c = qv_hi[k]
                 bus = bat_bus[b]
                 return (

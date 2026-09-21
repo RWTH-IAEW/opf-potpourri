@@ -184,6 +184,16 @@ def voltage_stats_by_level(ac: ACOPF) -> pd.DataFrame:
 
 
 def main() -> None:
+    """Run the analysis this script demonstrates.
+
+    Configuration comes from the module-level constants above, not from the
+    command line. Edit those, or import and call this function, to change what
+    is run.
+
+    Returns:
+        None. Results are printed, and written to the paths named in the
+        configuration block where the script produces files.
+    """
     print(f"Network  : {NET_NAME}")
     print(f"Loadcase : {LOADCASE}  (high load + near-rated PV)")
     print(f"Bounds   : Vmin={VM_MIN}  Vmax={VM_MAX} p.u.\n")

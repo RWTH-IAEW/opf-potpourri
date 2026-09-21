@@ -30,9 +30,12 @@ from potpourri.models.basemodel import preprocess_grid
 
 
 def _radial_four_bus_with_tie():
-    """Ext grid at bus 0; bus 1 joined to bus 0 by a closed bus-bus switch;
+    """A closed bus-bus switch fuses its two buses.
+
+    Ext grid at bus 0; bus 1 joined to bus 0 by a closed bus-bus switch;
     a normally-open tie line 1-3 whose switch sits on bus 1; bus 3 also
-    supplied from bus 2."""
+    supplied from bus 2.
+    """
     net = pp.create_empty_network(sn_mva=1.0)
     b = [
         pp.create_bus(net, 20.0, max_vm_pu=1.1, min_vm_pu=0.9)
@@ -62,9 +65,12 @@ def _radial_four_bus_with_tie():
 
 
 def _orphan_bus_net():
-    """Bus 1 is in service but connected to nothing: pandapower numbers it
+    """An isolated in-service bus does not break the mapping.
+
+    Bus 1 is in service but connected to nothing: pandapower numbers it
     last in the ppc, so pandapower and ppc bus numbers differ for buses
-    2 and 3."""
+    2 and 3.
+    """
     net = pp.create_empty_network(sn_mva=1.0)
     b = [
         pp.create_bus(net, 20.0, max_vm_pu=1.1, min_vm_pu=0.9)
@@ -173,8 +179,11 @@ def test_open_line_switch_is_respected_by_the_model():
 
 
 def test_simple_four_bus_impedance_endpoints_still_pp_indices_when_identity():
-    """On grids where pandapower and ppc numbering coincide the endpoint
-    map is unchanged (guards the impedance-branch inclusion tests)."""
+    """The endpoint map is unchanged when numbering coincides.
+
+    On grids where pandapower and ppc numbering coincide the endpoint
+    map is unchanged (guards the impedance-branch inclusion tests).
+    """
     net = pp.networks.simple_four_bus_system()
     b_new = pp.create_bus(net, net.bus.vn_kv.iloc[-1])
     pp.create_impedance(net, net.bus.index[-2], b_new, 0.01, 0.02, 1.0)
@@ -188,8 +197,11 @@ def test_simple_four_bus_impedance_endpoints_still_pp_indices_when_identity():
 
 @pytest.mark.slow
 def test_acopf_on_merged_switch_network_matches_power_flow_at_fixed_dispatch():
-    """With sgen dispatch pinned, the AC-OPF equations must reproduce the
-    pandapower power flow of the switch-processed network."""
+    """With dispatch pinned, the OPF reproduces the power flow.
+
+    With sgen dispatch pinned, the AC-OPF equations must reproduce the
+    pandapower power flow of the switch-processed network.
+    """
     net = _radial_four_bus_with_tie()
     net.sgen["controllable"] = False
     pp.runpp(net)

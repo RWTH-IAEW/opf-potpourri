@@ -84,6 +84,9 @@ docs = [
     # directly, so declare this rather than relying on mkdocs-material
     # pulling it in transitively.
     "pymdown-extensions>=10.0",
+    # The API pages under docs/api/ are generated from the source
+    # docstrings, so building the site needs the handler.
+    "mkdocstrings[python]>=0.26",
 ]
 dev = [
     "pytest>=8.0",
@@ -94,6 +97,9 @@ dev = [
     # PQVArea classes.  The 4105/4110 ones are shapely polygons, so without
     # shapely those parity tests skip rather than run.
     "shapely>=2.0",
+    # Docstring *coverage*. Ruff's D rules judge the shape of a
+    # docstring that exists; interrogate notices a missing one.
+    "interrogate>=1.7",
 ]
 performance-test = [
     "perfplot>=0.10.2",
@@ -125,17 +131,58 @@ extend-exclude = ["*.md"]
 # new rule families, including N999, which would demand renaming public modules
 # such as ACOPF_base). Widen this list deliberately, not by upgrade.
 select = ["E4", "E7", "E9", "F"]
-extend-select = ["E501"]
+extend-select = ["E501", "D"]
 # F403/F405: `from pyomo.environ import *` is standard Pyomo convention.
 # E741: single-letter `l` is the standard line-index variable in power systems math.
-ignore = ["E741", "F403", "F405"]
+# D107: the constructor contract is documented in the *class* docstring,
+#   which is the Google convention and what mkdocstrings renders (see
+#   merge_init_into_class in mkdocs.yml). Requiring a second copy on
+#   __init__ would duplicate it, so this rule is off by policy rather
+#   than by convenience -- interrogate's ignore-init-method matches it.
+ignore = ["E741", "F403", "F405", "D107"]
 
 [tool.ruff.lint.per-file-ignores]
 "scripts/*.py"     = ["E501"]
-"tests/**/*.py"    = ["E501"]
+# D103 only: a pytest function's name is its specification, and
+# `test_storage_soc_is_bounded` gains nothing from a docstring repeating
+# it. The module docstring (D100) is still required, because that is
+# where a test file says which behaviour or regression it pins down, and
+# every formatting rule still applies to the docstrings that do exist.
+# This is narrower than it looks -- it is the only D rule relaxed
+# anywhere in the repository.
+"tests/**/*.py"    = ["E501", "D103"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+
+[tool.interrogate]
+# Docstring coverage for the library. Scope is src/potpourri only: the
+# gate is about the code users import. scripts/, tests/ and tools/ are
+# measured separately (see docs/contributing-docs.md) because an example
+# script and a regression test have different documentation needs.
+#
+# Nothing is ignored except __init__. In particular nested functions stay
+# counted: in this codebase those are the Pyomo constraint rules, the
+# most mathematics-dense code there is, and they were 1.2% documented at
+# the baseline. Excluding them would have moved the headline number by
+# 27 points while hiding exactly what most needed writing.
+ignore-init-method = true
+ignore-magic = false
+ignore-nested-functions = false
+ignore-private = false
+ignore-semiprivate = false
+ignore-module = false
+exclude = []
+verbose = 1
+color = true
+# 47.7% before the 2026-09 documentation pass, 100% after it. Held at
+# 100 deliberately: with nested functions counted, this says every
+# Pyomo constraint rule states the relation it enforces. Never lower it
+# to make a red build green -- document the new object instead.
+#
+# 100% here means a docstring *exists* everywhere, not that each one is
+# right. That is what review is for; see docs/contributing-docs.md.
+fail-under = 100
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

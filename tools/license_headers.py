@@ -305,6 +305,15 @@ def docstring_notices(text: str) -> list[str]:
 
 
 def expected_license(path: str) -> str:
+    """SPDX expression required for one file.
+
+    Args:
+        path: Repo-relative path.
+
+    Returns:
+        The expression from `LICENSE_EXCEPTIONS` when the file is recorded
+        there, otherwise the first-party licence.
+    """
     return LICENSE_EXCEPTIONS.get(path, (FIRST_PARTY_LICENSE, ""))[0]
 
 
@@ -414,6 +423,17 @@ def read_source(full_path: str) -> tuple[str, str]:
 
 
 def read_text(full_path: str) -> str:
+    """Read a source file, honouring its own encoding.
+
+    Args:
+        full_path: Absolute path to the file.
+
+    Returns:
+        The decoded text.
+
+    Raises:
+        DecodeError: If the file cannot be decoded.
+    """
     return read_source(full_path)[0]
 
 
@@ -440,6 +460,15 @@ def check_repository(repo_root: str = REPO_ROOT) -> dict[str, list[str]]:
 
 
 def render_header(copyrights: list[str], license_id: str) -> list[str]:
+    """Render a header block from its parts.
+
+    Args:
+        copyrights: Notice texts, one per copyright line, in order.
+        license_id: SPDX licence expression.
+
+    Returns:
+        The header as a list of comment lines, without indentation.
+    """
     lines = [f"# {COPYRIGHT_TAG} {c}" for c in copyrights]
     lines.append("#")
     lines.append(f"# {LICENSE_TAG} {license_id}")

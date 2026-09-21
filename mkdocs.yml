@@ -20,6 +20,42 @@ plugins:
       # as a citation key and fails the strict build.
       enable_inline_citations: false
 
+plugins:
+  - search
+  # API pages are generated from the source docstrings so signatures and
+  # descriptions cannot drift away from the code. Google-style sections,
+  # matching [tool.ruff.lint.pydocstyle] in pyproject.toml.
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            docstring_section_style: table
+            docstring_options:
+              ignore_init_summary: true
+              # Keep warn_unknown_params: a documented parameter that no
+              # longer exists is a real documentation bug and should fail
+              # the strict build. warn_missing_types is off on purpose --
+              # this project documents units and meaning in prose, and
+              # demanding an annotation on every documented parameter
+              # would turn the docs pass into a typing migration.
+              warn_unknown_params: true
+              warn_missing_types: false
+            show_source: true
+            show_root_heading: true
+            show_root_full_path: false
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            members_order: source
+            separate_signature: true
+            show_signature_annotations: true
+            signature_crossrefs: true
+            merge_init_into_class: true
+            inherited_members: false
+            filters: ["!^_"]
+
 markdown_extensions:
   - admonition
   - footnotes
@@ -60,4 +96,7 @@ nav:
       - Multi-Period Models: api/multi-period.md
       - Flexible Devices: api/devices.md
       - Utilities: api/utilities.md
+  - Contributing:
+      - Documentation: contributing-docs.md
+      - Licensing: licensing.md
   - Licensing: licensing.md

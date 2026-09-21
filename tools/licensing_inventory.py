@@ -66,6 +66,15 @@ _AUTHOR_RE = re.compile(r"^Author:\s*(.+?)\s*$", re.MULTILINE)
 
 
 def authorship(text: str) -> list[str]:
+    """Author attributions found in a module docstring.
+
+    Args:
+        text: Full source text of the file.
+
+    Returns:
+        The names from any `Author:` lines. These are attributions, not
+        copyright claims.
+    """
     try:
         doc = ast.get_docstring(ast.parse(text))
     except SyntaxError:
@@ -74,6 +83,14 @@ def authorship(text: str) -> list[str]:
 
 
 def rows(repo_root: str = REPO_ROOT):
+    """Yield one inventory record per in-scope Python file.
+
+    Args:
+        repo_root: Repository to scan.
+
+    Yields:
+        A mapping with the `FIELDS` keys for one file.
+    """
     for rel in python_files(repo_root):
         text = read_text(os.path.join(repo_root, rel))
         head = parse_header(text)
@@ -109,6 +126,15 @@ def rows(repo_root: str = REPO_ROOT):
 
 
 def write(output: str = OUTPUT, repo_root: str = REPO_ROOT) -> int:
+    """Write the inventory CSV and print a summary.
+
+    Args:
+        output: Destination CSV path.
+        repo_root: Repository to scan.
+
+    Returns:
+        0 when every file is compliant, else 1.
+    """
     data = list(rows(repo_root))
     os.makedirs(os.path.dirname(output), exist_ok=True)
     with open(output, "w", encoding="utf-8", newline="") as handle:

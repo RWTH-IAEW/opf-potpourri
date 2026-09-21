@@ -2,16 +2,22 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Utility functions for augmenting pandapower networks before OPF model
-construction."""
+"""Prepare a pandapower network before building an OPF model.
+
+Utility functions for augmenting pandapower networks before OPF model
+construction.
+"""
 
 import pandas as pd
 import pandapower as pp
 
 
 def apply_loadcase_to_sb_net(net, case):
-    """Scale loads and sgen by the factors of a named load case from
-    net.loadcases."""
+    """Scale loads and sgens by a named load case.
+
+    Scale loads and sgen by the factors of a named load case from
+    net.loadcases.
+    """
     # apply loadcase to net
     factors = net.loadcases.loc[case]
     net.load.p_mw *= factors["pload"]
@@ -27,8 +33,11 @@ def apply_loadcase_to_sb_net(net, case):
 
 
 def add_regulatory_q_control_to_wind(net, variant):
-    """Add regulatory Q-control variant column to wind generators in
-    net.sgen."""
+    """Add the regulatory Q-control variant column to wind sgens.
+
+    Add regulatory Q-control variant column to wind generators in
+    net.sgen.
+    """
     # add wind control variant to existing wind generators
     net.sgen["controllable"] = False
     net.sgen["controllable"][net.sgen.type == "Wind"] = True
@@ -40,8 +49,7 @@ def add_regulatory_q_control_to_wind(net, variant):
 
 
 def upgrade_pandapower_net(old_net):
-    """Migrate an old pandapower network object to the current pandapower
-    version."""
+    """Migrate an older pandapower network to the current version."""
     # Create a new empty pandapowerNet with the current version of pandapower
     new_net = pp.create_empty_network()
 

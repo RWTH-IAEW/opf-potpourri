@@ -494,7 +494,7 @@ def test_no_overlap_warning_with_default_types(lv_rural_net):
 
 
 def test_windpower_has_no_private_capability_table():
-    """windpower must read the registry, not its own copy of the table.
+    """Windpower must read the registry, not its own copy of the table.
 
     It previously carried a private VDE-AR-N 4105 table and a third
     byte-identical copy of the Q-curve maths, so ``grid_code`` never reached
@@ -1335,7 +1335,7 @@ def test_fractional_var_q_is_rejected_not_rounded(bad):
 
 
 def test_integral_float_var_q_is_accepted():
-    """pandas stores var_q as float64 whenever the column holds NaN."""
+    """Pandas stores var_q as float64 whenever the column holds NaN."""
     qc.check_var_q([0.0, 1.0, 2.0], "4120")
     qc.check_var_q(np.array([0.0, 2.0]), "4120")
 

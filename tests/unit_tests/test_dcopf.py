@@ -193,10 +193,13 @@ def _trafo_feeder(tap_side, tap_pos):
 
 
 def test_powermodels_convention_ignores_the_tap_position():
-    """pandapower refers the series impedance to the tapped LV voltage when
+    """An LV-side tap refers the impedance to the tapped voltage.
+
+    Pandapower refers the series impedance to the tapped LV voltage when
     the tap sits on the LV side, (vn_trafo_lv / vn_lv_kv)². PowerModels reads
     the untapped reactance, so the susceptance must not move with the tap on
-    either side; the default convention keeps pandapower's value."""
+    either side; the default convention keeps pandapower's value.
+    """
     neutral = DCOPF(_trafo_feeder("lv", 0), dc_convention="powermodels")
     b_neutral = float(neutral.trafo_data["BLT_data"].iloc[0])
     for side in ("lv", "hv"):

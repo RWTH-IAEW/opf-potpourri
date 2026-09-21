@@ -36,6 +36,15 @@ from license_headers import (  # noqa: E402
 
 
 def main(repo_root: str = REPO_ROOT) -> int:
+    """Check every in-scope Python file and report the failures.
+
+    Args:
+        repo_root: Repository to scan. Defaults to this checkout.
+
+    Returns:
+        Process exit status: 0 compliant, 1 policy violations, 2 a discovery or
+            tool error. A broken scan is never reported as a pass.
+    """
     try:
         scanned = python_files(repo_root)
         failures = check_repository(repo_root)

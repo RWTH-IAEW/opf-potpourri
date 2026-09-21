@@ -22,8 +22,11 @@ pytestmark = pytest.mark.filterwarnings("ignore")
 
 
 def _two_unit_net(sgen_min_p_mw):
-    """Cheap external grid, expensive sgen: the optimum sends the sgen to its
-    lower bound and buys the difference from the grid."""
+    """An expensive sgen is driven to its lower bound.
+
+    Cheap external grid, expensive sgen: the optimum sends the sgen to its
+    lower bound and buys the difference from the grid.
+    """
     net = pp.create_empty_network(sn_mva=100.0)
     b0 = pp.create_bus(net, 110.0)
     b1 = pp.create_bus(net, 110.0)

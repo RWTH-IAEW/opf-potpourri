@@ -2,8 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Multi-period AC OPF combining multi-period AC power flow and OPF
-operational limits."""
+"""Multi-period AC OPF: AC power flow plus operating limits."""
 
 from pyomo.environ import *
 from potpourri.models_multi_period.AC_multi_period import AC_multi_period
@@ -19,15 +18,19 @@ from loguru import logger
 
 
 class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
-    """Multi-period AC OPF model combining AC power flow and OPF constraints
-    over a time horizon."""
+    """Multi-period AC OPF over a time horizon.
+
+    Multi-period AC OPF model combining AC power flow and OPF constraints
+    over a time horizon.
+    """
 
     def __init__(self, net, toT, fromT=None, pf=1):
         super().__init__(net, toT, fromT, pf)
 
     def _calc_opf_parameters(self, **kwargs):
-        """Extend OPF parameter calculation with AC-specific limits: voltage
-        bounds, Q limits, Q-curve data.
+        """Extend OPF parameter calculation with AC-specific limits.
+
+        Voltage bounds, Q limits, Q-curve data.
 
         Args:
             **kwargs: Forwarded to
@@ -159,8 +162,7 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
         return max_vm_pu, min_vm_pu
 
     def add_generator_v_limits(self, max_vm_pu, min_vm_pu):
-        """Apply per-generator voltage limits, overriding bus defaults where
-        applicable."""
+        """Apply per-generator voltage limits over the bus defaults."""
         # check max_vm_pu / min_vm_pu bus limit violation by gens
         gen_buses = self.bus_lookup[self.net.gen.bus.values]
         if "max_vm_pu" in self.net["gen"].columns:
@@ -227,7 +229,9 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
         qu_deadband=None,
         **kwargs,
     ):
-        """Extend OPF.add_OPF() with voltage bounds, AC thermal limits, and
+        """Add voltage bounds, thermal limits and reactive constraints.
+
+        Extend OPF.add_OPF() with voltage bounds, AC thermal limits, and
         reactive power constraints.
 
         Args:
@@ -313,24 +317,67 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
             # |S|² ≤ SLmax² · v² (i.e. |I| ≤ I_max). Varies with voltage;
             # physically meaningful for a thermal current rating.
             def line_lim_from_def(model, l, t):
+                r"""Current-based thermal limit at the from end of line `l`.
+
+                $p^2 + q^2 \le S_{max}^2 v^2$; see `ACOPF_base` for why the two
+                limit forms exist.
+
+                Args:
+                    model: The Pyomo model being extended.
+                    l: Branch index.
+                    t: Time index from `model.T`.
+
+                Returns:
+                    A Pyomo expression.
+                """
                 return (
                     model.pLfrom[l, t] ** 2 + model.qLfrom[l, t] ** 2
                     <= model.SLmax[l] ** 2 * model.v[model.A[l, 1], t] ** 2
                 )
 
             def line_lim_to_def(model, l, t):
+                """Current-based thermal limit at the to end of line `l`.
+
+                Args:
+                    model: The Pyomo model being extended.
+                    l: Branch index.
+                    t: Time index from `model.T`.
+
+                Returns:
+                    A Pyomo expression.
+                """
                 return (
                     model.pLto[l, t] ** 2 + model.qLto[l, t] ** 2
                     <= model.SLmax[l] ** 2 * model.v[model.A[l, 2], t] ** 2
                 )
 
             def transf_lim1_def(model, l, t):
+                """Current-based thermal limit at the HV side of trafo `l`.
+
+                Args:
+                    model: The Pyomo model being extended.
+                    l: Branch index.
+                    t: Time index from `model.T`.
+
+                Returns:
+                    A Pyomo expression.
+                """
                 return (
                     model.pThv[l, t] ** 2 + model.qThv[l, t] ** 2
                     <= model.SLmaxT[l] ** 2 * model.v[model.AT[l, 1], t] ** 2
                 )
 
             def transf_lim2_def(model, l, t):
+                """Current-based thermal limit at the LV side of trafo `l`.
+
+                Args:
+                    model: The Pyomo model being extended.
+                    l: Branch index.
+                    t: Time index from `model.T`.
+
+                Returns:
+                    A Pyomo expression.
+                """
                 return (
                     model.pTlv[l, t] ** 2 + model.qTlv[l, t] ** 2
                     <= model.SLmaxT[l] ** 2 * model.v[model.AT[l, 2], t] ** 2
@@ -339,24 +386,66 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
             # |S|² ≤ SLmax² (constant-MVA limit, matches MATPOWER /
             # PowerModels' constraint_thermal_limit_* and PGLib-OPF rate_a).
             def line_lim_from_def(model, l, t):
+                r"""Constant-MVA thermal limit at the from end of line `l`.
+
+                $p^2 + q^2 \le S_{max}^2$, the MATPOWER/PGLib convention.
+
+                Args:
+                    model: The Pyomo model being extended.
+                    l: Branch index.
+                    t: Time index from `model.T`.
+
+                Returns:
+                    A Pyomo expression.
+                """
                 return (
                     model.pLfrom[l, t] ** 2 + model.qLfrom[l, t] ** 2
                     <= model.SLmax[l] ** 2
                 )
 
             def line_lim_to_def(model, l, t):
+                """Constant-MVA thermal limit at the to end of line `l`.
+
+                Args:
+                    model: The Pyomo model being extended.
+                    l: Branch index.
+                    t: Time index from `model.T`.
+
+                Returns:
+                    A Pyomo expression.
+                """
                 return (
                     model.pLto[l, t] ** 2 + model.qLto[l, t] ** 2
                     <= model.SLmax[l] ** 2
                 )
 
             def transf_lim1_def(model, l, t):
+                """Constant-MVA thermal limit at the HV side of trafo `l`.
+
+                Args:
+                    model: The Pyomo model being extended.
+                    l: Branch index.
+                    t: Time index from `model.T`.
+
+                Returns:
+                    A Pyomo expression.
+                """
                 return (
                     model.pThv[l, t] ** 2 + model.qThv[l, t] ** 2
                     <= model.SLmaxT[l] ** 2
                 )
 
             def transf_lim2_def(model, l, t):
+                """Constant-MVA thermal limit at the LV side of trafo `l`.
+
+                Args:
+                    model: The Pyomo model being extended.
+                    l: Branch index.
+                    t: Time index from `model.T`.
+
+                Returns:
+                    A Pyomo expression.
+                """
                 return (
                     model.pTlv[l, t] ** 2 + model.qTlv[l, t] ** 2
                     <= model.SLmaxT[l] ** 2
@@ -388,6 +477,19 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
 
         # voltage bounds are time-dependent
         def v_bounds(model, b, t):
+            """Bound the voltage magnitude at bus `b`, time `t`.
+
+            Indexed over `model.Bpd`: auxiliary ppc buses carry no user voltage
+            limits.
+
+            Args:
+                model: The Pyomo model being extended.
+                b: Bus index from `model.B` (a ppc bus number).
+                t: Time index from `model.T`.
+
+            Returns:
+                A Pyomo expression.
+            """
             return model.Vmin[b], model.v[b, t], model.Vmax[b]
 
         self.model.v_constraint = Constraint(
@@ -399,13 +501,25 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
             self._add_branch_angle_limits()
 
     def add_voltage_deviation_objective(self):
-        """Set objective to minimise sum of squared bus voltage deviations
-        from 1 p.u. over all time steps."""
+        """Minimise the summed squared voltage deviation over time.
+
+        Set objective to minimise sum of squared bus voltage deviations
+        from 1 p.u. over all time steps.
+        """
         self.model.vm = Param(
             self.model.B, initialize=self.bus_data["v_m"][self.model.B]
         )
 
         def voltage_deviation_objective(model, t):
+            """Summed squared voltage deviation over buses and time.
+
+            Args:
+                model: The Pyomo model being extended.
+                t: Time index from `model.T`.
+
+            Returns:
+                A Pyomo expression.
+            """
             return sum(
                 (model.v[b, t] - 1.0) ** 2
                 for b in model.B - model.b0
@@ -421,10 +535,21 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
         )
 
     def add_minimize_power_objective(self):
-        """Set objective to minimise total demand served over all loads and
-        time steps."""
+        """Minimise the total demand served over all loads and steps.
+
+        Set objective to minimise total demand served over all loads and
+        time steps.
+        """
 
         def power_minimization_objective(model):
+            """Total demand served over all loads and time steps.
+
+            Args:
+                model: The Pyomo model being extended.
+
+            Returns:
+                A Pyomo expression.
+            """
             return sum(model.pD[d, t] for d in model.D for t in model.T)
 
         self.model.Objective = Objective(
@@ -432,19 +557,41 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
         )
 
     def add_generation_objective(self):
-        """Set objective to minimise sum of squared generator real power
-        injections."""
+        """Minimise the summed squared generator active power.
+
+        Set objective to minimise sum of squared generator real power
+        injections.
+        """
 
         def minimize_generation(model):
+            """Summed squared generator active power over time.
+
+            Args:
+                model: The Pyomo model being extended.
+
+            Returns:
+                A Pyomo expression.
+            """
             return sum(model.pG[(g, t)] ** 2 for g in model.G for t in model.T)
 
         self.model.obj = Objective(rule=minimize_generation, sense=minimize)
 
     def add_weighted_generation_objective(self):
-        """Set objective to minimise a weighted sum of external grid and sgen
-        power."""
+        """Minimise a weighted sum of external-grid and sgen power."""
 
         def weighted_generation_objective(model):
+            """Weighted sum of external-grid and static-generator power.
+
+            The weights trade importing from the grid against running local
+            generation; see the method that builds this objective for what they
+            mean.
+
+            Args:
+                model: The Pyomo model being extended.
+
+            Returns:
+                A Pyomo expression.
+            """
             c1 = 4
             c3 = 1
             return c1 * sum(

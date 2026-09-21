@@ -2,8 +2,11 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Multi-period OPF mixin: adds operational limit constraints and thermal
-ratings over time."""
+"""Multi-period OPF mix-in: operating limits over a horizon.
+
+Adds generator, load and branch limits, and thermal ratings,
+indexed over the model's time set.
+"""
 
 import copy
 
@@ -32,6 +35,11 @@ def _calc_tap_min_max_mp(obj):
 
 
 def _calc_nominal_ratio_mp(obj, vn_hv_kv, vn_lv_kv):
+    """Off-nominal tap ratio of every transformer.
+
+    Returns:
+        A Pyomo expression.
+    """
     tap_rat = vn_hv_kv / vn_lv_kv
     hv_bus = obj.net.trafo.hv_bus
     lv_bus = obj.net.trafo.lv_bus
@@ -110,13 +118,23 @@ def _calc_tap_shift_mp(obj, tap_pos=None):
 
 
 class OPF_multi_period(Basemodel_multi_period):
-    """OPF mixin for multi-period models: provides line/transformer ratings
-    and generator/demand limits."""
+    """OPF mixin for multi-period models.
+
+    Provides line/transformer ratings and generator/demand limits.
+    """
 
     def __init__(self, net, toT, fromT=None, pf=1):
         super().__init__(net, toT, fromT, pf)
 
     def __calc_SLmax(self, max_loading_percent=100):
+        """Apparent-power rating of every branch, in p.u.
+
+        A line's rating is a current limit in pandapower, converted with the
+        from-bus nominal voltage; a transformer already carries an MVA rating.
+
+        Returns:
+            A Pyomo expression.
+        """
         # Native lines: max_i_ka @ from-bus vn_kv → MVA limit, p.u.
         vr = self.net.bus.loc[
             self.net.line["from_bus"].values, "vn_kv"
@@ -148,7 +166,9 @@ class OPF_multi_period(Basemodel_multi_period):
         return line_lim
 
     def _calc_opf_parameters(self, **kwargs):
-        """Compute line/transformer ratings and call generator/demand limit
+        """Compute branch ratings and the device operating limits.
+
+        Compute line/transformer ratings and call generator/demand limit
         methods on flexibility objects.
 
         Args:
@@ -228,8 +248,9 @@ class OPF_multi_period(Basemodel_multi_period):
         demand_object.get_demand_real_power_data(self.model)
 
     def add_OPF(self, **kwargs):
-        """Attach OPF parameters and constraints: ratings, generator limits,
-        demand limits.
+        """Attach OPF parameters and constraints.
+
+        Ratings, generator limits, demand limits.
 
         Args:
             **kwargs: Forwarded to _calc_opf_parameters.
@@ -314,6 +335,19 @@ class OPF_multi_period(Basemodel_multi_period):
             self.model.LineAngleSet = Set(initialize=list(line_bounds))
 
             def _line_angle_rule(model, l, t):
+                r"""Phase-angle-difference limit on line `l`.
+
+                $\alpha_{min} \le \theta_f - \theta_t \le \alpha_{max}$, in
+                radians.
+
+                Args:
+                    model: The Pyomo model being built.
+                    l: Branch index.
+                    t: Time index.
+
+                Returns:
+                    A Pyomo expression.
+                """
                 f, to, amin, amax = line_bounds[l]
                 return amin, model.delta[f, t] - model.delta[to, t], amax
 
@@ -325,6 +359,16 @@ class OPF_multi_period(Basemodel_multi_period):
             self.model.TrafoAngleSet = Set(initialize=list(trafo_bounds))
 
             def _trafo_angle_rule(model, l, t):
+                """Phase-angle-difference limit on transformer `l`.
+
+                Args:
+                    model: The Pyomo model being built.
+                    l: Branch index.
+                    t: Time index.
+
+                Returns:
+                    A Pyomo expression.
+                """
                 f, to, amin, amax = trafo_bounds[l]
                 return amin, model.delta[f, t] - model.delta[to, t], amax
 
@@ -362,6 +406,16 @@ class OPF_multi_period(Basemodel_multi_period):
         )
 
         def trafo_tap_linear_bounds(model, tr, t):
+            """Bound the continuous tap ratio of transformer `t`.
+
+            Args:
+                tr: Transformer index.
+                model: The Pyomo model being built.
+                t: Time index.
+
+            Returns:
+                A Pyomo expression.
+            """
             return model.Tap_min[tr], model.Tap[tr, t], model.Tap_max[tr]
 
         self.model.Tap_linear_constr = Constraint(
@@ -374,12 +428,34 @@ class OPF_multi_period(Basemodel_multi_period):
             t_pairs = list(zip(t_list[:-1], t_list[1:]))
 
             def tap_rate_up(model, tr, t_prev, t_next):
+                """Limit how far a tap may move up between time steps.
+
+                Args:
+                    t_next: Later time index of the consecutive pair.
+                    t_prev: Earlier time index of the consecutive pair.
+                    tr: Transformer index.
+                    model: The Pyomo model being built.
+
+                Returns:
+                    A Pyomo expression.
+                """
                 return (
                     model.Tap[tr, t_next] - model.Tap[tr, t_prev]
                     <= max_tap_change_per_step
                 )
 
             def tap_rate_down(model, tr, t_prev, t_next):
+                """Limit how far a tap may move down between time steps.
+
+                Args:
+                    t_next: Later time index of the consecutive pair.
+                    t_prev: Earlier time index of the consecutive pair.
+                    tr: Transformer index.
+                    model: The Pyomo model being built.
+
+                Returns:
+                    A Pyomo expression.
+                """
                 return (
                     model.Tap[tr, t_next] - model.Tap[tr, t_prev]
                     >= -max_tap_change_per_step
@@ -447,6 +523,16 @@ class OPF_multi_period(Basemodel_multi_period):
         )
 
         def trafo_tap_pos_min_max(model, tr, t):
+            """Bound the integer tap position of transformer `t`.
+
+            Args:
+                tr: Transformer index.
+                model: The Pyomo model being built.
+                t: Time index.
+
+            Returns:
+                A Pyomo expression.
+            """
             return (
                 model.Tap_pos_min[tr],
                 model.Tap_pos[tr, t],
@@ -458,6 +544,19 @@ class OPF_multi_period(Basemodel_multi_period):
         )
 
         def trafo_tap_discrete(model, tr, t):
+            """Tie the tap ratio to the integer tap position.
+
+            An LV-side tap enters as a reciprocal. The integer variable makes
+            the model a MINLP.
+
+            Args:
+                tr: Transformer index.
+                model: The Pyomo model being built.
+                t: Time index.
+
+            Returns:
+                A Pyomo expression.
+            """
             if model.Tap_side[tr]:
                 return model.Tap[tr, t] == 1 / (
                     1

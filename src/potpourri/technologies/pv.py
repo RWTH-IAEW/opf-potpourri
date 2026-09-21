@@ -2,8 +2,11 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""PV mix-in: attaches PV generation sets, parameters, variables, and
-power-bound constraints to a multi-period model."""
+"""PV mix-in: photovoltaic generation over a horizon.
+
+Attaches the PV sets, parameters, variables and power-bound
+constraints to a multi-period model.
+"""
 
 import pyomo.environ as pyo
 from potpourri.technologies.flexibility import Flexibility_multi_period
@@ -58,6 +61,18 @@ class PV_multi_period(Flexibility_multi_period):
             over *seed*.  Thread one through a Monte Carlo sweep for
             independent scenarios from a run that replays exactly.
 
+        q_control: Reactive-power control mode. One of ``None`` (no
+            Q-control, the default), ``"qp"`` (Q(P) characteristic),
+            ``"qu"`` (Q(U) droop, needs an AC model with ``v``) or
+            ``"both"``.
+        var_q: VDE-AR-N 4105 operating variant (0–2), selecting the Q/P
+            envelope column from the grid-code table.
+        p_inst_mw: Installed PV capacity per unit (MW), used as Pn in
+            the Q-control characteristic. Defaults to the peak of the
+            generation profile.
+        grid_code: Grid-code object supplying the capability envelopes.
+            ``None`` resolves the project default.
+
     Example::
 
         pv = PV_multi_period(net, T=96, scenario=0, profile_column="PV3")
@@ -87,20 +102,11 @@ class PV_multi_period(Flexibility_multi_period):
         seed=None,
         rng=None,
     ):
-        """
-        Args:
-            q_control: Reactive-power control mode.  One of:
+        """Select the PV units and configure their reactive-power control.
 
-                * ``None``   — no Q-control (default)
-                * ``"qp"``   — Q(P) characteristic only
-                * ``"qu"``   — Q(U) droop only (requires AC model with ``v``)
-                * ``"both"`` — Q(P) and Q(U) combined
-
-            var_q: VDE-AR-N 4105 operating variant (0–2).  Selects the
-                Q/P envelope column from the grid-code table.
-            p_inst_mw: Installed PV capacity per unit (MW).  Used as Pn in
-                the Q-control characteristic.  Defaults to the peak of the
-                generation profile.
+        Nothing is attached to a Pyomo model here; the device only reads
+        the network and works out which static generators it represents.
+        Call `get_all` afterwards to add the components to a model.
 
         Note:
             ``pPV`` and — when ``q_control`` is set — ``qPV`` are wired into
@@ -166,8 +172,11 @@ class PV_multi_period(Flexibility_multi_period):
                 self.pv_p_inst = float(self.pv_load_profile.abs().max())
 
     def get_all(self, model):
-        """Attach PV sets, parameters, variables, constraints, unfix
-        variables, and couple the generation into the nodal balance."""
+        """Attach the PV device and couple it to the balance.
+
+        Attach PV sets, parameters, variables, constraints, unfix
+        variables, and couple the generation into the nodal balance.
+        """
         self.get_sets(model)
         self.get_parameters(model)
         self.get_variables(model)
@@ -242,11 +251,24 @@ class PV_multi_period(Flexibility_multi_period):
             )
 
     def get_all_constraints(self, model):
-        """Add real-power bound constraints for all PV units over all time
-        steps."""
+        """Add the PV active-power bounds over time.
+
+        Add real-power bound constraints for all PV units over all time
+        steps.
+        """
 
         @model.Constraint(model.PV, model.T)
         def PV_real_power_bounds(model, pv, t):
+            """Bound a PV unit's active power, freeing it first.
+
+            Args:
+                pv: PV-unit index.
+                model: The Pyomo model being built.
+                t: Time index.
+
+            Returns:
+                A Pyomo expression.
+            """
             # (lower, body, upper). The arguments used to be the other way
             # round, which read as Pmax being the floor.
             return model.PV_Pmin[pv, t], model.pPV[pv, t], model.PV_Pmax[pv, t]
@@ -286,11 +308,33 @@ class PV_multi_period(Flexibility_multi_period):
 
             @model.Constraint(model.PV, model.T, range(len(pq_hi)))
             def PV_QP_pos(model, pv, t, k):
+                """Upper Q(P) capability piece for a PV unit.
+
+                Args:
+                    pv: PV-unit index.
+                    model: The Pyomo model being built.
+                    t: Time index.
+                    k: Facet or piece index.
+
+                Returns:
+                    A Pyomo expression.
+                """
                 m, b = pq_hi[k]
                 return model.qPV[pv, t] <= m * model.pPV[pv, t] + b * p_inst
 
             @model.Constraint(model.PV, model.T, range(len(pq_lo)))
             def PV_QP_neg(model, pv, t, k):
+                """Lower Q(P) capability piece for a PV unit.
+
+                Args:
+                    pv: PV-unit index.
+                    model: The Pyomo model being built.
+                    t: Time index.
+                    k: Facet or piece index.
+
+                Returns:
+                    A Pyomo expression.
+                """
                 m, b = pq_lo[k]
                 return model.qPV[pv, t] >= m * model.pPV[pv, t] + b * p_inst
 
@@ -300,6 +344,17 @@ class PV_multi_period(Flexibility_multi_period):
 
             @model.Constraint(model.PV, model.T, range(len(qv_lo)))
             def PV_QU_min(model, pv, t, k):
+                """Lower Q(U) capability piece for a PV unit.
+
+                Args:
+                    pv: PV-unit index.
+                    model: The Pyomo model being built.
+                    t: Time index.
+                    k: Facet or piece index.
+
+                Returns:
+                    A Pyomo expression.
+                """
                 b_bus = pv_bus_lookup.get(pv)
                 if b_bus is None:
                     return pyo.Constraint.Skip
@@ -308,6 +363,17 @@ class PV_multi_period(Flexibility_multi_period):
 
             @model.Constraint(model.PV, model.T, range(len(qv_hi)))
             def PV_QU_max(model, pv, t, k):
+                """Upper Q(U) capability piece for a PV unit.
+
+                Args:
+                    pv: PV-unit index.
+                    model: The Pyomo model being built.
+                    t: Time index.
+                    k: Facet or piece index.
+
+                Returns:
+                    A Pyomo expression.
+                """
                 b_bus = pv_bus_lookup.get(pv)
                 if b_bus is None:
                     return pyo.Constraint.Skip

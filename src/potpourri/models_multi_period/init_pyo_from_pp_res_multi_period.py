@@ -2,8 +2,10 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Warm-start utilities: initialise multi-period Pyomo variables from a
-pandapower power flow at each time step.
+"""Warm-start a multi-period model from per-step power flows.
+
+Initialises the Pyomo variables from a pandapower power flow
+solved at each time step.
 
 A cold-started multi-period AC OPF begins with ``v = 1``, every angle at zero
 and every branch flow at zero, which violates Kirchhoff's laws at every bus by

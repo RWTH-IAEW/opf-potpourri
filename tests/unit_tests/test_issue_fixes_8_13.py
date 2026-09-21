@@ -101,7 +101,7 @@ def test_issue8_constructor_builds_a_model(lv_net):
 
 
 def test_issue8_result_mappers_do_not_use_top_level_symbol():
-    """pandapower 3.5 also moved ``clear_result_tables``.
+    """Pandapower 3.5 also moved ``clear_result_tables``.
 
     Both mappers call it as the first thing they do, so on 3.5 neither could
     write ``net.res_*`` at all. In the multi-period mapper this was dormant

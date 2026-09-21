@@ -24,7 +24,9 @@ import pyomo.environ as pyo
 
 
 def _ext_grid_or_gen_index(net, et: str, element: int) -> int:
-    """Map a (et, element) pair from net.poly_cost to the row index used by
+    """Row index in generation_data for a poly_cost entry.
+
+    Map a (et, element) pair from net.poly_cost to the row index used by
     Basemodel.generation_data / model.G.
 
     Pandapower stacks ext_grid and gen elements into a single _ppc['gen']

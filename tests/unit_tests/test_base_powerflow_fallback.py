@@ -3,8 +3,10 @@
 # SPDX-License-Identifier: MIT
 
 """Basemodel needs a power flow only for the ppc tables and a starting point.
+
 When Newton-Raphson diverges from the flat start it must fall back to a DC
-power flow instead of refusing to build the model."""
+power flow instead of refusing to build the model.
+"""
 
 import numpy as np
 import pandapower as pp
@@ -64,10 +66,13 @@ def test_acopf_builds_on_the_fallback():
 
 
 def test_isolated_bus_gets_no_degenerate_kcl():
-    """A bus whose every branch is out of service has a balance without any
+    """A fully out-of-service bus contributes no constraint.
+
+    A bus whose every branch is out of service has a balance without any
     variable. Its sums are numpy floats, so the equality is a numpy bool, not
     a Python bool; the KCL rules must skip it instead of handing Pyomo a
-    constant (case78484_epigrids has such buses)."""
+    constant (case78484_epigrids has such buses).
+    """
     import pandapower as pp
 
     from potpourri.models.ACOPF_base import ACOPF

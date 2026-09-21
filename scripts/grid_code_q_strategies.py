@@ -292,6 +292,16 @@ def assign_per_sgen_strategies(base_net, solver=SOLVER):
 
 
 def main():
+    """Run the analysis this script demonstrates.
+
+    Configuration comes from the module-level constants above, not from the
+    command line. Edit those, or import and call this function, to change what
+    is run.
+
+    Returns:
+        None. Results are printed, and written to the paths named in the
+        configuration block where the script produces files.
+    """
     base_net = sb.get_simbench_net(NET_NAME)
     compare_grid_codes(base_net)
     print()

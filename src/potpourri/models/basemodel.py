@@ -2,8 +2,60 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Single-period Basemodel: maps a pandapower network to a Pyomo ConcreteModel
-and solves it."""
+"""Turn a pandapower network into a Pyomo model, and solve it.
+
+[`Basemodel`][potpourri.models.basemodel.Basemodel] is the bottom of the
+single-period stack. It owns everything that is about *reading a
+network* rather than about physics: it copies and preprocesses the
+network, runs a base power flow to obtain pandapower's internal tables,
+and turns those into Pyomo sets, parameters and active-power variables.
+It also provides the shared `solve` entry point.
+
+It is not usable on its own. `Basemodel` contains no power-flow
+equations at all -- a formulation layer supplies those:
+
+```text
+Basemodel                        <- here: data, sets, active power
+  ├── AC    (+ DC, LPAC)         power-flow equations
+  └── OPF                        limits and objectives
+        └── ACOPF, DCOPF, ...    the classes users instantiate
+```
+
+## Conventions this module establishes
+
+Everything downstream inherits these, so they are worth stating once.
+
+| topic | convention |
+|-------|------------|
+| Power base | `net.sn_mva`, exposed as `self.baseMVA` |
+| Power | per unit; `p`/`q` prefixes for active/reactive |
+| Angles | radians (pandapower stores degrees; converted here) |
+| Load sign | positive = consumption, as pandapower |
+| Storage sign | positive = charging (a load), see `add_storage` |
+| Bus index | **ppc** bus numbers, not `net.bus` labels |
+
+That last row causes the most confusion. `model.B` is indexed by
+pandapower's *internal* ppc bus numbers, because the admittance data
+comes from `net._ppc`. pandapower may insert auxiliary buses for
+node-node switches, so the ppc bus table can be longer than `net.bus`;
+`model.Bpd` is the subset that corresponds to real pandapower buses and
+therefore carries user data such as voltage limits. `self.bus_lookup`
+maps a pandapower bus to its ppc number.
+
+## The network is copied
+
+The constructor deep copies the network it is given, so the caller's
+object is never modified. The consequence at the other end is that
+`solve(to_net=True)` writes results to **the model's** copy: read
+`model.net.res_bus`, not the network you passed in.
+
+See Also:
+    - [`AC`][potpourri.models.AC.AC]: the AC power-flow layer.
+    - [`OPF`][potpourri.models.OPF.OPF]: operating limits and
+      objectives.
+    - [`pyo_sol_to_net_res`][potpourri.models.pyo_to_net.pyo_sol_to_net_res]:
+      writes a solved model back into `net.res_*`.
+"""
 
 import copy
 from math import pi
@@ -300,8 +352,22 @@ class Basemodel:
         self.net._ppc = ppc
 
     def create_model(self):
-        """Create the Pyomo ConcreteModel with sets, parameters, and fixed
-        variables."""
+        """Build `self.model` from the network, replacing any previous one.
+
+        Called by `__init__`. It assigns a **new** `ConcreteModel` to
+        `self.model`, so anything added to an earlier model is lost --
+        call it again only to rebuild from scratch.
+
+        Adds the sets (`B`, `Bpd`, `b0`, `bPV`, `L`, `TRANSF`, `D`,
+        `G`, `sG`, `SHUNT`, `STOR`, ...), their parameters, the
+        active-power variables (`pG`, `psG`, `pD`, `pLfrom`/`pLto`,
+        `pThv`/`pTlv`, `delta`, `Tap`) and the base-case fixings that
+        make the system square: `psG`, `pG`, `pD` at their set points,
+        `Tap` at its position, and `delta` at the reference bus.
+
+        Returns:
+            None. The model is reachable as `self.model`.
+        """
         self.model = pyo.ConcreteModel()
 
         # Always declare STOR/STOR_bus; KCL sums are 0 when empty
@@ -500,8 +566,7 @@ class Basemodel:
         neos_opt="ipopt",
         nlp_solver_args=None,
     ):
-        """
-        Solves the optimization model using the specified solver.
+        """Solves the optimization model using the specified solver.
 
         Args:
             to_net (bool): Whether to map results back to the pandapower
@@ -652,8 +717,21 @@ class Basemodel:
             logger.error("change_vals failed for component '{}': {}", key, err)
 
     def fix_vars(self, key, value=None):
-        """Fix all indices of a named Pyomo variable; optionally set to value
-        first."""
+        """Fix every index of a named variable, optionally to a value.
+
+        A fixed Pyomo variable is removed from the optimization: it
+        becomes a constant at its current (or given) value. Missing
+        components are logged and ignored rather than raising, so a
+        caller can fix a variable that only some formulations define.
+
+        Args:
+            key: Component name on `self.model`, e.g. `"qsG"`.
+            value: Value to fix every index to. `None` (the default)
+                freezes each index at whatever it currently holds.
+
+        Returns:
+            None. Mutates `self.model` in place.
+        """
         component = self.model.component(key)
         if not component:
             logger.warning(
@@ -673,8 +751,21 @@ class Basemodel:
             logger.error("fix_vars failed for component '{}': {}", key, err)
 
     def unfix_vars(self, key, value=None):
-        """Unfix all indices of a named Pyomo variable; optionally reset to
-        value."""
+        """Free every index of a named variable, optionally reseating it.
+
+        The inverse of `fix_vars`. When `value` is given it is assigned
+        *after* unfixing, so it acts as a fresh starting point for the
+        solver rather than as a bound. Missing components are logged
+        and ignored.
+
+        Args:
+            key: Component name on `self.model`, e.g. `"qsG"`.
+            value: Starting value to assign after unfixing. `None`
+                (the default) leaves the current value in place.
+
+        Returns:
+            None. Mutates `self.model` in place.
+        """
         component = self.model.component(key)
         if not component:
             logger.warning(
@@ -787,6 +878,23 @@ class Basemodel:
 
         # pSTOR = Pchg - Pdis; negative when discharging → KCL sign: -pSTOR > 0
         def stor_injection_rule(model, s):
+            """Net active power drawn by storage `s`.
+
+            $p^{stor} = P_{chg} - P_{dis}$, so the sign follows pandapower's
+            **load** convention: positive while charging (consuming), negative
+            while discharging. That is why the nodal balance subtracts `pSTOR`
+            on the generation side.
+
+            This is a Pyomo `Expression`, not a `Var`: it has no domain of its
+            own and carries no constraint.
+
+            Args:
+                model: The Pyomo model being built.
+                s: Storage index from `model.STOR`.
+
+            Returns:
+                A Pyomo expression in `STOR_Pchg` and `STOR_Pdis` (p.u.).
+            """
             return model.STOR_Pchg[s] - model.STOR_Pdis[s]
 
         self.model.pSTOR = pyo.Expression(
@@ -795,9 +903,27 @@ class Basemodel:
 
         # --- Constraints ---
         def stor_chg_limit_rule(model, s):
+            r"""Cap the charging power of storage `s`.
+
+            Args:
+                model: The Pyomo model being built.
+                s: Storage index from `model.STOR`.
+
+            Returns:
+                A Pyomo inequality, $P_{chg} \le P_{max}$ (p.u.).
+            """
             return model.STOR_Pchg[s] <= model.STOR_Pmax[s]
 
         def stor_dis_limit_rule(model, s):
+            r"""Cap the discharging power of storage `s`.
+
+            Args:
+                model: The Pyomo model being built.
+                s: Storage index from `model.STOR`.
+
+            Returns:
+                A Pyomo inequality, $P_{dis} \le P_{max}$ (p.u.).
+            """
             return model.STOR_Pdis[s] <= model.STOR_Pmax[s]
 
         self.model.stor_chg_limit = pyo.Constraint(
@@ -809,6 +935,30 @@ class Basemodel:
 
         # SOC update: single-period energy balance; eff is a fraction (0–1)
         def stor_soc_update_rule(model, s):
+            r"""State-of-charge balance for storage `s` over one step.
+
+            $$SOC = SOC_0 + \frac{\Delta t\,
+            (\eta P_{chg} - P_{dis} / \eta)}{E_{max}}$$
+
+            Points worth noting:
+
+            * **One-way efficiency.** $\eta$ multiplies the charge and divides
+            the discharge, so a full cycle returns $\eta^2$ -- the round-trip
+            efficiency is the square of this parameter, not the parameter. *
+            **Units.** $SOC$ is a fraction in $[0, 1]$ (pandapower stores
+            percent, converted on the way in), powers are p.u. and $\Delta t$
+            is in hours, so the quotient is dimensionless. * **Single period.**
+            There is exactly one step here, from the fixed `STOR_SOC0`.
+            Time-coupled storage across a horizon lives in
+            `potpourri.technologies.battery` instead.
+
+            Args:
+                model: The Pyomo model being built.
+                s: Storage index from `model.STOR`.
+
+            Returns:
+                A Pyomo equality expression.
+            """
             return model.STOR_SOC[s] == (
                 model.STOR_SOC0[s]
                 + model.STOR_dt
@@ -824,6 +974,16 @@ class Basemodel:
         )
 
         def stor_soc_bounds_rule(model, s):
+            """Keep the state of charge of storage `s` within its band.
+
+            Args:
+                model: The Pyomo model being built.
+                s: Storage index from `model.STOR`.
+
+            Returns:
+                The Pyomo ranged 3-tuple `(SOCmin, SOC, SOCmax)`, both bounds
+                being fractions in $[0, 1]$.
+            """
             return (
                 model.STOR_SOCmin[s],
                 model.STOR_SOC[s],
@@ -836,6 +996,23 @@ class Basemodel:
 
         # Convex relaxation of no-simultaneous-charge-discharge
         def stor_no_simul_rule(model, s):
+            r"""Discourage simultaneous charging and discharging of `s`.
+
+            $P_{chg} + P_{dis} \le P_{max}$ is the convex relaxation of the
+            disjunction "charge **or** discharge". It is not equivalent: a
+            solver may still split the rating between both directions, which
+            wastes energy through the efficiencies and can therefore look
+            attractive if the objective rewards losses. Enforcing the real
+            condition needs a binary and turns the problem into a MINLP, which
+            this model deliberately avoids.
+
+            Args:
+                model: The Pyomo model being built.
+                s: Storage index from `model.STOR`.
+
+            Returns:
+                A Pyomo inequality expression.
+            """
             return (
                 model.STOR_Pchg[s] + model.STOR_Pdis[s] <= model.STOR_Pmax[s]
             )
@@ -846,6 +1023,18 @@ class Basemodel:
 
         # Inverter apparent power limit
         def stor_inverter_cap_rule(model, s):
+            r"""Converter apparent-power limit for storage `s`.
+
+            $(P_{chg} - P_{dis})^2 + q^2 \le P_{max}^2$: active and reactive
+            power share one rating, so reactive support costs active headroom.
+
+            Args:
+                model: The Pyomo model being built.
+                s: Storage index from `model.STOR`.
+
+            Returns:
+                A Pyomo inequality expression.
+            """
             return (
                 model.pSTOR[s] ** 2 + model.qSTOR[s] ** 2
                 <= model.STOR_Pmax[s] ** 2
@@ -915,6 +1104,14 @@ def preprocess_grid(grid):
     grid = copy.deepcopy(grid)
 
     def _present(name):
+        """Whether `grid` has a non-empty table of this name.
+
+        Args:
+            name: pandapower table name, e.g. `"switch"`.
+
+        Returns:
+            True if the table exists and holds at least one row.
+        """
         return name in grid and hasattr(grid[name], "loc") and len(grid[name])
 
     # Merge the buses joined by closed zero-impedance bus-bus switches across
@@ -925,6 +1122,18 @@ def preprocess_grid(grid):
     alias: dict[int, int] = {}
 
     def _resolve(bus):
+        """Follow a bus through the fusion map to its surviving bus.
+
+        Bus-bus switches are merged by rewriting every reference to point at
+        one representative bus. The map can chain (a fused to b, b fused to c),
+        so this walks it to the end rather than taking one step.
+
+        Args:
+            bus: Original pandapower bus index.
+
+        Returns:
+            The index of the bus that survives the merge.
+        """
         while bus in alias:
             bus = alias[bus]
         return bus

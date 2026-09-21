@@ -2,5 +2,8 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Plotting utilities for POTPOURRI: network maps, PQ/QU grid codes, and
-generation bar charts."""
+"""Plotting utilities for potpourri.
+
+Plotting utilities for POTPOURRI. Network maps, PQ/QU grid codes, and
+generation bar charts.
+"""

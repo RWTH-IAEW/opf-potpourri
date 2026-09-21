@@ -2,8 +2,11 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""OPF mixin: adds operational limit constraints and line thermal limits to a
-power flow model."""
+"""OPF mixin.
+
+Adds operational limit constraints and line thermal limits to a power flow
+model.
+"""
 
 import copy
 
@@ -14,7 +17,9 @@ import numpy as np
 
 
 class OPF(Basemodel):
-    """OPF mixin that adds power and thermal limit constraints to a power flow
+    """Operating limits and objectives, as a mix-in.
+
+    OPF mixin that adds power and thermal limit constraints to a power flow
     model.
 
     Intended for use via multiple inheritance alongside AC or DC:
@@ -170,6 +175,19 @@ class OPF(Basemodel):
         )
 
     def __calc_SLmax(self, max_loading_percent=100):
+        r"""Apparent-power rating of every line and transformer, in p.u.
+
+        A line's rating is a *current* limit in pandapower, so it is converted
+        with the from-bus nominal voltage: $S_{max} = \sqrt{3} \, V_n \,
+        I_{max}$. Transformers already carry an MVA rating.
+
+        Args:
+            max_loading_percent: Scales the ratings, so 100 means the nameplate
+                value.
+
+        Returns:
+            None. Stores the limits for the parameter builders.
+        """
         # Native lines: max_i_ka @ from-bus vn_kv → MVA limit, p.u.
         vr = self.net.bus.loc[
             self.net.line["from_bus"].values, "vn_kv"
@@ -204,7 +222,9 @@ class OPF(Basemodel):
         return line_lim
 
     def _calc_opf_parameters(self, **kwargs):
-        """Compute all OPF limit data from the network before model
+        """Derive every OPF limit from the network before building.
+
+        Compute all OPF limit data from the network before model
         construction.
 
         Calculates line apparent power limits (SLmax) and transformer limits
@@ -308,6 +328,21 @@ class OPF(Basemodel):
         _DEGENERATE_EPS = 1e-9
 
         def static_generation_real_power_bounds(model, g):
+            """Bound a static generator's active power, freeing it first.
+
+            Unfixes `psG[g]` and returns its bounds. A generator whose two
+            bounds coincide is widened by a tiny epsilon instead of being
+            pinned: an equality here would leave the NL writer a constraint
+            with no free variable, which IPOPT reports as `TOO_FEW_DOF` rather
+            than as an infeasibility.
+
+            Args:
+                model: The Pyomo model being built.
+                g: Static-generator index.
+
+            Returns:
+                The Pyomo ranged 3-tuple `(lower, psG, upper)`.
+            """
             lo = float(pyo.value(model.sPGmin[g]))
             hi = float(pyo.value(model.sPGmax[g]))
             if abs(hi - lo) < 1e-12:
@@ -325,6 +360,17 @@ class OPF(Basemodel):
 
         # --- generation real power limits ---
         def real_power_bounds(model, g):
+            """Bound a generator's active power, freeing it first.
+
+            As `static_generation_real_power_bounds`, for `model.G`.
+
+            Args:
+                model: The Pyomo model being built.
+                g: Generator index.
+
+            Returns:
+                The Pyomo ranged 3-tuple `(lower, pG, upper)`.
+            """
             lo = float(pyo.value(model.PGmin[g]))
             hi = float(pyo.value(model.PGmax[g]))
             if abs(hi - lo) < 1e-12:
@@ -342,6 +388,15 @@ class OPF(Basemodel):
 
         # --- demand limits ---
         def real_demand_bounds(model, d):
+            """Bound a controllable load's active power, freeing it first.
+
+            Args:
+                model: The Pyomo model being built.
+                d: Load index from the controllable subset.
+
+            Returns:
+                The Pyomo ranged 3-tuple `(lower, pD, upper)`.
+            """
             return model.PDmin[d], model.pD[d], model.PDmax[d]
 
         self.model.PD_Constraint = pyo.Constraint(
@@ -358,6 +413,15 @@ class OPF(Basemodel):
         """
 
         def _calc_tap_min_max(self):
+            """Tap ratio and phase shift at the extreme tap positions.
+
+            Evaluates the transformer's referred voltages at `tap_min` and
+            `tap_max`, which gives the range the continuous tap variable may
+            move over.
+
+            Returns:
+                None. Stores the bounds for the tap parameters.
+            """
             vn_trafo_hv_min, vn_trafo_lv_min, shift_min = _calc_tap_shift(
                 self, tap_pos=self.net.trafo.tap_min
             )
@@ -373,8 +437,9 @@ class OPF(Basemodel):
             return ratio_min, ratio_max
 
         def _calc_nominal_ratio_from_dataframe(self, vn_hv_kv, vn_lv_kv):
-            """
-            Calculates (Vectorized) the off nominal tap ratio::
+            """Compute the off-nominal tap ratio, vectorised.
+
+            ::
 
                           (vn_hv_kv / vn_lv_kv) / (ub1_in_kv / ub2_in_kv)
 
@@ -401,9 +466,9 @@ class OPF(Basemodel):
             return tap_rat / nom_rat
 
         def _calc_tap_shift(self, tap_pos=None):
-            """
-            Adjust the nominal voltage vnh and vnl to the active tab position
-            "tap_pos". If "side" is 1 (high-voltage side) the high voltage
+            """Refer the nominal voltages to the active tap position.
+
+            If ``side`` is 1 (high-voltage side) the high voltage
             vnh is adjusted. If "side" is 2 (low-voltage side) the low
             voltage vnl is adjusted
 
@@ -439,12 +504,36 @@ class OPF(Basemodel):
             tap_step_degree = self.net.trafo.tap_step_degree
 
             def cos(x):
+                """Cosine of an angle given in degrees.
+
+                Args:
+                    x: Angle in degrees.
+
+                Returns:
+                    The cosine, as a float or array.
+                """
                 return np.cos(np.deg2rad(x))
 
             def sin(x):
+                """Sine of an angle given in degrees.
+
+                Args:
+                    x: Angle in degrees.
+
+                Returns:
+                    The sine, as a float or array.
+                """
                 return np.sin(np.deg2rad(x))
 
             def arctan(x):
+                """Arctangent, returned in degrees.
+
+                Args:
+                    x: Tangent value.
+
+                Returns:
+                    The angle in degrees.
+                """
                 return np.rad2deg(np.arctan(x))
 
             for side, vn, direction in [("hv", vnh, 1), ("lv", vnl, -1)]:
@@ -526,6 +615,18 @@ class OPF(Basemodel):
         )
 
         def trafo_tap_linear_bounds(model, t):
+            """Bound the continuous tap ratio of transformer `t`.
+
+            Used by the *linear* tap model, where the ratio may take any value
+            between the extremes rather than only the discrete positions.
+
+            Args:
+                model: The Pyomo model being built.
+                t: Transformer index from `model.TRANSF`.
+
+            Returns:
+                The Pyomo ranged 3-tuple `(Tap_min, Tap, Tap_max)`.
+            """
             return model.Tap_min[t], model.Tap[t], model.Tap_max[t]
 
         self.model.Tap_linear_constr = pyo.Constraint(
@@ -585,6 +686,15 @@ class OPF(Basemodel):
         )  # transformer tap side; 0: hv, 1: lv
 
         def trafo_tap_pos_min_max(model, t):
+            """Bound the integer tap position of transformer `t`.
+
+            Args:
+                model: The Pyomo model being built.
+                t: Transformer index from `model.TRANSF`.
+
+            Returns:
+                The Pyomo ranged 3-tuple over `Tap_pos`.
+            """
             return model.Tap_pos_min[t], model.Tap_pos[t], model.Tap_pos_max[t]
 
         self.model.Tap_pos_constr = pyo.Constraint(
@@ -592,6 +702,20 @@ class OPF(Basemodel):
         )
 
         def trafo_tap_discrete(model, t):
+            """Tie the tap ratio to the integer tap position.
+
+            Turns the discrete tap changer into an equality between the ratio
+            and the position, with the sense depending on which winding the tap
+            sits on -- an LV-side tap enters as a reciprocal. Introducing an
+            integer variable makes the model a MINLP.
+
+            Args:
+                model: The Pyomo model being built.
+                t: Transformer index from `model.TRANSF`.
+
+            Returns:
+                A Pyomo equality expression.
+            """
             if model.Tap_side[t]:
                 # tap side: lv
                 return model.Tap[t] == 1 / (

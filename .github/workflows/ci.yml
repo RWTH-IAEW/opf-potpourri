@@ -21,6 +21,25 @@ jobs:
       - run: ruff check .
       - run: ruff format --check .
 
+  documentation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install "interrogate>=1.7"
+      # Coverage: does a docstring exist at all? Scope and threshold
+      # come from [tool.interrogate] in pyproject.toml, so this behaves
+      # identically here and locally. Structure is checked by the lint
+      # job, whose `ruff check` now includes the pydocstyle D rules.
+      - run: interrogate src/potpourri
+      # The README badge is committed, so it can go stale. Regenerate
+      # it and fail if it moved, keeping the measurement authoritative.
+      - run: interrogate src/potpourri --generate-badge docs/assets/
+          --badge-format svg
+      - run: git diff --exit-code -- docs/assets/interrogate_badge.svg
+
   licensing:
     runs-on: ubuntu-latest
     steps:

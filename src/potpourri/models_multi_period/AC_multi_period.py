@@ -2,8 +2,10 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Multi-period AC power flow mixin: adds full AC equations with voltage
-magnitudes over time."""
+"""Multi-period AC power flow mixin.
+
+Adds full AC equations with voltage magnitudes over time.
+"""
 
 import numpy as np
 
@@ -16,8 +18,7 @@ from potpourri.technologies.demand import Demand_multi_period
 
 
 class AC_multi_period(Basemodel_multi_period):
-    """Multi-period AC power flow model with full AC equations indexed over
-    time steps."""
+    """Multi-period AC power flow, indexed over time steps."""
 
     def __init__(self, net, toT, fromT=None, pf=1):
         super().__init__(net, toT, fromT, pf)
@@ -75,8 +76,11 @@ class AC_multi_period(Basemodel_multi_period):
         self.create_model()
 
     def create_model(self):
-        """Build the multi-period AC Pyomo model with admittance parameters
-        and AC KCL/KVL constraints."""
+        """Build the multi-period AC model, in place.
+
+        Build the multi-period AC Pyomo model with admittance parameters
+        and AC KCL/KVL constraints.
+        """
         super().create_model()
         self.model.name = "AC"
 
@@ -195,6 +199,21 @@ class AC_multi_period(Basemodel_multi_period):
 
         # --- Kirchoff's voltage law on each line ---
         def KVL_real_fromend(model, l, t):
+            r"""Active power entering line `l` at its from bus, at time `t`.
+
+            The time-indexed twin of `AC.create_model`'s `KVL_real_fromend`;
+            see [`potpourri.models.AC`][potpourri.models.AC] for the
+            $\pi$-model relation and the sign conventions, which are identical
+            here.
+
+            Args:
+                model: The Pyomo model being built.
+                l: Line index from `model.L`.
+                t: Time index from `model.T`.
+
+            Returns:
+                A Pyomo equality expression defining `pLfrom[l, t]`.
+            """
             return model.pLfrom[l, t] == model.Gii[(l, t)] * (
                 model.v[model.A[l, 1], t] ** 2
             ) + model.v[model.A[l, 1], t] * model.v[model.A[l, 2], t] * (
@@ -211,6 +230,20 @@ class AC_multi_period(Basemodel_multi_period):
             )
 
         def KVL_real_toend(model, l, t):
+            r"""Active power entering line `l` at its to bus, at time `t`.
+
+            The time-indexed twin of `AC.create_model`'s `KVL_real_toend`; see
+            [`potpourri.models.AC`][potpourri.models.AC] for the $\pi$-model
+            relation and the sign conventions, which are identical here.
+
+            Args:
+                model: The Pyomo model being built.
+                l: Line index from `model.L`.
+                t: Time index from `model.T`.
+
+            Returns:
+                A Pyomo equality expression defining `pLto[l, t]`.
+            """
             return model.pLto[l, t] == model.Gii[l, t] * (
                 model.v[model.A[l, 2], t] ** 2
             ) + model.v[model.A[l, 1], t] * model.v[model.A[l, 2], t] * (
@@ -227,6 +260,21 @@ class AC_multi_period(Basemodel_multi_period):
             )
 
         def KVL_reactive_fromend(model, l, t):
+            r"""Reactive power entering line `l` at its from bus, at time `t`.
+
+            The time-indexed twin of `AC.create_model`'s
+            `KVL_reactive_fromend`; see
+            [`potpourri.models.AC`][potpourri.models.AC] for the $\pi$-model
+            relation and the sign conventions, which are identical here.
+
+            Args:
+                model: The Pyomo model being built.
+                l: Line index from `model.L`.
+                t: Time index from `model.T`.
+
+            Returns:
+                A Pyomo equality expression defining `qLfrom[l, t]`.
+            """
             return model.qLfrom[l, t] == -model.Bii[l, t] * (
                 model.v[model.A[l, 1], t] ** 2
             ) + model.v[model.A[l, 1], t] * model.v[model.A[l, 2], t] * (
@@ -243,6 +291,21 @@ class AC_multi_period(Basemodel_multi_period):
             )
 
         def KVL_reactive_toend(model, l, t):
+            r"""Reactive power entering line `l` at its to bus, at time `t`.
+
+            The time-indexed twin of `AC.create_model`'s `KVL_reactive_toend`;
+            see [`potpourri.models.AC`][potpourri.models.AC] for the
+            $\pi$-model relation and the sign conventions, which are identical
+            here.
+
+            Args:
+                model: The Pyomo model being built.
+                l: Line index from `model.L`.
+                t: Time index from `model.T`.
+
+            Returns:
+                A Pyomo equality expression defining `qLto[l, t]`.
+            """
             return model.qLto[l, t] == -model.Bii[l, t] * (
                 model.v[model.A[l, 2], t] ** 2
             ) + model.v[model.A[l, 1], t] * model.v[model.A[l, 2], t] * (
@@ -273,6 +336,21 @@ class AC_multi_period(Basemodel_multi_period):
 
         # --- Kirchoff's voltage law on each transformer line ---
         def KVL_real_fromendTransf(model, l, t):
+            """Active power entering transformer `l` at its HV bus.
+
+            The time-indexed twin of `AC.create_model`'s
+            `KVL_real_fromendTransf`. The tap ratio and phase shift are
+            time-independent, so only the voltages and angles carry the extra
+            index.
+
+            Args:
+                model: The Pyomo model being built.
+                l: Transformer index from `model.TRANSF`.
+                t: Time index from `model.T`.
+
+            Returns:
+                A Pyomo equality expression defining `pThv[l, t]`.
+            """
             if model.shift[l]:
                 return model.pThv[l, t] == model.GiiT[l] / model.Tap[
                     l, t
@@ -311,6 +389,21 @@ class AC_multi_period(Basemodel_multi_period):
             )
 
         def KVL_real_toendTransf(model, l, t):
+            """Active power entering transformer `l` at its LV bus.
+
+            The time-indexed twin of `AC.create_model`'s
+            `KVL_real_toendTransf`. The tap ratio and phase shift are
+            time-independent, so only the voltages and angles carry the extra
+            index.
+
+            Args:
+                model: The Pyomo model being built.
+                l: Transformer index from `model.TRANSF`.
+                t: Time index from `model.T`.
+
+            Returns:
+                A Pyomo equality expression defining `pTlv[l, t]`.
+            """
             if model.shift[l]:
                 return model.pTlv[l, t] == model.GiiT[l] * (
                     model.v[model.AT[l, 2], t] ** 2
@@ -349,6 +442,21 @@ class AC_multi_period(Basemodel_multi_period):
             )
 
         def KVL_reactive_fromendTransf(model, l, t):
+            """Reactive power entering transformer `l` at its HV bus.
+
+            The time-indexed twin of `AC.create_model`'s
+            `KVL_reactive_fromendTransf`. The tap ratio and phase shift are
+            time-independent, so only the voltages and angles carry the extra
+            index.
+
+            Args:
+                model: The Pyomo model being built.
+                l: Transformer index from `model.TRANSF`.
+                t: Time index from `model.T`.
+
+            Returns:
+                A Pyomo equality expression defining `qThv[l, t]`.
+            """
             if model.shift[l]:
                 return model.qThv[l, t] == -model.BiiT[l] / model.Tap[
                     l, t
@@ -387,6 +495,21 @@ class AC_multi_period(Basemodel_multi_period):
             )
 
         def KVL_reactive_toendTransf(model, l, t):
+            """Reactive power entering transformer `l` at its LV bus.
+
+            The time-indexed twin of `AC.create_model`'s
+            `KVL_reactive_toendTransf`. The tap ratio and phase shift are
+            time-independent, so only the voltages and angles carry the extra
+            index.
+
+            Args:
+                model: The Pyomo model being built.
+                l: Transformer index from `model.TRANSF`.
+                t: Time index from `model.T`.
+
+            Returns:
+                A Pyomo equality expression defining `qTlv[l, t]`.
+            """
             if model.shift[l]:
                 return model.qTlv[l, t] == -model.BiiT[l] * (
                     model.v[model.AT[l, 2], t] ** 2
@@ -456,6 +579,22 @@ class AC_multi_period(Basemodel_multi_period):
                 self.model.v[b0, t].fix(self.model.v_b0[b0])
 
     def _kcl_real_rule(self, model, b, t):
+        """Active-power balance at bus `b` and time `t`.
+
+        Generation minus storage equals demand, the branch injections at that
+        bus and the shunt term, per time step. Device contributions registered
+        through `register_kcl_real` are added here, which is what lets a
+        flexible device attach after the power-flow equations were built.
+
+        Args:
+            model: The Pyomo model being built.
+            b: Bus index from `model.B` (a ppc bus number).
+            t: Time index from `model.T`.
+
+        Returns:
+            A Pyomo equality expression, or `Constraint.Skip` where every term
+            at that bus is constant.
+        """
         kcl = sum(
             model.psG[g, t] for g in model.sG if (g, b) in model.sGbs
         ) + sum(model.pG[g, t] for g in model.G if (g, b) in model.Gbs) == sum(
@@ -476,6 +615,20 @@ class AC_multi_period(Basemodel_multi_period):
         return kcl
 
     def _kcl_reactive_rule(self, model, b, t):
+        """Reactive-power balance at bus `b` and time `t`.
+
+        The reactive counterpart of `_kcl_real_rule`, including any terms
+        registered via `register_kcl_reactive`.
+
+        Args:
+            model: The Pyomo model being built.
+            b: Bus index from `model.B` (a ppc bus number).
+            t: Time index from `model.T`.
+
+        Returns:
+            A Pyomo equality expression, or `Constraint.Skip` where every term
+            at that bus is constant.
+        """
         kcl = sum(
             model.qsG[g, t] for g in model.sG if (g, b) in model.sGbs
         ) + sum(model.qG[g, t] for g in model.G if (g, b) in model.Gbs) == sum(

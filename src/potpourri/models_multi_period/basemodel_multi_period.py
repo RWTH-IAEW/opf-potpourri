@@ -2,8 +2,10 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Multi-period Basemodel: extends Basemodel with a time dimension and
-simbench profile integration."""
+"""Multi-period Basemodel.
+
+Extends Basemodel with a time dimension and simbench profile integration.
+"""
 
 import pandas as pd
 from pyomo.environ import *
@@ -29,7 +31,9 @@ from potpourri.technologies.windpower import Windpower_multi_period
 
 
 class Basemodel_multi_period:
-    """Multi-period base model that adds a time set and simbench profile
+    """Multi-period base model with a time set and profiles.
+
+    Multi-period base model that adds a time set and simbench profile
     support to a pandapower network.
 
     Attributes:
@@ -230,15 +234,21 @@ class Basemodel_multi_period:
             self.flexibilities.append(Windpower_multi_period(self.net))
 
     def calc_reactive_sgen_power(self, pf=1):
-        """Calculate reactive power profiles for static generators from active
-        power and power factor."""
+        """Reactive-power profiles derived from active power.
+
+        Calculate reactive power profiles for static generators from active
+        power and power factor.
+        """
         self.net.profiles[("sgen", "q_mvar")] = self.net.profiles[
             ("sgen", "p_mw")
         ] * np.tan(np.arccos(pf))
 
     def create_model(self):
-        """Create the multi-period Pyomo ConcreteModel with time sets,
-        bus/line data, and base variables."""
+        """Build the multi-period model, replacing any previous one.
+
+        Create the multi-period Pyomo ConcreteModel with time sets,
+        bus/line data, and base variables.
+        """
         logger.info("Creating model at {}", ctime.ctime())
         self.model = ConcreteModel()
 
@@ -616,8 +626,11 @@ class Basemodel_multi_period:
             logger.error("change_vals failed for component '{}': {}", key, err)
 
     def fix_vars(self, key, value=None):
-        """Fix all indices of a named Pyomo variable; optionally set to value
-        first."""
+        """Fix every index of a named variable, optionally to a value.
+
+        Fix all indices of a named Pyomo variable; optionally set to value
+        first.
+        """
         component = self.model.component(key)
         if not component:
             logger.warning("Model has no component '{}'", key)
@@ -633,8 +646,11 @@ class Basemodel_multi_period:
             logger.error("fix_vars failed for component '{}': {}", key, err)
 
     def unfix_vars(self, key, value=None):
-        """Unfix all indices of a named Pyomo variable; optionally reset to
-        value."""
+        """Free every index of a named variable, optionally reseating it.
+
+        Unfix all indices of a named Pyomo variable; optionally reset to
+        value.
+        """
         component = self.model.component(key)
         if not component:
             logger.warning("Model has no component '{}'", key)
@@ -649,21 +665,28 @@ class Basemodel_multi_period:
             logger.error("unfix_vars failed for component '{}': {}", key, err)
 
     def make_to_dict(self, model_obj, model_time, data, time_dependent=True):
-        """
-        **make_to_dict** \n
+        """Spread per-object data over the time index for a Pyomo Param.
+
+        Pyomo parameters indexed over (object, time) want a flat dict
+        keyed by that pair. This builds one, either by reading a value
+        per time step or by repeating a single value across the
+        horizon.
+
         Args:
-            model_obj: Object Indices
-            model_time: Time Indices
-            data: Data to be converted to dictionary
-            time_dependent: should the data be time dependent True or
-                constant for all time steps False
+            model_obj: Object indices (buses, lines, devices, ...).
+            model_time: Time indices, normally `model.T`.
+            data: Values to spread. A scalar `0` is treated as a
+                sentinel and fills every entry with zero. Otherwise a
+                pandas Series or array-like, indexed by time when
+                `time_dependent` is True and by object when it is not.
+            time_dependent: True takes a different value per time step;
+                False repeats one value per object across all steps.
 
         Returns:
-            data_dict: Dictionary with the data
-            tuple_list: List of tuples with the object and time index
-
+            A `(data_dict, tuple_list)` pair: the value mapping keyed
+            by `(object, time)`, and the matching list of index tuples
+            for constructing the Pyomo Set.
         """
-
         # Scalar zero sentinel — must check with isinstance to avoid ambiguous
         # truth-value error when `data` is a pandas Series.
         if isinstance(data, (int, float)) and data == 0:
@@ -727,15 +750,14 @@ class Basemodel_multi_period:
         return data_dict, tuple_list
 
     def make_to_tuple(self, model_obj, model_time):
-        """
-        **make_to_tuple** \n
+        """Build the (object, time) index list for a Pyomo component.
+
         Args:
-            model_obj: Object Indices
-            model_time: Time Indices
+            model_obj: Object indices (buses, lines, devices, ...).
+            model_time: Time indices, normally `model.T`.
 
         Returns:
-            tuple_list: List of tuples with the object and time index
-
+            A list of `(object, time)` tuples, ordered object-major.
         """
         tuple_list = list([(o, t) for o in model_obj for t in model_time])
         return tuple_list

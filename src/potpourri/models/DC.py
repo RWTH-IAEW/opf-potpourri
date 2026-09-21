@@ -2,8 +2,10 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""DC power flow mixin: adds linearised DC equations (voltage angles only)
-to Basemodel."""
+"""DC power flow mixin.
+
+Adds linearised DC equations (voltage angles only) to Basemodel.
+"""
 
 import numpy as np
 import pandas as pd
@@ -107,7 +109,9 @@ class DC(Basemodel):
         self.create_model()
 
     def _lv_tap_impedance_scale(self):
-        """Factor pandapower applied to each transformer's series impedance
+        """Impedance factor pandapower applies for an LV-side tap.
+
+        Factor pandapower applied to each transformer's series impedance
         for a tap on the LV side: ``(vn_trafo_lv / vn_lv_kv)²`` per
         ``net.trafo`` row, 1 where the tap sits on the HV side or is absent.
         """
@@ -168,6 +172,15 @@ class DC(Basemodel):
 
         # --- Kirchoff's current law at each bus b ---
         def KCL_def(model, b):
+            """Active-power balance at bus `b`.
+
+            Args:
+                model: The Pyomo model being built.
+                b: Bus index (a ppc bus number).
+
+            Returns:
+                A Pyomo expression.
+            """
             kcl = sum(
                 model.psG[g] for g in model.sG if (g, b) in model.sGbs
             ) + sum(
@@ -193,9 +206,27 @@ class DC(Basemodel):
 
         # --- Kirchoff's voltage law at each line and transformer---
         def KVL_real_fromend(model, l):
+            """Active power entering line `l` at its from bus.
+
+            Args:
+                model: The Pyomo model being built.
+                l: Branch index.
+
+            Returns:
+                A Pyomo expression.
+            """
             return model.pLfrom[l] == (-model.BL[l]) * model.deltaL[l]
 
         def KVL_real_toend(model, l):
+            """Active power entering line `l` at its to bus.
+
+            Args:
+                model: The Pyomo model being built.
+                l: Branch index.
+
+            Returns:
+                A Pyomo expression.
+            """
             return model.pLto[l] == (model.BL[l]) * model.deltaL[l]
 
         self.model.KVL_real_from = pyo.Constraint(
@@ -206,9 +237,27 @@ class DC(Basemodel):
         )
 
         def KVL_trans_fromend(model, l):
+            """Active power entering transformer `l` at its HV bus.
+
+            Args:
+                model: The Pyomo model being built.
+                l: Branch index.
+
+            Returns:
+                A Pyomo expression.
+            """
             return model.pThv[l] == (-model.BLT[l]) * (model.deltaLT[l])
 
         def KVL_trans_toend(model, l):
+            """Active power entering transformer `l` at its LV bus.
+
+            Args:
+                model: The Pyomo model being built.
+                l: Branch index.
+
+            Returns:
+                A Pyomo expression.
+            """
             return model.pTlv[l] == (model.BLT[l]) * (model.deltaLT[l])
 
         self.model.KVL_trans_from = pyo.Constraint(
@@ -220,6 +269,15 @@ class DC(Basemodel):
 
         # --- phase angle pyo.Constraints ---
         def phase_angle_diff1(model, l):
+            """Upper bound on a branch's angle difference.
+
+            Args:
+                model: The Pyomo model being built.
+                l: Branch index.
+
+            Returns:
+                A Pyomo expression.
+            """
             return (
                 model.deltaL[l]
                 == model.delta[model.A[l, 1]] - model.delta[model.A[l, 2]]
@@ -235,6 +293,15 @@ class DC(Basemodel):
         use_shift = self.dc_convention != "powermodels"
 
         def phase_angle_diff2(model, l):
+            """Lower bound on a branch's angle difference.
+
+            Args:
+                model: The Pyomo model being built.
+                l: Branch index.
+
+            Returns:
+                A Pyomo expression.
+            """
             diff = model.delta[model.AT[l, 1]] - model.delta[model.AT[l, 2]]
             if use_shift:
                 diff = diff - model.shift[l]

@@ -21,3 +21,16 @@ repos:
         additional_dependencies: ["packaging>=24.2"]
         pass_filenames: false
         always_run: true
+
+      # Docstring coverage. Ruff's D rules (above) judge the shape of a
+      # docstring that exists; interrogate is what notices one missing.
+      # Scope and threshold live in [tool.interrogate] in pyproject.toml
+      # so this command behaves identically in CI and by hand.
+      - id: interrogate
+        name: docstring coverage (interrogate)
+        entry: interrogate
+        args: ["src/potpourri"]
+        language: python
+        additional_dependencies: ["interrogate>=1.7"]
+        pass_filenames: false
+        always_run: true

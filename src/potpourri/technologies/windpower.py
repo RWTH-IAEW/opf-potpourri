@@ -2,8 +2,11 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Wind power mix-in: attaches wind generator sets, parameters, and
-Q-control constraints to a multi-period model."""
+"""Wind power mix-in.
+
+Attaches wind generator sets, parameters, and Q-control constraints to a
+multi-period model.
+"""
 
 import numpy as np
 import pandas as pd
@@ -48,7 +51,9 @@ _DEFAULT_HC_Q_MAX, _DEFAULT_HC_Q_MIN = _hc_q_bounds(DEFAULT_GRID_CODE)
 
 
 class Windpower_multi_period(Sgens_multi_period):
-    """Multi-period wind generator device module, extending sgen with
+    """Multi-period wind, with Q-control and hosting capacity.
+
+    Multi-period wind generator device module, extending sgen with
     Q-control and hosting-capacity (HC) support.
 
     The Q-control constraints implement the capability area of the selected
@@ -101,7 +106,7 @@ class Windpower_multi_period(Sgens_multi_period):
             self.static_generation_data["type"] = net.sgen.type.values
 
     def get_all(self, model):
-        """No-op: wind generators are initialised via get_all_opf."""
+        """No-op. Wind generators are initialised via get_all_opf."""
 
     def get_all_opf(self, model):
         """Attach OPF sets and parameters for controllable wind generators."""
@@ -145,7 +150,9 @@ class Windpower_multi_period(Sgens_multi_period):
         sw_max_mva: float | None = None,
         sw_min_mva: float | None = None,
     ):
-        """Compute SWmax/SWmin apparent-power limits and Q(U) slope
+        """Derive the apparent-power limits and Q(U) slopes.
+
+        Compute SWmax/SWmin apparent-power limits and Q(U) slope
         parameters for HC wind generators.
 
         Args:
@@ -223,8 +230,11 @@ class Windpower_multi_period(Sgens_multi_period):
         return True
 
     def get_opf_parameters(self, model):
-        """Attach var_q and PsG_inst parameters for controllable wind
-        generators."""
+        """Attach the variant and installed-capacity parameters.
+
+        Attach var_q and PsG_inst parameters for controllable wind
+        generators.
+        """
         model.var_q = pyo.Param(
             model.WINDc,
             model.T,
@@ -308,6 +318,17 @@ class Windpower_multi_period(Sgens_multi_period):
         """Add a wind-maximisation objective that subtracts line losses."""
 
         def obj_wind_loss_rule(model):
+            """Wind infeed minus network losses.
+
+            Maximised, so the objective rewards hosting capacity and charges
+            for the losses needed to carry it.
+
+            Args:
+                model: The Pyomo model being extended.
+
+            Returns:
+                A Pyomo expression.
+            """
             return (
                 sum(model.psG[w] for w in model.WIND_HC)
                 - sum(model.pLfrom[l] + model.pLto[l] for l in model.L)
@@ -317,9 +338,11 @@ class Windpower_multi_period(Sgens_multi_period):
         model.obj = pyo.Objective(rule=obj_wind_loss_rule, sense=pyo.maximize)
 
     def get_constraints(self, model, net):
-        """Add Q(P) and Q(U) constraints for controllable wind and HC
-        generators."""
+        """Add the Q(P) and Q(U) capability constraints.
 
+        Add Q(P) and Q(U) constraints for controllable wind and HC
+        generators.
+        """
         # Each grid-code bound is a piecewise-linear envelope, so it becomes
         # one inequality per affine piece: the upper bound is the pointwise
         # minimum of its pieces, the lower bound the pointwise maximum.  A
@@ -335,6 +358,16 @@ class Windpower_multi_period(Sgens_multi_period):
 
         @model.Constraint(model.WINDc, model.W_QP_PIECE)
         def QW_pos(model, w, k):
+            """Upper Q(P) capability piece for wind unit `w`.
+
+            Args:
+                model: The Pyomo model being extended.
+                w: Wind-generator index.
+                k: Piece index of the piecewise envelope.
+
+            Returns:
+                A Pyomo expression.
+            """
             pieces = pq_area.upper_pieces(
                 int(pyo.value(model.var_q[w])), DEFAULT_P_RANGE_PU
             )
@@ -345,6 +378,16 @@ class Windpower_multi_period(Sgens_multi_period):
 
         @model.Constraint(model.WINDc, model.W_QP_PIECE)
         def QW_neg(model, w, k):
+            """Lower Q(P) capability piece for wind unit `w`.
+
+            Args:
+                model: The Pyomo model being extended.
+                w: Wind-generator index.
+                k: Piece index of the piecewise envelope.
+
+            Returns:
+                A Pyomo expression.
+            """
             pieces = pq_area.lower_pieces(
                 int(pyo.value(model.var_q[w])), DEFAULT_P_RANGE_PU
             )
@@ -355,6 +398,16 @@ class Windpower_multi_period(Sgens_multi_period):
 
         @model.Constraint(model.WINDc, model.W_QU_PIECE)
         def QV_min(model, w, k):
+            """Lower Q(U) capability piece for wind unit `w`.
+
+            Args:
+                model: The Pyomo model being extended.
+                w: Wind-generator index.
+                k: Piece index of the piecewise envelope.
+
+            Returns:
+                A Pyomo expression.
+            """
             if w not in sGbs_lookup:
                 return pyo.Constraint.Skip
             pieces = qv_area.lower_pieces(
@@ -368,6 +421,16 @@ class Windpower_multi_period(Sgens_multi_period):
 
         @model.Constraint(model.WINDc, model.W_QU_PIECE)
         def QV_max(model, w, k):
+            """Upper Q(U) capability piece for wind unit `w`.
+
+            Args:
+                model: The Pyomo model being extended.
+                w: Wind-generator index.
+                k: Piece index of the piecewise envelope.
+
+            Returns:
+                A Pyomo expression.
+            """
             if w not in sGbs_lookup:
                 return pyo.Constraint.Skip
             pieces = qv_area.upper_pieces(
@@ -381,6 +444,18 @@ class Windpower_multi_period(Sgens_multi_period):
 
         @model.Constraint(model.WIND_HC)
         def SW_max(model, w):
+            r"""Upper apparent-power limit of candidate `w`.
+
+            $p^2 + q^2 \le S_{max}^2 y_w$: a zero selection variable forces the
+            unit off, which makes the model a MINLP.
+
+            Args:
+                model: The Pyomo model being extended.
+                w: Wind-generator index.
+
+            Returns:
+                A Pyomo expression.
+            """
             return (
                 model.psG[w] ** 2 + model.qsG[w] ** 2
                 <= model.SWmax[w] ** 2 * model.y[w]
@@ -388,6 +463,17 @@ class Windpower_multi_period(Sgens_multi_period):
 
         @model.Constraint(model.WIND_HC)
         def SW_min(model, w):
+            """Lower apparent-power limit of candidate `w`.
+
+            A selected unit must run at or above a minimum size.
+
+            Args:
+                model: The Pyomo model being extended.
+                w: Wind-generator index.
+
+            Returns:
+                A Pyomo expression.
+            """
             return (
                 model.psG[w] ** 2 + model.qsG[w] ** 2
                 >= model.SWmin[w] ** 2 * model.y[w]
@@ -396,14 +482,43 @@ class Windpower_multi_period(Sgens_multi_period):
         # Simplified HC Q-P bounds: the widest band the grid code offers
         @model.Constraint(model.WIND_HC)
         def QW_min(model, w):
+            """Lower Q(P) bound for candidate `w`.
+
+            Args:
+                model: The Pyomo model being extended.
+                w: Wind-generator index.
+
+            Returns:
+                A Pyomo expression.
+            """
             return model.qsG[w] >= self.qp_min * model.psG[w]
 
         @model.Constraint(model.WIND_HC)
         def QW_max(model, w):
+            """Upper Q(P) bound for candidate `w`.
+
+            Args:
+                model: The Pyomo model being extended.
+                w: Wind-generator index.
+
+            Returns:
+                A Pyomo expression.
+            """
             return model.qsG[w] <= self.qp_max * model.psG[w]
 
         @model.Constraint(model.WIND_HC)
         def QU_min_hc(model, w):
+            """Lower Q(U) bound for candidate `w`.
+
+            Bilinear in the bus voltage and the active power, hence nonconvex.
+
+            Args:
+                model: The Pyomo model being extended.
+                w: Wind-generator index.
+
+            Returns:
+                A Pyomo expression.
+            """
             for g, b in model.sGbs:
                 if g == w:
                     return (
@@ -414,6 +529,15 @@ class Windpower_multi_period(Sgens_multi_period):
 
         @model.Constraint(model.WIND_HC)
         def QU_max_hc(model, w):
+            """Upper Q(U) bound for candidate `w`.
+
+            Args:
+                model: The Pyomo model being extended.
+                w: Wind-generator index.
+
+            Returns:
+                A Pyomo expression.
+            """
             for g, b in model.sGbs:
                 if g == w:
                     return (
@@ -426,6 +550,15 @@ class Windpower_multi_period(Sgens_multi_period):
 
             @model.Constraint(model.WIND_HC)
             def PW_max(model, w):
+                """Cap candidate `w` at the bus's wind potential.
+
+                Args:
+                    model: The Pyomo model being extended.
+                    w: Wind-generator index.
+
+                Returns:
+                    A Pyomo expression.
+                """
                 return model.psG[w] <= model.pWmax[w]
 
     def unfix_variables(self, model):
@@ -435,5 +568,8 @@ class Windpower_multi_period(Sgens_multi_period):
             model.qsG[w].unfix()
 
     def get_all_acopf(self, model):
-        """No additional ACOPF components needed for wind (called via
-        get_all_opf)."""
+        """Nothing extra for wind at the AC OPF stage.
+
+        No additional ACOPF components needed for wind (called via
+        get_all_opf).
+        """
