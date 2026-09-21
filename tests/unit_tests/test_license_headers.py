@@ -309,7 +309,9 @@ def test_license_texts_do_not_drift():
 
 
 def test_declared_licence_matches_pyproject():
-    import tomllib
+    # tomllib is 3.11+; the project still supports 3.10, where this skips
+    # rather than failing the whole suite on a missing stdlib module.
+    tomllib = pytest.importorskip("tomllib")
 
     with open(os.path.join(REPO_ROOT, "pyproject.toml"), "rb") as handle:
         pyproject = tomllib.load(handle)
