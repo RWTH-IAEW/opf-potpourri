@@ -1,5 +1,4 @@
 # SPDX-FileCopyrightText: 2023-2026 Institute for High Voltage Equipment and Grids, Digitalization and Energy Economics (IAEW), RWTH Aachen University
-# SPDX-FileCopyrightText: 2026 Steffen Kortmann
 #
 # SPDX-License-Identifier: MIT
 
@@ -30,7 +29,7 @@ cost of the other — the weight signal makes this choice explicit.
 Network: 1-MVLV-urban-5.303-0-no_sw  (246 buses: 110 kV / 10 kV / 0.4 kV)
 Solver : IPOPT
 
-(c) 2026, Steffen Kortmann
+Author: Steffen Kortmann (2026)
 """
 
 from __future__ import annotations

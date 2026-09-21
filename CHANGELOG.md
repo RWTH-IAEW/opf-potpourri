@@ -10,9 +10,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Every Python file carries an SPDX licensing header.** pandapower's
   maintainers asked us to carry proper copyright and licensing information
   and keep it consistent; none of the tracked Python files had any. Each
-  file now opens with `SPDX-FileCopyrightText` and
-  `SPDX-License-Identifier: MIT` as real comments, with the holder wording
-  taken verbatim from `LICENSE`. The 15 example scripts that already carried
+  file now opens with an `SPDX-FileCopyrightText` line and an
+  `SPDX-License-Identifier` line naming MIT, as real comments, with the
+  holder wording taken verbatim from `LICENSE`. The 15 example scripts that already carried
   a personal `(c) YEAR, ...` notice in their docstring keep it and gain a
   second copyright line mirroring it, so both holders are recorded and
   neither replaces the other. `LICENSES/MIT.txt` adds the licence text in
@@ -38,6 +38,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Copyright is institutional, and `LICENSE` carries the project's real
+  span.** Settled by the maintainer on 2026-09-21, resolving two of the
+  three questions the licensing audit raised. The 15 personal
+  `(c) YEAR, Steffen Kortmann` claims in example-script docstrings were
+  retired in favour of the holder named in `LICENSE`; the names stay as
+  `Author: Name (YEAR)`, which is attribution and asserts no rights. The
+  checker now reports a personal copyright claim in prose instead of
+  mirroring it into the header, and the fixer refuses such a file rather
+  than rewriting someone's notice. `LICENSE` and `LICENSES/MIT.txt` read
+  `2023-2026` instead of `2024`, matching the headers and the repository's
+  history. Contributions from outside IAEW are accepted inbound = outbound
+  under MIT with the contributor keeping their copyright; `CONTRIBUTING.md`
+  and `docs/licensing.md` say so explicitly.
 - **The issue-16 window converges from the cold start.** A side effect of
   0.5.3's static-generator fix: with the lower bound expressed as a constraint
   instead of a variable domain, IPOPT takes a different path and the 12-step

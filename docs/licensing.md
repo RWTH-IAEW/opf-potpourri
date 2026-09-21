@@ -39,39 +39,46 @@ Points that matter:
 
 ### Copyright years
 
-The year range is **`2023-2026`** on every first-party file: 2023 is the
-repository's earliest revision, 2026 the most recent. It is a single
-project-wide range rather than a per-file one, because a 2026 reorganisation
-rewrote the path history of most files — `git log --follow` reports 2026 for
-files whose own notices say 2023, so per-file git dates would *understate* the
-real authorship.
+The year range is **`2023-2026`** on every first-party file, and `LICENSE`
+carries the same span: 2023 is the repository's earliest revision, 2026 the
+most recent. It is a single project-wide range rather than a per-file one,
+because a 2026 reorganisation rewrote the path history of most files —
+`git log --follow` reports 2026 for files whose own notices say 2023, so
+per-file git dates would *understate* the real authorship.
 
-Extend the end year when the project moves into a new year. Do not stamp files
-individually, and do not narrow the range to the single year in `LICENSE`.
+Extend the end year when the project moves into a new year, in `LICENSE`,
+`LICENSES/MIT.txt` and `FIRST_PARTY_COPYRIGHT` together. Do not stamp files
+individually.
 
-### Additional copyright holders
+### Authorship is not copyright
 
-Some example scripts carry a personal notice in their module docstring that
-predates this policy:
+Copyright in this repository is **institutional**. Files do not carry a
+personal copyright line, and neither should new ones.
+
+Several example scripts used to end their docstring with a personal claim:
 
 ```
 (c) 2023, Steffen Kortmann
 ```
 
-Those notices are **kept where they are** and additionally mirrored into the
-header, so the file declares both holders:
+The maintainer confirmed in September 2026 that copyright is institutional,
+so those claims were retired in favour of the holder named in `LICENSE`, and
+the name kept as plain attribution:
 
-```python
-# SPDX-FileCopyrightText: 2023-2026 Institute for High Voltage Equipment and Grids, Digitalization and Energy Economics (IAEW), RWTH Aachen University
-# SPDX-FileCopyrightText: 2023 Steffen Kortmann
-#
-# SPDX-License-Identifier: MIT
+```
+Author: Steffen Kortmann (2023)
 ```
 
-Adding the institutional notice does not remove the personal one, and mirroring
-the personal one does not endorse it over the institutional one. Which of the
-two actually holds the rights is an open question — see
-[Open questions](#open-questions-for-maintainers-and-rwth).
+`Author:` is attribution and carries no rights claim, so it is welcome
+anywhere. A `(c) YEAR, Name` line in prose *is* a copyright claim, and the
+checker reports it wherever it appears — a copyright notice belongs in the
+SPDX header, not in text that `help()` prints.
+
+An **outside** contributor keeps their own copyright; see
+[Contributions from outside IAEW](#contributions-from-outside-iaew). The
+checker therefore tolerates extra `SPDX-FileCopyrightText` lines, while the
+fixer refuses to touch a file that has one — whose claim it is, is a
+question for a person.
 
 ---
 
@@ -217,24 +224,54 @@ The build previously declared `setuptools>=69` while using PEP 639's
 `License-Expression:`. The floor was raised, and a real build was inspected to
 confirm the wheel carries `License-Expression: MIT` and both licence files.
 
-### Open questions for maintainers and RWTH
+### Decisions taken, September 2026
 
-These are **not** resolved by the passing check, and were deliberately not
-decided here:
+Two of the three questions the audit raised were settled by the maintainer
+on 2026-09-21 and are now implemented:
 
-1. **Institutional versus personal copyright.** 15 example scripts declare
-   `(c) YEAR, Steffen Kortmann` while `LICENSE` declares IAEW / RWTH Aachen
-   University. Both are now recorded; neither was removed. Whether work by an
-   institute member belongs to the institute, and whether the personal notices
-   should therefore be retired, needs RWTH's licensing contact — not a
-   maintainer guess and not this tool.
-2. **The year in `LICENSE` is narrower than the project's history.** `LICENSE`
-   reads "Copyright (c) 2024" while the repository's revisions span 2023-2026
-   and file notices cite 2023, 2024 and 2026. The headers use `2023-2026`. The
-   text of `LICENSE` was **not** edited, because changing a year in a licence
-   grant is a legal statement rather than a formatting fix. Maintainers should
-   confirm the intended span and align `LICENSE` deliberately.
+1. **Copyright is institutional.** The 15 personal `(c) YEAR, Steffen
+   Kortmann` claims were retired in favour of the holder named in `LICENSE`.
+   The names stay as `Author:` attribution, which asserts no rights. The
+   checker now reports a personal copyright claim in prose rather than
+   mirroring it.
+2. **`LICENSE` carries the project's real span.** It read
+   "Copyright (c) 2024" while the repository's revisions run 2023-2026;
+   it and `LICENSES/MIT.txt` now read `2023-2026`, matching the headers.
+
+These record a maintainer decision about this institute's own work. They are
+not a legal opinion, and neither is the passing check.
+
+### Still open
+
 3. **Contributor rights.** `pyproject.toml` and `CITATION.cff` list seven
-   authors. No contributor licence agreement or assignment record exists in
-   the repository, so their individual positions are undocumented. Worth
-   settling before the JOSS submission.
+   authors, all IAEW. Under the decision above their work is institutional,
+   so the listed authors are covered — but nothing in the repository records
+   the **inbound** terms for contributions from outside IAEW, and the public
+   mirror accepts pull requests. See below.
+
+### Contributions from outside IAEW
+
+Until the maintainers choose otherwise, contributions are accepted on the
+ordinary open-source basis: **inbound = outbound**. Opening a pull request
+means you offer your contribution under the MIT License in `LICENSE`, and
+you keep your own copyright in what you wrote. No assignment to RWTH is
+asked for, and none is implied.
+
+A substantial outside contribution may therefore add its own
+`SPDX-FileCopyrightText` line alongside the institutional one. The checker
+accepts that; the fixer refuses to rewrite such a file. Do not remove
+someone else's copyright line to make a file look uniform.
+
+Three mechanisms exist if the maintainers want something stronger than the
+statement above, in increasing order of weight:
+
+| Mechanism | What it gives | Cost |
+| --- | --- | --- |
+| Inbound = outbound (current) | A clear licence for contributions | A sentence in `CONTRIBUTING.md` |
+| DCO sign-off | Each contributor certifies they may submit the work; a per-commit audit trail | A `Signed-off-by` line, plus a CI check |
+| CLA | Explicit grant, possibly assignment, to RWTH | Legal drafting, a signature process, friction for drive-by fixes |
+
+For a research tool of this size, inbound = outbound is the norm and is what
+JOSS reviewers expect to see stated. A DCO is a reasonable middle step if
+provenance of outside patches becomes a concern. A CLA needs RWTH's legal
+office and would need to come from them, not from this file.

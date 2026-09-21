@@ -1,5 +1,4 @@
 # SPDX-FileCopyrightText: 2023-2026 Institute for High Voltage Equipment and Grids, Digitalization and Energy Economics (IAEW), RWTH Aachen University
-# SPDX-FileCopyrightText: 2023 Steffen Kortmann
 #
 # SPDX-License-Identifier: MIT
 
@@ -43,7 +42,7 @@ Network: 1-LV-rural1--0-sw  (96 time steps = 1 day at 15-min resolution).
 
 Institut für Elektrische Anlagen und Netze, Digitalisierung und
 Energiewirtschaft (IAEW)
-(c) 2023, Steffen Kortmann
+Author: Steffen Kortmann (2023)
 """
 
 import logging

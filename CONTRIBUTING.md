@@ -86,9 +86,22 @@ attribution, add the licence text under `LICENSES/`, and register the file in
 `LICENSE_EXCEPTIONS` in `tools/license_headers.py` with its provenance.
 Importing a dependency is not copying it; pasting or porting source is.
 
+## Licensing your contribution
+
+Contributions are accepted on the ordinary open-source basis: **inbound =
+outbound**. Opening a pull request means you offer your contribution under the
+[MIT License](LICENSE), and **you keep your own copyright** in what you wrote.
+No assignment to RWTH is asked for, and none is implied.
+
+Copyright on IAEW's own work is institutional, which is why first-party files
+carry the institute as the holder rather than an individual. A substantial
+contribution from outside IAEW may add its own `SPDX-FileCopyrightText` line
+next to it — the checker accepts that, and nobody will remove your line to make
+the file look uniform.
+
 If you are unsure who owns a contribution, say so in the pull request instead
 of guessing a holder or a year. [`docs/licensing.md`](docs/licensing.md) has
-the full policy and the questions still open.
+the full policy.
 
 ## Commit messages
 

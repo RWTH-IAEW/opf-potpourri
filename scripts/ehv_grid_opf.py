@@ -1,5 +1,4 @@
 # SPDX-FileCopyrightText: 2023-2026 Institute for High Voltage Equipment and Grids, Digitalization and Energy Economics (IAEW), RWTH Aachen University
-# SPDX-FileCopyrightText: 2026 Steffen Kortmann
 #
 # SPDX-License-Identifier: MIT
 
@@ -14,7 +13,7 @@ grid(s).  For DC the OPF reduces to a pure LP; for AC it is a non-convex NLP.
 
 Solvers: GLPK for DC-OPF, IPOPT for AC-OPF.
 
-(c) 2026, Steffen Kortmann
+Author: Steffen Kortmann (2026)
 """
 
 from __future__ import annotations

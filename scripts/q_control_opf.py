@@ -1,5 +1,4 @@
 # SPDX-FileCopyrightText: 2023-2026 Institute for High Voltage Equipment and Grids, Digitalization and Energy Economics (IAEW), RWTH Aachen University
-# SPDX-FileCopyrightText: 2024 Steffen Kortmann
 #
 # SPDX-License-Identifier: MIT
 
@@ -44,7 +43,7 @@ Network: 1-LV-rural1--0-sw (low-voltage rural feeder, 4 rooftop PV units).
 
 Institut für Elektrische Anlagen und Netze, Digitalisierung und
 Energiewirtschaft (IAEW)
-(c) 2024, Steffen Kortmann
+Author: Steffen Kortmann (2024)
 """
 
 import copy

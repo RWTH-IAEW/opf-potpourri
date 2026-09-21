@@ -138,10 +138,21 @@ def test_multiple_holders_are_accepted():
     assert lh.check_text("a.py", text) == []
 
 
-def test_docstring_notice_must_be_mirrored_into_the_header():
+def test_personal_copyright_claim_in_a_docstring_is_flagged():
+    """Copyright is institutional and belongs in the SPDX header.
+
+    A `(c) YEAR, Name` line in prose is a copyright claim, so it is a
+    finding even when the header itself is correct.
+    """
     text = GOOD + '\n"""Doc.\n\n(c) 2023, Steffen Kortmann\n"""\n'
     problems = lh.check_text("a.py", text)
-    assert any("docstring claims" in p for p in problems)
+    assert any("asserts a copyright claim" in p for p in problems)
+
+
+def test_authorship_line_in_a_docstring_is_fine():
+    """Attribution is not a copyright claim, so it must not be flagged."""
+    text = GOOD + '\n"""Doc.\n\nAuthor: Steffen Kortmann (2023)\n"""\n'
+    assert lh.check_text("a.py", text) == []
 
 
 def test_third_party_exception_is_honoured(monkeypatch):
@@ -211,13 +222,20 @@ def test_fix_keeps_other_leading_comments():
     assert lh.check_text("a.py", fixed) == []
 
 
-def test_fix_mirrors_an_existing_docstring_notice():
+def test_fix_refuses_a_docstring_copyright_claim():
+    """Retiring someone's copyright notice is not a mechanical edit."""
     text = '"""Doc.\n\n(c) 2023, Steffen Kortmann\n"""\n\nx = 1\n'
-    fixed, _ = lh.fix_text("a.py", text)
-    assert "# SPDX-FileCopyrightText: 2023 Steffen Kortmann" in fixed
+    out, note = lh.fix_text("a.py", text)
+    assert note.startswith("refused")
+    assert out == text
+
+
+def test_fix_leaves_an_authorship_line_alone():
+    text = '"""Doc.\n\nAuthor: Steffen Kortmann (2023)\n"""\n\nx = 1\n'
+    fixed, note = lh.fix_text("a.py", text)
+    assert note == "added"
+    assert "Author: Steffen Kortmann (2023)" in fixed
     assert f"# SPDX-FileCopyrightText: {CR}" in fixed
-    # the original notice stays where it was
-    assert "(c) 2023, Steffen Kortmann" in fixed
     assert lh.check_text("a.py", fixed) == []
     assert lh.fix_text("a.py", fixed)[1] == ""
 

@@ -278,11 +278,12 @@ def canonical_expression(expression: str) -> str:
 
 
 def docstring_notices(text: str) -> list[str]:
-    """``(c) YEAR, Holder`` notices already present in the docstring.
+    """``(c) YEAR, Holder`` copyright claims inside the module docstring.
 
-    These are pre-existing claims in this repository.  The fixer mirrors
-    them into SPDX metadata so a compact header does not silently drop a
-    notice; it never invents one.
+    Copyright in this repository is institutional (see docs/licensing.md),
+    and a copyright notice belongs in the SPDX header rather than in prose
+    that ``help()`` prints.  These are therefore reported as problems, not
+    mirrored: write authorship as ``Author: Name (YEAR)`` instead.
     """
     try:
         doc = ast.get_docstring(ast.parse(split_bom(text)[1]))
@@ -376,11 +377,11 @@ def check_text(path: str, text: str) -> list[str]:
         problems.append("duplicated SPDX-FileCopyrightText line")
 
     for notice in docstring_notices(text):
-        if notice not in head.copyrights:
-            problems.append(
-                f"docstring claims '(c) {notice}' but no matching "
-                f"'# {COPYRIGHT_TAG} {notice}' line is in the header"
-            )
+        problems.append(
+            f"module docstring asserts a copyright claim '(c) {notice}'. "
+            "Copyright here is institutional and belongs in the SPDX "
+            "header; write authorship as 'Author: Name (YEAR)' instead"
+        )
     return problems
 
 
@@ -468,24 +469,22 @@ def fix_text(path: str, text: str) -> tuple[str, str]:
             f"{sorted(set(head.licenses))}, which the first-party policy "
             "cannot overwrite"
         )
-    foreign = [
-        c
-        for c in head.copyrights
-        if c != FIRST_PARTY_COPYRIGHT and c not in docstring_notices(text)
-    ]
+    # Any holder other than the institution is someone else's claim --
+    # an outside contributor, say. The checker tolerates it; the writer
+    # must not touch it. Whose it is, is a question for a person.
+    foreign = [c for c in head.copyrights if c != FIRST_PARTY_COPYRIGHT]
     if foreign:
         return bom + text, (
             f"refused: header carries copyright notices {foreign} that the "
             "policy cannot verify or rewrite"
         )
+    if docstring_notices(text):
+        return bom + text, (
+            "refused: the module docstring asserts a copyright claim; "
+            "resolve it by hand (see docs/licensing.md)"
+        )
 
     wanted = [FIRST_PARTY_COPYRIGHT]
-    for notice in docstring_notices(text):
-        if notice not in wanted:
-            wanted.append(notice)
-    for existing in head.copyrights:
-        if existing not in wanted:
-            wanted.append(existing)
 
     lines = text.split("\n")
     body = lines[head.end :]

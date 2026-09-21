@@ -18,14 +18,15 @@ reviewer can re-check the reasoning instead of trusting the label.
 
 from __future__ import annotations
 
+import ast
 import csv
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from license_headers import (  # noqa: E402
-    FIRST_PARTY_COPYRIGHT,
     LICENSE_EXCEPTIONS,
     REPO_ROOT,
     check_text,
@@ -40,7 +41,7 @@ OUTPUT = os.path.join(REPO_ROOT, "docs", "licensing-inventory.csv")
 FIELDS = (
     "path",
     "category",
-    "prior_notice",
+    "authorship",
     "license",
     "copyright",
     "evidence",
@@ -52,40 +53,58 @@ FIRST_PARTY_EVIDENCE = (
     "LICENSE and pyproject.toml declare MIT for this repository; no "
     "upstream notice, licence block or copied source found in the file"
 )
-MIRRORED_EVIDENCE = (
-    "pre-existing '(c) YEAR, holder' notice in the module docstring, "
-    "left in place and mirrored into SPDX metadata; institutional "
-    "holder from LICENSE added alongside it, neither replacing the other"
+RETIRED_EVIDENCE = (
+    "carried a personal '(c) YEAR, holder' notice in its docstring "
+    "before the 2026-09 audit; the maintainer confirmed copyright is "
+    "institutional, so the claim was retired in favour of the holder in "
+    "LICENSE and the name kept as an authorship line"
 )
+
+# `Author: Name (YEAR)` -- attribution, deliberately not a copyright
+# claim. See docs/licensing.md.
+_AUTHOR_RE = re.compile(r"^Author:\s*(.+?)\s*$", re.MULTILINE)
+
+
+def authorship(text: str) -> list[str]:
+    try:
+        doc = ast.get_docstring(ast.parse(text))
+    except SyntaxError:
+        return []
+    return _AUTHOR_RE.findall(doc or "")
 
 
 def rows(repo_root: str = REPO_ROOT):
     for rel in python_files(repo_root):
         text = read_text(os.path.join(repo_root, rel))
         head = parse_header(text)
-        notices = docstring_notices(text)
+        authors = authorship(text)
+        claims = docstring_notices(text)
         problems = check_text(rel, text)
         if rel in LICENSE_EXCEPTIONS:
             expression, evidence = LICENSE_EXCEPTIONS[rel]
             category = "third-party"
         else:
             expression = head.licenses[0] if head.licenses else ""
-            evidence = MIRRORED_EVIDENCE if notices else FIRST_PARTY_EVIDENCE
+            evidence = RETIRED_EVIDENCE if authors else FIRST_PARTY_EVIDENCE
             category = "first-party"
-        extra = [c for c in head.copyrights if c != FIRST_PARTY_COPYRIGHT]
         yield {
             "path": rel,
             "category": category,
-            "prior_notice": "; ".join(notices) or "none",
+            "authorship": "; ".join(authors) or "none",
             "license": expression,
             "copyright": " | ".join(head.copyrights),
             "evidence": evidence,
             "action": (
-                "SPDX header added; docstring notice preserved and mirrored"
-                if extra
+                "SPDX header added; personal copyright claim retired, "
+                "authorship kept"
+                if authors
                 else "SPDX header added"
             ),
-            "status": "compliant" if not problems else "; ".join(problems),
+            "status": (
+                "compliant"
+                if not problems and not claims
+                else "; ".join(problems)
+            ),
         }
 
 
@@ -104,7 +123,7 @@ def write(output: str = OUTPUT, repo_root: str = REPO_ROOT) -> int:
     print(f"{len(data)} files -> {output}")
     print(f"  first-party : {tally('category', 'first-party')}")
     print(f"  third-party : {tally('category', 'third-party')}")
-    print(f"  mirrored    : {tally('prior_notice', 'none', equal=False)}")
+    print(f"  authored    : {tally('authorship', 'none', equal=False)}")
     print(f"  compliant   : {compliant}/{len(data)}")
     return 0 if compliant == len(data) else 1
 
