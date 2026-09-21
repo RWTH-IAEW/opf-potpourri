@@ -438,7 +438,8 @@ class AC(Basemodel):
         self.model.qG = pyo.Var(self.model.G, domain=pyo.Reals)
 
         # --- nodal power balance at each bus b ---
-        def KCL_real_def(model, b):
+        @self.model.Constraint(self.model.B)
+        def KCL_real(model, b):
             """Active-power balance at bus `b`.
 
             `generation - storage = demand + branch outflows + shunt`,
@@ -485,10 +486,11 @@ class AC(Basemodel):
                 return pyo.Constraint.Skip
             return kcl
 
-        def KCL_reactive_def(model, b):
+        @self.model.Constraint(self.model.B)
+        def KCL_reactive(model, b):
             """Reactive-power balance at bus `b`.
 
-            Mirrors `KCL_real_def` with `q` in place of `p`. The
+            Mirrors `KCL_real` with `q` in place of `p`. The
             shunt term is `- BB * v**2`: `BB` was negated when it was
             built from `net.shunt.q_mvar`, so a reactive-consuming
             (inductive) shunt has `BB < 0` and the term lands on the
@@ -501,7 +503,7 @@ class AC(Basemodel):
             Returns:
                 A Pyomo equality expression, or `Constraint.Skip` when
                 the balance degenerates to a constant -- see
-                `KCL_real_def`.
+                `KCL_real`.
             """
             kcl = sum(
                 model.qsG[g] for g in model.sG if (g, b) in model.sGbs
@@ -530,11 +532,6 @@ class AC(Basemodel):
                 return pyo.Constraint.Skip
             return kcl
 
-        self.model.KCL_real = pyo.Constraint(self.model.B, rule=KCL_real_def)
-        self.model.KCL_reactive = pyo.Constraint(
-            self.model.B, rule=KCL_reactive_def
-        )
-
         # --- branch power flow on each line (both ends) ---
         # Despite the historical `KVL_*` names -- kept because they are
         # public component names -- these are not Kirchhoff's voltage
@@ -542,7 +539,8 @@ class AC(Basemodel):
         # power pushed into one end as a function of both terminal
         # voltages. Lines are symmetric, so the same Gii/Bii serve both
         # ends and only the sign of the angle difference flips.
-        def KVL_real_fromend(model, l):
+        @self.model.Constraint(self.model.L)
+        def KVL_real_from(model, l):
             r"""Active power entering line `l` at its *from* bus.
 
             $p_{ik} = G_{ii} v_i^2 + v_i v_k
@@ -571,10 +569,11 @@ class AC(Basemodel):
                 )
             )
 
-        def KVL_real_toend(model, l):
+        @self.model.Constraint(self.model.L)
+        def KVL_real_to(model, l):
             r"""Active power entering line `l` at its *to* bus.
 
-            The same relation as `KVL_real_fromend` with the two
+            The same relation as `KVL_real_from` with the two
             terminals swapped, so the angle difference is
             $\theta_k - \theta_i$. A line is symmetric, so the
             self term reuses the same `Gii`.
@@ -599,7 +598,8 @@ class AC(Basemodel):
                 )
             )
 
-        def KVL_reactive_fromend(model, l):
+        @self.model.Constraint(self.model.L)
+        def KVL_reactive_from(model, l):
             r"""Reactive power entering line `l` at its *from* bus.
 
             $q_{ik} = -B_{ii} v_i^2 + v_i v_k
@@ -628,10 +628,11 @@ class AC(Basemodel):
                 )
             )
 
-        def KVL_reactive_toend(model, l):
+        @self.model.Constraint(self.model.L)
+        def KVL_reactive_to(model, l):
             """Reactive power entering line `l` at its *to* bus.
 
-            `KVL_reactive_fromend` with the terminals swapped.
+            `KVL_reactive_from` with the terminals swapped.
 
             Args:
                 model: The Pyomo model being built.
@@ -653,19 +654,6 @@ class AC(Basemodel):
                 )
             )
 
-        self.model.KVL_real_from = pyo.Constraint(
-            self.model.L, rule=KVL_real_fromend
-        )
-        self.model.KVL_real_to = pyo.Constraint(
-            self.model.L, rule=KVL_real_toend
-        )
-        self.model.KVL_reactive_from = pyo.Constraint(
-            self.model.L, rule=KVL_reactive_fromend
-        )
-        self.model.KVL_reactive_to = pyo.Constraint(
-            self.model.L, rule=KVL_reactive_toend
-        )
-
         # --- branch power flow on each transformer (both ends) ---
         # The transformer is the line pi model behind an ideal
         # transformer of complex ratio tau = Tap * exp(j * shift), placed
@@ -680,7 +668,8 @@ class AC(Basemodel):
         # equation; the shift == 0 branch just omits the `- 0` terms so
         # the expression tree stays small on the many transformers that
         # are not phase shifters.
-        def KVL_real_fromendTransf(model, l):
+        @self.model.Constraint(self.model.TRANSF)
+        def KVL_real_fromTransf(model, l):
             r"""Active power entering transformer `l` at its HV bus.
 
             $p_{hv} = \frac{G_{ii}}{\tau^2} v_{hv}^2 +
@@ -732,7 +721,8 @@ class AC(Basemodel):
                 )
             )
 
-        def KVL_real_toendTransf(model, l):
+        @self.model.Constraint(self.model.TRANSF)
+        def KVL_real_toTransf(model, l):
             r"""Active power entering transformer `l` at its LV bus.
 
             $p_{lv} = G_{ii} v_{lv}^2 +
@@ -786,10 +776,11 @@ class AC(Basemodel):
                 )
             )
 
-        def KVL_reactive_fromendTransf(model, l):
+        @self.model.Constraint(self.model.TRANSF)
+        def KVL_reactive_fromTransf(model, l):
             r"""Reactive power entering transformer `l` at its HV bus.
 
-            The reactive counterpart of `KVL_real_fromendTransf`:
+            The reactive counterpart of `KVL_real_fromTransf`:
             $q_{hv} = -\frac{B_{ii}}{\tau^2} v_{hv}^2 +
             \frac{v_{hv} v_{lv}}{\tau}
             (G_{ik}\sin(\theta_{hv} - \theta_{lv} - \varphi)
@@ -837,10 +828,11 @@ class AC(Basemodel):
                 )
             )
 
-        def KVL_reactive_toendTransf(model, l):
+        @self.model.Constraint(self.model.TRANSF)
+        def KVL_reactive_toTransf(model, l):
             """Reactive power entering transformer `l` at its LV bus.
 
-            The reactive counterpart of `KVL_real_toendTransf`,
+            The reactive counterpart of `KVL_real_toTransf`,
             again with a bare $-B_{ii} v_{lv}^2$ self term because
             the ideal transformer is on the HV side.
 
@@ -886,19 +878,6 @@ class AC(Basemodel):
                 )
             )
 
-        self.model.KVL_real_fromTransf = pyo.Constraint(
-            self.model.TRANSF, rule=KVL_real_fromendTransf
-        )
-        self.model.KVL_real_toTransf = pyo.Constraint(
-            self.model.TRANSF, rule=KVL_real_toendTransf
-        )
-        self.model.KVL_reactive_fromTransf = pyo.Constraint(
-            self.model.TRANSF, rule=KVL_reactive_fromendTransf
-        )
-        self.model.KVL_reactive_toTransf = pyo.Constraint(
-            self.model.TRANSF, rule=KVL_reactive_toendTransf
-        )
-
         # --- reactive demand limits ---
         for d in self.model.D:
             self.model.qD[d].fix(self.model.QD[d])
@@ -906,7 +885,8 @@ class AC(Basemodel):
         # --- generator voltage operating point ---
         # A constraint rather than a fix, so that add_OPF() can
         # deactivate it and let the voltage float within its limits.
-        def v_bPV_setpoint_rule(model, b):
+        @self.model.Constraint(self.model.bPV)
+        def v_bPV_setpoint(model, b):
             """Hold a PV bus at its generator voltage set point.
 
             Args:
@@ -918,10 +898,6 @@ class AC(Basemodel):
                 `v_bPV[b]`.
             """
             return model.v[b] == model.v_bPV[b]
-
-        self.model.v_bPV_setpoint = pyo.Constraint(
-            self.model.bPV, rule=v_bPV_setpoint_rule
-        )
 
         # --- reference bus voltage pyo.Constraint ---
         for b0 in self.model.b0:

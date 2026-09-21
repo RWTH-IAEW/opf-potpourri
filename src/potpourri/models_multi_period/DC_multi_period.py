@@ -9,7 +9,7 @@ Adds linearised DC equations indexed over time steps.
 
 import numpy as np
 import pandas as pd
-from pyomo.environ import *
+import pyomo.environ as pyo
 from potpourri.models_multi_period.basemodel_multi_period import (
     Basemodel_multi_period,
 )
@@ -92,21 +92,23 @@ class DC_multi_period(Basemodel_multi_period):
         self.model.name = "DC"
 
         # --- single-period line / transformer parameters ---
-        self.model.BL = Param(
-            self.model.L, within=Reals, initialize=self.BL_data[self.model.L]
+        self.model.BL = pyo.Param(
+            self.model.L,
+            within=pyo.Reals,
+            initialize=self.BL_data[self.model.L],
         )  # line + impedance series susceptance
-        self.model.BLT = Param(
+        self.model.BLT = pyo.Param(
             self.model.TRANSF,
-            within=Reals,
+            within=pyo.Reals,
             initialize=self.trafo_data.BLT_data[self.model.TRANSF],
         )  # transformer series susceptance
 
         # --- time-indexed angle differences ---
-        self.model.deltaL = Var(
-            self.model.L, self.model.T, domain=Reals
+        self.model.deltaL = pyo.Var(
+            self.model.L, self.model.T, domain=pyo.Reals
         )  # angle difference across lines + impedance branches
-        self.model.deltaLT = Var(
-            self.model.TRANSF, self.model.T, domain=Reals
+        self.model.deltaLT = pyo.Var(
+            self.model.TRANSF, self.model.T, domain=pyo.Reals
         )  # angle difference across transformers
 
         # --- KCL at each bus, per time step ---
@@ -236,5 +238,5 @@ class DC_multi_period(Basemodel_multi_period):
             model.GB[s, t] for s in model.SHUNT if (b, s) in model.SHUNTbs
         ) + self.KCL_flexibility(model, b, t)
         if isinstance(kcl, bool):
-            return Constraint.Skip
+            return pyo.Constraint.Skip
         return kcl

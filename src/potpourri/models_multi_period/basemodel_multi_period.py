@@ -8,7 +8,7 @@ Extends Basemodel with a time dimension and simbench profile integration.
 """
 
 import pandas as pd
-from pyomo.environ import *
+import pyomo.environ as pyo
 from math import pi
 import copy
 import numpy as np
@@ -250,16 +250,16 @@ class Basemodel_multi_period:
         bus/line data, and base variables.
         """
         logger.info("Creating model at {}", ctime.ctime())
-        self.model = ConcreteModel()
+        self.model = pyo.ConcreteModel()
 
         # time dependency to model
 
-        self.model.T = Set(
+        self.model.T = pyo.Set(
             initialize=range(self.fromT, self.toT), ordered=True
         )  # time periods
         self.deltaT = 1 / 4  # time step length in hours = 15 minutes
-        self.model.deltaT = Param(
-            initialize=self.deltaT, within=PositiveReals
+        self.model.deltaT = pyo.Param(
+            initialize=self.deltaT, within=pyo.PositiveReals
         )  # time step length
 
         # --- iterate through flexibility list ---
@@ -267,49 +267,49 @@ class Basemodel_multi_period:
             flex.get_all(self.model)
 
         # --- SETS ---
-        self.model.b0 = Set(
+        self.model.b0 = pyo.Set(
             initialize=self.bus_data.index[self.bus_data.type == 3],
             within=self.model.B,
         )  # reference buses
-        self.model.bPV = Set(
+        self.model.bPV = pyo.Set(
             initialize=self.bus_data.index[self.bus_data.type == 2],
             within=self.model.B,
         )  # PV buses
 
-        self.model.L = Set(
+        self.model.L = pyo.Set(
             initialize=self.line_data.index[self.line_data.in_service]
         )
-        self.model.LE = Set(initialize=[1, 2])
-        self.model.TRANSF = Set(
+        self.model.LE = pyo.Set(initialize=[1, 2])
+        self.model.TRANSF = pyo.Set(
             initialize=self.trafo_data.index[self.trafo_data.in_service]
         )
 
         # --- parameters ---
         # line and trafo matrix
-        self.model.A = Param(
+        self.model.A = pyo.Param(
             self.model.L * self.model.LE, initialize=self.bus_line_dict
         )  # bus-line matrix
-        self.model.AT = Param(
+        self.model.AT = pyo.Param(
             self.model.TRANSF * self.model.LE, initialize=self.bus_trafo_dict
         )  # bus-transformer matrix
 
         # trafo
-        self.model.shift = Param(
+        self.model.shift = pyo.Param(
             self.model.TRANSF,
-            within=Reals,
+            within=pyo.Reals,
             initialize=self.trafo_data.shift_rad[self.model.TRANSF],
         )  # transformer phase shift in rad DONE:remove Time dependency
 
         # external grid voltage angle DONE: remove time depdendency
-        self.model.delta_b0 = Param(
+        self.model.delta_b0 = pyo.Param(
             self.model.b0,
-            within=Reals,
+            within=pyo.Reals,
             initialize=self.bus_data.v_a_rad[self.model.b0],
         )
 
         # baseMVA of the net
-        self.model.baseMVA = Param(
-            within=NonNegativeReals, initialize=self.baseMVA
+        self.model.baseMVA = pyo.Param(
+            within=pyo.NonNegativeReals, initialize=self.baseMVA
         )
 
         # --- variables ---
@@ -328,26 +328,26 @@ class Basemodel_multi_period:
             False,
         )  # False or true on time dpendency?
 
-        self.model.delta = Var(
+        self.model.delta = pyo.Var(
             self.delta_tuple,
-            domain=Reals,
+            domain=pyo.Reals,
             initialize=self.delta_data_dict,
             bounds=(-pi, pi),
         )  # voltage phase angle at bus b, rad
-        self.model.pLfrom = Var(
-            self.pLfrom_tuple, domain=Reals
+        self.model.pLfrom = pyo.Var(
+            self.pLfrom_tuple, domain=pyo.Reals
         )  # real power injected at b onto line
-        self.model.pLto = Var(
-            self.pLto_tuple, domain=Reals
+        self.model.pLto = pyo.Var(
+            self.pLto_tuple, domain=pyo.Reals
         )  # real power injected at b' onto line
-        self.model.pThv = Var(
-            self.pThv_tuple, domain=Reals
+        self.model.pThv = pyo.Var(
+            self.pThv_tuple, domain=pyo.Reals
         )  # real power injected at b onto transformer
-        self.model.pTlv = Var(
-            self.pTlv_tuple, domain=Reals
+        self.model.pTlv = pyo.Var(
+            self.pTlv_tuple, domain=pyo.Reals
         )  # real power injected at b' onto transformer
-        self.model.Tap = Var(
-            self.Tap_tuple, domain=Reals, initialize=self.Tap_data_dict
+        self.model.Tap = pyo.Var(
+            self.Tap_tuple, domain=pyo.Reals, initialize=self.Tap_data_dict
         )  # transformer tap ratio
 
         # transformer tap ratio
@@ -410,7 +410,7 @@ class Basemodel_multi_period:
             self.warm_start_from_pf()
 
         logger.info("Solving model with solver '{}'", solver)
-        optimizer = SolverFactory(solver)
+        optimizer = pyo.SolverFactory(solver)
 
         if solver == "mindtpy":
             if not max_iter:
@@ -441,7 +441,7 @@ class Basemodel_multi_period:
 
         elif solver == "neos":
             logger.info("Submitting model to NEOS server (opt={})", neos_opt)
-            solver_manager = SolverManagerFactory("neos")
+            solver_manager = pyo.SolverManagerFactory("neos")
             self.results = solver_manager.solve(
                 self.model, opt=neos_opt, tee=True
             )
@@ -476,7 +476,7 @@ class Basemodel_multi_period:
         # logged and swallowed, leaving the base-case power flow in place and
         # reporting success.
         try:
-            optimal = check_optimal_termination(self.results)
+            optimal = pyo.check_optimal_termination(self.results)
         except AttributeError as err:
             logger.error("Could not check termination condition: {}", err)
             return self.results
@@ -520,10 +520,13 @@ class Basemodel_multi_period:
             index_name = f"{name}_index"
             if hasattr(self.model, index_name):
                 self.model.del_component(getattr(self.model, index_name))
+            # `rule=` rather than a decorator, deliberately: both the
+            # component name and the rule come from the loop, so there is
+            # no function to decorate. See docs/contributing-pyomo.md.
             setattr(
                 self.model,
                 name,
-                Constraint(self.model.B, self.model.T, rule=rule),
+                pyo.Constraint(self.model.B, self.model.T, rule=rule),
             )
 
     def rebuild_kcl(self):

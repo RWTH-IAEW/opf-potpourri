@@ -877,7 +877,8 @@ class Basemodel:
         self.model.qSTOR = pyo.Var(self.model.STOR, domain=pyo.Reals)
 
         # pSTOR = Pchg - Pdis; negative when discharging → KCL sign: -pSTOR > 0
-        def stor_injection_rule(model, s):
+        @self.model.Expression(self.model.STOR)
+        def pSTOR(model, s):
             """Net active power drawn by storage `s`.
 
             $p^{stor} = P_{chg} - P_{dis}$, so the sign follows pandapower's
@@ -897,12 +898,9 @@ class Basemodel:
             """
             return model.STOR_Pchg[s] - model.STOR_Pdis[s]
 
-        self.model.pSTOR = pyo.Expression(
-            self.model.STOR, rule=stor_injection_rule
-        )
-
         # --- Constraints ---
-        def stor_chg_limit_rule(model, s):
+        @self.model.Constraint(self.model.STOR)
+        def stor_chg_limit(model, s):
             r"""Cap the charging power of storage `s`.
 
             Args:
@@ -914,7 +912,8 @@ class Basemodel:
             """
             return model.STOR_Pchg[s] <= model.STOR_Pmax[s]
 
-        def stor_dis_limit_rule(model, s):
+        @self.model.Constraint(self.model.STOR)
+        def stor_dis_limit(model, s):
             r"""Cap the discharging power of storage `s`.
 
             Args:
@@ -926,15 +925,9 @@ class Basemodel:
             """
             return model.STOR_Pdis[s] <= model.STOR_Pmax[s]
 
-        self.model.stor_chg_limit = pyo.Constraint(
-            self.model.STOR, rule=stor_chg_limit_rule
-        )
-        self.model.stor_dis_limit = pyo.Constraint(
-            self.model.STOR, rule=stor_dis_limit_rule
-        )
-
         # SOC update: single-period energy balance; eff is a fraction (0–1)
-        def stor_soc_update_rule(model, s):
+        @self.model.Constraint(self.model.STOR)
+        def stor_soc_update(model, s):
             r"""State-of-charge balance for storage `s` over one step.
 
             $$SOC = SOC_0 + \frac{\Delta t\,
@@ -969,11 +962,8 @@ class Basemodel:
                 / model.STOR_Emax[s]
             )
 
-        self.model.stor_soc_update = pyo.Constraint(
-            self.model.STOR, rule=stor_soc_update_rule
-        )
-
-        def stor_soc_bounds_rule(model, s):
+        @self.model.Constraint(self.model.STOR)
+        def stor_soc_bounds(model, s):
             """Keep the state of charge of storage `s` within its band.
 
             Args:
@@ -990,12 +980,9 @@ class Basemodel:
                 model.STOR_SOCmax[s],
             )
 
-        self.model.stor_soc_bounds = pyo.Constraint(
-            self.model.STOR, rule=stor_soc_bounds_rule
-        )
-
         # Convex relaxation of no-simultaneous-charge-discharge
-        def stor_no_simul_rule(model, s):
+        @self.model.Constraint(self.model.STOR)
+        def stor_no_simul(model, s):
             r"""Discourage simultaneous charging and discharging of `s`.
 
             $P_{chg} + P_{dis} \le P_{max}$ is the convex relaxation of the
@@ -1017,12 +1004,9 @@ class Basemodel:
                 model.STOR_Pchg[s] + model.STOR_Pdis[s] <= model.STOR_Pmax[s]
             )
 
-        self.model.stor_no_simul = pyo.Constraint(
-            self.model.STOR, rule=stor_no_simul_rule
-        )
-
         # Inverter apparent power limit
-        def stor_inverter_cap_rule(model, s):
+        @self.model.Constraint(self.model.STOR)
+        def stor_inverter_cap(model, s):
             r"""Converter apparent-power limit for storage `s`.
 
             $(P_{chg} - P_{dis})^2 + q^2 \le P_{max}^2$: active and reactive
@@ -1039,10 +1023,6 @@ class Basemodel:
                 model.pSTOR[s] ** 2 + model.qSTOR[s] ** 2
                 <= model.STOR_Pmax[s] ** 2
             )
-
-        self.model.stor_inverter_cap = pyo.Constraint(
-            self.model.STOR, rule=stor_inverter_cap_rule
-        )
 
 
 _BR_B = 4  # pandapower/MATPOWER idx_brch.BR_B

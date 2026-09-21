@@ -98,4 +98,5 @@ nav:
       - Utilities: api/utilities.md
   - Contributing:
       - Documentation: contributing-docs.md
+      - Pyomo Conventions: contributing-pyomo.md
       - Licensing: licensing.md

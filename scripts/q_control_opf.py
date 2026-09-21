@@ -49,7 +49,7 @@ Author: Steffen Kortmann (2024)
 import copy
 import warnings
 
-import pyomo.environ as pe
+import pyomo.environ as pyo
 import simbench as sb
 
 from potpourri.models.ACOPF_base import ACOPF
@@ -126,19 +126,19 @@ def solve_sp(net_snapshot, mode, solver):
 
     base = ac.model.baseMVA
     qc = compute_q_curves()
-    v_vals = [pe.value(ac.model.v[b]) for b in ac.model.B]
+    v_vals = [pyo.value(ac.model.v[b]) for b in ac.model.B]
 
     q_dispatch = []
     pvc = list(ac.model.PVc) if hasattr(ac.model, "PVc") else []
     # When mode is None, report all controllable sgens instead.
     sgen_list = pvc if pvc else list(ac.model.sGc)
     for g in sgen_list:
-        p_pu = pe.value(ac.model.psG[g])
-        q_pu = pe.value(ac.model.qsG[g])
+        p_pu = pyo.value(ac.model.psG[g])
+        q_pu = pyo.value(ac.model.qsG[g])
         # Q(P) bounds (uses p_inst if available, else p_mw)
         if pvc:
-            pi_pu = pe.value(ac.model.PV_p_inst[g])
-            v_idx = int(pe.value(ac.model.PV_var_q[g]))
+            pi_pu = pyo.value(ac.model.PV_p_inst[g])
+            v_idx = int(pyo.value(ac.model.PV_var_q[g]))
         else:
             pi_pu = p_pu  # fallback: no p_inst param in uncontrolled case
             v_idx = VAR_Q
@@ -156,7 +156,7 @@ def solve_sp(net_snapshot, mode, solver):
 
     return {
         "term": term,
-        "obj": pe.value(ac.model.obj_v_deviation),
+        "obj": pyo.value(ac.model.obj_v_deviation),
         "v_min": min(v_vals),
         "v_max": max(v_vals),
         "q_dispatch": q_dispatch,
@@ -188,18 +188,18 @@ def solve_sp_ctrl(net_snapshot, add_opf_kwargs, solver):
         return {"term": term}
 
     base = ac.model.baseMVA
-    v_vals = [pe.value(ac.model.v[b]) for b in ac.model.B]
+    v_vals = [pyo.value(ac.model.v[b]) for b in ac.model.B]
     p_q = [
         (
             g,
-            pe.value(ac.model.psG[g]) * base * 1e3,
-            pe.value(ac.model.qsG[g]) * base * 1e3,
+            pyo.value(ac.model.psG[g]) * base * 1e3,
+            pyo.value(ac.model.qsG[g]) * base * 1e3,
         )
         for g in sorted(ac.model.sGc)
     ]
     return {
         "term": term,
-        "obj": pe.value(ac.model.obj_v_deviation),
+        "obj": pyo.value(ac.model.obj_v_deviation),
         "v_min": min(v_vals),
         "v_max": max(v_vals),
         "p_q": p_q,
@@ -432,26 +432,26 @@ if __name__ == "__main__":
                 f"{'vm_max (p.u.)':>14}"
             )
             for t in sorted(mpopf.model.T):
-                p_kw = pe.value(mpopf.model.psG[g0, t]) * base * 1e3
-                q_kvar = pe.value(mpopf.model.qsG[g0, t]) * base * 1e3
+                p_kw = pyo.value(mpopf.model.psG[g0, t]) * base * 1e3
+                q_kvar = pyo.value(mpopf.model.qsG[g0, t]) * base * 1e3
                 vm_max = max(
-                    pe.value(mpopf.model.v[b, t]) for b in mpopf.model.B
+                    pyo.value(mpopf.model.v[b, t]) for b in mpopf.model.B
                 )
                 print(
                     f"  {t:>5}  {p_kw:>8.2f}  {q_kvar:>10.2f}  {vm_max:>14.4f}"
                 )
 
         v_max = max(
-            pe.value(mpopf.model.v[b, t])
+            pyo.value(mpopf.model.v[b, t])
             for b in mpopf.model.B
             for t in mpopf.model.T
         )
         v_min = min(
-            pe.value(mpopf.model.v[b, t])
+            pyo.value(mpopf.model.v[b, t])
             for b in mpopf.model.B
             for t in mpopf.model.T
         )
-        obj_mp = pe.value(mpopf.model.obj_v_deviation)
+        obj_mp = pyo.value(mpopf.model.obj_v_deviation)
         print(
             f"\nVoltage band over full horizon: [{v_min:.4f}, {v_max:.4f}] p.u."
         )

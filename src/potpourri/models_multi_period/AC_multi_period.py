@@ -10,7 +10,7 @@ Adds full AC equations with voltage magnitudes over time.
 import numpy as np
 
 from potpourri.models.basemodel import branch_charging_admittance
-from pyomo.environ import *
+import pyomo.environ as pyo
 from potpourri.models_multi_period.basemodel_multi_period import (
     Basemodel_multi_period,
 )
@@ -91,8 +91,8 @@ class AC_multi_period(Basemodel_multi_period):
             self.BB_data[self.model.SHUNT],
             False,
         )
-        self.model.BB = Param(
-            self.BB_tuple, within=Reals, initialize=self.BB_data_dict
+        self.model.BB = pyo.Param(
+            self.BB_tuple, within=pyo.Reals, initialize=self.BB_data_dict
         )  # shunt susceptance
 
         # derived line parameters
@@ -121,37 +121,37 @@ class AC_multi_period(Basemodel_multi_period):
             False,
         )
 
-        self.model.Bii = Param(
-            self.Bii_tuple, within=Reals, initialize=self.Bii_data_dict
+        self.model.Bii = pyo.Param(
+            self.Bii_tuple, within=pyo.Reals, initialize=self.Bii_data_dict
         )
-        self.model.Bik = Param(
-            self.Bik_tuple, within=Reals, initialize=self.Bik_data_dict
+        self.model.Bik = pyo.Param(
+            self.Bik_tuple, within=pyo.Reals, initialize=self.Bik_data_dict
         )
-        self.model.Gii = Param(
-            self.Gii_tuple, within=Reals, initialize=self.Gii_data_dict
+        self.model.Gii = pyo.Param(
+            self.Gii_tuple, within=pyo.Reals, initialize=self.Gii_data_dict
         )
-        self.model.Gik = Param(
-            self.Gik_tuple, within=Reals, initialize=self.Gik_data_dict
+        self.model.Gik = pyo.Param(
+            self.Gik_tuple, within=pyo.Reals, initialize=self.Gik_data_dict
         )
 
-        self.model.BiiT = Param(
+        self.model.BiiT = pyo.Param(
             self.model.TRANSF,
-            within=Reals,
+            within=pyo.Reals,
             initialize=self.trafo_data.BiiT_data[self.model.TRANSF],
         )
-        self.model.BikT = Param(
+        self.model.BikT = pyo.Param(
             self.model.TRANSF,
-            within=Reals,
+            within=pyo.Reals,
             initialize=self.trafo_data.BikT_data[self.model.TRANSF],
         )
-        self.model.GiiT = Param(
+        self.model.GiiT = pyo.Param(
             self.model.TRANSF,
-            within=Reals,
+            within=pyo.Reals,
             initialize=self.trafo_data.GiiT_data[self.model.TRANSF],
         )
-        self.model.GikT = Param(
+        self.model.GikT = pyo.Param(
             self.model.TRANSF,
-            within=Reals,
+            within=pyo.Reals,
             initialize=self.trafo_data.GikT_data[self.model.TRANSF],
         )
         # create instance of demand
@@ -166,42 +166,46 @@ class AC_multi_period(Basemodel_multi_period):
         demand_object.get_all_ac(self.model)
 
         # external grid voltage
-        self.model.v_b0 = Param(
+        self.model.v_b0 = pyo.Param(
             self.model.b0,
-            within=NonNegativeReals,
+            within=pyo.NonNegativeReals,
             initialize=self.bus_data.v_m[self.model.b0],
         )
 
         # time dependent control variables
 
         # --- control variables --- stay multiperiod
-        self.model.qLfrom = Var(
-            self.model.L, self.model.T, domain=Reals
+        self.model.qLfrom = pyo.Var(
+            self.model.L, self.model.T, domain=pyo.Reals
         )  # reactive power injected at b onto line
-        self.model.qLto = Var(
-            self.model.L, self.model.T, domain=Reals
+        self.model.qLto = pyo.Var(
+            self.model.L, self.model.T, domain=pyo.Reals
         )  # reactive power injected at b' onto line
-        self.model.qThv = Var(
-            self.model.TRANSF, self.model.T, domain=Reals
+        self.model.qThv = pyo.Var(
+            self.model.TRANSF, self.model.T, domain=pyo.Reals
         )  # reactive power injected at b onto transformer
-        self.model.qTlv = Var(
-            self.model.TRANSF, self.model.T, domain=Reals
+        self.model.qTlv = pyo.Var(
+            self.model.TRANSF, self.model.T, domain=pyo.Reals
         )  # reactive power injected at b' onto transformer
-        self.model.v = Var(
-            self.model.B, self.model.T, domain=NonNegativeReals, initialize=1.0
+        self.model.v = pyo.Var(
+            self.model.B,
+            self.model.T,
+            domain=pyo.NonNegativeReals,
+            initialize=1.0,
         )  # voltage magnitude at bus b, rad
 
         # correct?
-        self.model.qG = Var(self.model.G, self.model.T, domain=Reals)
+        self.model.qG = pyo.Var(self.model.G, self.model.T, domain=pyo.Reals)
 
         # --- Kirchoff's current law at each bus b ---
         self.build_kcl()
 
         # --- Kirchoff's voltage law on each line ---
-        def KVL_real_fromend(model, l, t):
+        @self.model.Constraint(self.model.L, self.model.T)
+        def KVL_real_from(model, l, t):
             r"""Active power entering line `l` at its from bus, at time `t`.
 
-            The time-indexed twin of `AC.create_model`'s `KVL_real_fromend`;
+            The time-indexed twin of `AC.create_model`'s `KVL_real_from`;
             see [`potpourri.models.AC`][potpourri.models.AC] for the
             $\pi$-model relation and the sign conventions, which are identical
             here.
@@ -218,21 +222,22 @@ class AC_multi_period(Basemodel_multi_period):
                 model.v[model.A[l, 1], t] ** 2
             ) + model.v[model.A[l, 1], t] * model.v[model.A[l, 2], t] * (
                 model.Bik[l, t]
-                * sin(
+                * pyo.sin(
                     model.delta[model.A[l, 1], t]
                     - model.delta[model.A[l, 2], t]
                 )
                 + model.Gik[l, t]
-                * cos(
+                * pyo.cos(
                     model.delta[model.A[l, 1], t]
                     - model.delta[model.A[l, 2], t]
                 )
             )
 
-        def KVL_real_toend(model, l, t):
+        @self.model.Constraint(self.model.L, self.model.T)
+        def KVL_real_to(model, l, t):
             r"""Active power entering line `l` at its to bus, at time `t`.
 
-            The time-indexed twin of `AC.create_model`'s `KVL_real_toend`; see
+            The time-indexed twin of `AC.create_model`'s `KVL_real_to`; see
             [`potpourri.models.AC`][potpourri.models.AC] for the $\pi$-model
             relation and the sign conventions, which are identical here.
 
@@ -248,22 +253,23 @@ class AC_multi_period(Basemodel_multi_period):
                 model.v[model.A[l, 2], t] ** 2
             ) + model.v[model.A[l, 1], t] * model.v[model.A[l, 2], t] * (
                 model.Bik[l, t]
-                * sin(
+                * pyo.sin(
                     model.delta[model.A[l, 2], t]
                     - model.delta[model.A[l, 1], t]
                 )
                 + model.Gik[l, t]
-                * cos(
+                * pyo.cos(
                     model.delta[model.A[l, 2], t]
                     - model.delta[model.A[l, 1], t]
                 )
             )
 
-        def KVL_reactive_fromend(model, l, t):
+        @self.model.Constraint(self.model.L, self.model.T)
+        def KVL_reactive_from(model, l, t):
             r"""Reactive power entering line `l` at its from bus, at time `t`.
 
             The time-indexed twin of `AC.create_model`'s
-            `KVL_reactive_fromend`; see
+            `KVL_reactive_from`; see
             [`potpourri.models.AC`][potpourri.models.AC] for the $\pi$-model
             relation and the sign conventions, which are identical here.
 
@@ -279,21 +285,22 @@ class AC_multi_period(Basemodel_multi_period):
                 model.v[model.A[l, 1], t] ** 2
             ) + model.v[model.A[l, 1], t] * model.v[model.A[l, 2], t] * (
                 model.Gik[l, t]
-                * sin(
+                * pyo.sin(
                     model.delta[model.A[l, 1], t]
                     - model.delta[model.A[l, 2], t]
                 )
                 - model.Bik[l, t]
-                * cos(
+                * pyo.cos(
                     model.delta[model.A[l, 1], t]
                     - model.delta[model.A[l, 2], t]
                 )
             )
 
-        def KVL_reactive_toend(model, l, t):
+        @self.model.Constraint(self.model.L, self.model.T)
+        def KVL_reactive_to(model, l, t):
             r"""Reactive power entering line `l` at its to bus, at time `t`.
 
-            The time-indexed twin of `AC.create_model`'s `KVL_reactive_toend`;
+            The time-indexed twin of `AC.create_model`'s `KVL_reactive_to`;
             see [`potpourri.models.AC`][potpourri.models.AC] for the
             $\pi$-model relation and the sign conventions, which are identical
             here.
@@ -310,36 +317,24 @@ class AC_multi_period(Basemodel_multi_period):
                 model.v[model.A[l, 2], t] ** 2
             ) + model.v[model.A[l, 1], t] * model.v[model.A[l, 2], t] * (
                 model.Gik[l, t]
-                * sin(
+                * pyo.sin(
                     model.delta[model.A[l, 2], t]
                     - model.delta[model.A[l, 1], t]
                 )
                 - model.Bik[l, t]
-                * cos(
+                * pyo.cos(
                     model.delta[model.A[l, 2], t]
                     - model.delta[model.A[l, 1], t]
                 )
             )
 
-        self.model.KVL_real_from = Constraint(
-            self.model.L, self.model.T, rule=KVL_real_fromend
-        )
-        self.model.KVL_real_to = Constraint(
-            self.model.L, self.model.T, rule=KVL_real_toend
-        )
-        self.model.KVL_reactive_from = Constraint(
-            self.model.L, self.model.T, rule=KVL_reactive_fromend
-        )
-        self.model.KVL_reactive_to = Constraint(
-            self.model.L, self.model.T, rule=KVL_reactive_toend
-        )
-
         # --- Kirchoff's voltage law on each transformer line ---
-        def KVL_real_fromendTransf(model, l, t):
+        @self.model.Constraint(self.model.TRANSF, self.model.T)
+        def KVL_real_fromTransf(model, l, t):
             """Active power entering transformer `l` at its HV bus.
 
             The time-indexed twin of `AC.create_model`'s
-            `KVL_real_fromendTransf`. The tap ratio and phase shift are
+            `KVL_real_fromTransf`. The tap ratio and phase shift are
             time-independent, so only the voltages and angles carry the extra
             index.
 
@@ -358,13 +353,13 @@ class AC_multi_period(Basemodel_multi_period):
                     model.AT[l, 1], t
                 ] * model.v[model.AT[l, 2], t] / model.Tap[l, t] * (
                     model.GikT[l]
-                    * cos(
+                    * pyo.cos(
                         model.delta[model.AT[l, 1], t]
                         - model.delta[model.AT[l, 2], t]
                         - model.shift[l]
                     )
                     + model.BikT[l]
-                    * sin(
+                    * pyo.sin(
                         model.delta[model.AT[l, 1], t]
                         - model.delta[model.AT[l, 2], t]
                         - model.shift[l]
@@ -377,22 +372,23 @@ class AC_multi_period(Basemodel_multi_period):
                 model.AT[l, 2], t
             ] / model.Tap[l, t] * (
                 model.GikT[l]
-                * cos(
+                * pyo.cos(
                     model.delta[model.AT[l, 1], t]
                     - model.delta[model.AT[l, 2], t]
                 )
                 + model.BikT[l]
-                * sin(
+                * pyo.sin(
                     model.delta[model.AT[l, 1], t]
                     - model.delta[model.AT[l, 2], t]
                 )
             )
 
-        def KVL_real_toendTransf(model, l, t):
+        @self.model.Constraint(self.model.TRANSF, self.model.T)
+        def KVL_real_toTransf(model, l, t):
             """Active power entering transformer `l` at its LV bus.
 
             The time-indexed twin of `AC.create_model`'s
-            `KVL_real_toendTransf`. The tap ratio and phase shift are
+            `KVL_real_toTransf`. The tap ratio and phase shift are
             time-independent, so only the voltages and angles carry the extra
             index.
 
@@ -411,13 +407,13 @@ class AC_multi_period(Basemodel_multi_period):
                     model.AT[l, 2], t
                 ] / model.Tap[l, t] * (
                     model.BikT[l]
-                    * sin(
+                    * pyo.sin(
                         model.delta[model.AT[l, 2], t]
                         - model.delta[model.AT[l, 1], t]
                         + model.shift[l]
                     )
                     + model.GikT[l]
-                    * cos(
+                    * pyo.cos(
                         model.delta[model.AT[l, 2], t]
                         - model.delta[model.AT[l, 1], t]
                         + model.shift[l]
@@ -430,22 +426,23 @@ class AC_multi_period(Basemodel_multi_period):
                 model.AT[l, 2], t
             ] / model.Tap[l, t] * (
                 model.BikT[l]
-                * sin(
+                * pyo.sin(
                     model.delta[model.AT[l, 2], t]
                     - model.delta[model.AT[l, 1], t]
                 )
                 + model.GikT[l]
-                * cos(
+                * pyo.cos(
                     model.delta[model.AT[l, 2], t]
                     - model.delta[model.AT[l, 1], t]
                 )
             )
 
-        def KVL_reactive_fromendTransf(model, l, t):
+        @self.model.Constraint(self.model.TRANSF, self.model.T)
+        def KVL_reactive_fromTransf(model, l, t):
             """Reactive power entering transformer `l` at its HV bus.
 
             The time-indexed twin of `AC.create_model`'s
-            `KVL_reactive_fromendTransf`. The tap ratio and phase shift are
+            `KVL_reactive_fromTransf`. The tap ratio and phase shift are
             time-independent, so only the voltages and angles carry the extra
             index.
 
@@ -464,13 +461,13 @@ class AC_multi_period(Basemodel_multi_period):
                     model.AT[l, 1], t
                 ] * model.v[model.AT[l, 2], t] / model.Tap[l, t] * (
                     -model.BikT[l]
-                    * cos(
+                    * pyo.cos(
                         model.delta[model.AT[l, 1], t]
                         - model.delta[model.AT[l, 2], t]
                         - model.shift[l]
                     )
                     + model.GikT[l]
-                    * sin(
+                    * pyo.sin(
                         model.delta[model.AT[l, 1], t]
                         - model.delta[model.AT[l, 2], t]
                         - model.shift[l]
@@ -483,22 +480,23 @@ class AC_multi_period(Basemodel_multi_period):
                 model.AT[l, 1], t
             ] * model.v[model.AT[l, 2], t] / model.Tap[l, t] * (
                 -model.BikT[l]
-                * cos(
+                * pyo.cos(
                     model.delta[model.AT[l, 1], t]
                     - model.delta[model.AT[l, 2], t]
                 )
                 + model.GikT[l]
-                * sin(
+                * pyo.sin(
                     model.delta[model.AT[l, 1], t]
                     - model.delta[model.AT[l, 2], t]
                 )
             )
 
-        def KVL_reactive_toendTransf(model, l, t):
+        @self.model.Constraint(self.model.TRANSF, self.model.T)
+        def KVL_reactive_toTransf(model, l, t):
             """Reactive power entering transformer `l` at its LV bus.
 
             The time-indexed twin of `AC.create_model`'s
-            `KVL_reactive_toendTransf`. The tap ratio and phase shift are
+            `KVL_reactive_toTransf`. The tap ratio and phase shift are
             time-independent, so only the voltages and angles carry the extra
             index.
 
@@ -517,13 +515,13 @@ class AC_multi_period(Basemodel_multi_period):
                     model.AT[l, 2], t
                 ] / model.Tap[l, t] * (
                     -model.BikT[l]
-                    * cos(
+                    * pyo.cos(
                         model.delta[model.AT[l, 2], t]
                         - model.delta[model.AT[l, 1], t]
                         + model.shift[l]
                     )
                     + model.GikT[l]
-                    * sin(
+                    * pyo.sin(
                         model.delta[model.AT[l, 2], t]
                         - model.delta[model.AT[l, 1], t]
                         + model.shift[l]
@@ -536,30 +534,18 @@ class AC_multi_period(Basemodel_multi_period):
                 model.AT[l, 2], t
             ] / model.Tap[l, t] * (
                 -model.BikT[l]
-                * cos(
+                * pyo.cos(
                     model.delta[model.AT[l, 2], t]
                     - model.delta[model.AT[l, 1], t]
                 )
                 + model.GikT[l]
-                * sin(
+                * pyo.sin(
                     model.delta[model.AT[l, 2], t]
                     - model.delta[model.AT[l, 1], t]
                 )
             )
 
         # Constraint Definitions for Pyomo, needed for the model
-        self.model.KVL_real_fromTransf = Constraint(
-            self.model.TRANSF, self.model.T, rule=KVL_real_fromendTransf
-        )
-        self.model.KVL_real_toTransf = Constraint(
-            self.model.TRANSF, self.model.T, rule=KVL_real_toendTransf
-        )
-        self.model.KVL_reactive_fromTransf = Constraint(
-            self.model.TRANSF, self.model.T, rule=KVL_reactive_fromendTransf
-        )
-        self.model.KVL_reactive_toTransf = Constraint(
-            self.model.TRANSF, self.model.T, rule=KVL_reactive_toendTransf
-        )
 
         # --- reactive generator power limits ---
         for g in self.model.sG:
@@ -611,7 +597,7 @@ class AC_multi_period(Basemodel_multi_period):
             if (b, s) in model.SHUNTbs and model.GB[s, t] != 0
         ) + self.KCL_flexibility(model, b, t)
         if isinstance(kcl, bool):
-            return Constraint.Skip
+            return pyo.Constraint.Skip
         return kcl
 
     def _kcl_reactive_rule(self, model, b, t):
@@ -645,7 +631,7 @@ class AC_multi_period(Basemodel_multi_period):
             if (b, s) in model.SHUNTbs and model.BB[s, t] != 0
         ) + self.KCL_flexibility(model, b, t, reactive=True)
         if isinstance(kcl, bool):
-            return Constraint.Skip
+            return pyo.Constraint.Skip
         return kcl
 
     # build_kcl / rebuild_kcl / KCL_flexibility come from

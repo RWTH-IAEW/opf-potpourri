@@ -29,7 +29,7 @@ import warnings
 
 import numpy as np
 import pandapower as pp
-import pyomo.environ as pe
+import pyomo.environ as pyo
 import simbench as sb
 
 from potpourri.models.DC import DC
@@ -72,7 +72,7 @@ if __name__ == "__main__":
     print(f"  {'Bus':>5}  {'pp (°)':>10}  {'pyo (°)':>10}  {'|diff|':>10}")
     for b in pf.model.B:
         pp_va = net.res_bus.va_degree.iloc[b]
-        pyo_va = pe.value(pf.model.delta[b]) * 180 / np.pi
+        pyo_va = pyo.value(pf.model.delta[b]) * 180 / np.pi
         print(
             f"  {b:>5}  {pp_va:>10.4f}  {pyo_va:>10.4f}  "
             f"{abs(pp_va - pyo_va):>10.6f}"
@@ -90,9 +90,9 @@ if __name__ == "__main__":
     dcopf = DCOPF(net_opf)
     dcopf.add_OPF()
 
-    dcopf.model.obj = pe.Objective(
+    dcopf.model.obj = pyo.Objective(
         expr=sum(dcopf.model.pG[g] for g in dcopf.model.G),
-        sense=pe.minimize,
+        sense=pyo.minimize,
     )
     dcopf.solve(solver=SOLVER, print_solver_output=False)
 
@@ -100,12 +100,12 @@ if __name__ == "__main__":
 
     print("\n== External grid dispatch ==")
     for g in dcopf.model.G:
-        p_mw = pe.value(dcopf.model.pG[g]) * base
+        p_mw = pyo.value(dcopf.model.pG[g]) * base
         print(f"  Generator {g}: {p_mw:+.3f} MW  (+ = import, − = export)")
 
     print("\n== Static generator dispatch ==")
     for g in dcopf.model.sG:
-        p_mw = pe.value(dcopf.model.psG[g]) * base
+        p_mw = pyo.value(dcopf.model.psG[g]) * base
         print(f"  sgen {g}: {p_mw:.4f} MW")
 
     print("\n== Line loading — five most loaded ==")
@@ -113,11 +113,11 @@ if __name__ == "__main__":
     for line in dcopf.model.L:
         p_max = abs(
             max(
-                pe.value(dcopf.model.pLfrom[line]),
-                abs(pe.value(dcopf.model.pLto[line])),
+                pyo.value(dcopf.model.pLfrom[line]),
+                abs(pyo.value(dcopf.model.pLto[line])),
             )
         )
-        smax = pe.value(dcopf.model.SLmax[line]) or 1e-9
+        smax = pyo.value(dcopf.model.SLmax[line]) or 1e-9
         loadings[line] = p_max / smax * 100
     for line, pct in sorted(loadings.items(), key=lambda x: -x[1])[:5]:
         print(f"  Line {line:>3}: {pct:.1f} %")

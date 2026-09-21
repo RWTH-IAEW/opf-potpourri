@@ -6,7 +6,7 @@
 
 import copy
 
-from pyomo.environ import *
+import pyomo.environ as pyo
 from potpourri.models_multi_period.ACOPF_multi_period import (
     ACOPF_multi_period,
 )
@@ -95,9 +95,14 @@ class HC_ACOPF_multi_period(ACOPF_multi_period):
         Replace default objective with weighted wind-vs-loss objective
         using mutable eps parameter.
         """
-        self.model.eps = Param(domain=Reals, initialize=1.0, mutable=True)
+        self.model.eps = pyo.Param(
+            domain=pyo.Reals, initialize=1.0, mutable=True
+        )
 
-        def objective_pwind_loss(model):
+        self.model.obj_hc.deactivate()
+
+        @self.model.Objective(sense=pyo.maximize)
+        def OBJ_with_loss(model):
             """Weighted trade-off between wind infeed and losses.
 
             Args:
@@ -109,8 +114,3 @@ class HC_ACOPF_multi_period(ACOPF_multi_period):
             return model.eps * sum(model.psG[w] for w in model.WIND_HC) + (
                 1 - model.eps
             ) * (-sum(model.pLfrom[l] + model.pLto[l] for l in model.L))
-
-        self.model.obj_hc.deactivate()
-        self.model.OBJ_with_loss = Objective(
-            rule=objective_pwind_loss, sense=maximize
-        )

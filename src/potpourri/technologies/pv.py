@@ -242,12 +242,12 @@ class PV_multi_period(Flexibility_multi_period):
             model.PV, model.T, self.pv_load_profile
         )
         model.pPV = pyo.Var(
-            self.pPV_tuple, within=pyo.Reals, initialize=self.pPV_data_dict
+            self.pPV_tuple, domain=pyo.Reals, initialize=self.pPV_data_dict
         )
         if self.pv_q_control is not None:
             self.qPV_tuple = [(pv, t) for pv in model.PV for t in model.T]
             model.qPV = pyo.Var(
-                self.qPV_tuple, within=pyo.Reals, initialize=0.0
+                self.qPV_tuple, domain=pyo.Reals, initialize=0.0
             )
 
     def get_all_constraints(self, model):

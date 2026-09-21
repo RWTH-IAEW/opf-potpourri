@@ -1006,6 +1006,10 @@ def attach_deadband_qu(
         k = _key(args)
         return q_of(k) == q_aux[k] * pn_of(k)
 
+    # One of the few places `rule=` has to stay: the component names are
+    # built from `name` at run time, and a decorator can only name a
+    # component after the function it decorates. See
+    # docs/contributing-pyomo.md.
     model.add_component(f"{name}_v_link", pyo.Constraint(idx, rule=_link_v))
     model.add_component(f"{name}_q_link", pyo.Constraint(idx, rule=_link_q))
 

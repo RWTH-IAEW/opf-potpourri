@@ -612,7 +612,8 @@ class ACOPF(AC, OPF):
         if thermal_limit == "current":
             # |S|^2 ≤ SLmax^2 · v^2 (i.e. |I| ≤ I_max). Physically meaningful
             # for thermal current rating; varies with voltage.
-            def line_lim_from_def(model, l):
+            @self.model.Constraint(self.model.L)
+            def line_lim_from(model, l):
                 r"""Thermal limit at the from end of line `l`, as a current.
 
                 $p^2 + q^2 \le S_{max}^2 v^2$, i.e. $|I| \le I_{max}$.
@@ -634,7 +635,8 @@ class ACOPF(AC, OPF):
                     <= model.SLmax[l] ** 2 * model.v[model.A[l, 1]] ** 2
                 )
 
-            def line_lim_to_def(model, l):
+            @self.model.Constraint(self.model.L)
+            def line_lim_to(model, l):
                 r"""Thermal limit at the to end of line `l`, as a current.
 
                 $p^2 + q^2 \le S_{max}^2 v^2$, i.e. $|I| \le I_{max}$.
@@ -656,7 +658,8 @@ class ACOPF(AC, OPF):
                     <= model.SLmax[l] ** 2 * model.v[model.A[l, 2]] ** 2
                 )
 
-            def transf_lim1_def(model, l):
+            @self.model.Constraint(self.model.TRANSF)
+            def transf_lim1(model, l):
                 r"""HV-side thermal limit of transformer `l`, as a current.
 
                 $p^2 + q^2 \le S_{max}^2 v^2$ at the HV terminal, so the
@@ -675,7 +678,8 @@ class ACOPF(AC, OPF):
                     <= model.SLmaxT[l] ** 2 * model.v[model.AT[l, 1]] ** 2
                 )
 
-            def transf_lim2_def(model, l):
+            @self.model.Constraint(self.model.TRANSF)
+            def transf_lim2(model, l):
                 r"""LV-side thermal limit of transformer `l`, as a current.
 
                 $p^2 + q^2 \le S_{max}^2 v^2$ at the LV terminal, so the
@@ -696,7 +700,8 @@ class ACOPF(AC, OPF):
         else:
             # |S|^2 ≤ SLmax^2 (constant-MVA limit, matches MATPOWER /
             # PowerModels' constraint_thermal_limit_* and PGLib-OPF rate_a).
-            def line_lim_from_def(model, l):
+            @self.model.Constraint(self.model.L)
+            def line_lim_from(model, l):
                 r"""Apparent-power thermal limit at the from end of line `l`.
 
                 $p^2 + q^2 \le S_{max}^2$: a constant-MVA rating that
@@ -718,7 +723,8 @@ class ACOPF(AC, OPF):
                     <= model.SLmax[l] ** 2
                 )
 
-            def line_lim_to_def(model, l):
+            @self.model.Constraint(self.model.L)
+            def line_lim_to(model, l):
                 r"""Apparent-power thermal limit at the to end of line `l`.
 
                 $p^2 + q^2 \le S_{max}^2$: a constant-MVA rating that
@@ -740,7 +746,8 @@ class ACOPF(AC, OPF):
                     <= model.SLmax[l] ** 2
                 )
 
-            def transf_lim1_def(model, l):
+            @self.model.Constraint(self.model.TRANSF)
+            def transf_lim1(model, l):
                 r"""HV-side thermal limit of transformer `l`, as MVA.
 
                 $p^2 + q^2 \le S_{max}^2$, the constant-MVA form; see
@@ -759,7 +766,8 @@ class ACOPF(AC, OPF):
                     <= model.SLmaxT[l] ** 2
                 )
 
-            def transf_lim2_def(model, l):
+            @self.model.Constraint(self.model.TRANSF)
+            def transf_lim2(model, l):
                 r"""LV-side thermal limit of transformer `l`, as MVA.
 
                 $p^2 + q^2 \le S_{max}^2$, the constant-MVA form; see
@@ -778,22 +786,11 @@ class ACOPF(AC, OPF):
                     <= model.SLmaxT[l] ** 2
                 )
 
-        self.model.line_lim_from = pyo.Constraint(
-            self.model.L, rule=line_lim_from_def
-        )
-        self.model.line_lim_to = pyo.Constraint(
-            self.model.L, rule=line_lim_to_def
-        )
-        self.model.transf_lim1 = pyo.Constraint(
-            self.model.TRANSF, rule=transf_lim1_def
-        )
-        self.model.transf_lim2 = pyo.Constraint(
-            self.model.TRANSF, rule=transf_lim2_def
-        )
         self.thermal_limit_mode = thermal_limit
 
         # --- static generation reactive power limits ---
-        def static_generation_reactive_power_bounds(model, g):
+        @self.model.Constraint(self.model.sGc)
+        def QsG_pyo(model, g):
             r"""Free static-generator reactive power within its limits.
 
             Two things happen here, and the side effect is the important one:
@@ -814,9 +811,6 @@ class ACOPF(AC, OPF):
             model.qsG[g].unfix()
             return model.QsGmin[g], model.qsG[g], model.QsGmax[g]
 
-        self.model.QsG_pyo = pyo.Constraint(
-            self.model.sGc, rule=static_generation_reactive_power_bounds
-        )
         non_ctrl = [g for g in self.model.sG if g not in set(self.model.sGc)]
         self.model.sGnc = pyo.Set(within=self.model.sG, initialize=non_ctrl)
 
@@ -824,7 +818,8 @@ class ACOPF(AC, OPF):
             self.model.qsG[g].fix(self.model.QsG[g])
 
         # --- reactive generator power limits ---
-        def reactive_power_bounds(model, g):
+        @self.model.Constraint(self.model.G)
+        def QG_pyo(model, g):
             r"""Free generator reactive power within its limits.
 
             Two things happen here, and the side effect is the important one:
@@ -844,12 +839,9 @@ class ACOPF(AC, OPF):
             model.qG[g].unfix()
             return model.QGmin[g], model.qG[g], model.QGmax[g]
 
-        self.model.QG_pyo = pyo.Constraint(
-            self.model.G, rule=reactive_power_bounds
-        )
-
         # --- reactive demand limits ---
-        def reactive_demand_bounds(model, d):
+        @self.model.Constraint(self.model.Dc)
+        def QD_pyo(model, d):
             r"""Free reactive demand within its limits.
 
             Two things happen here, and the side effect is the important one:
@@ -870,10 +862,6 @@ class ACOPF(AC, OPF):
             model.qD[d].unfix()
             return model.QDmin[d], model.qD[d], model.QDmax[d]
 
-        self.model.QD_pyo = pyo.Constraint(
-            self.model.Dc, rule=reactive_demand_bounds
-        )
-
         # --- voltage pyo.Constraints ---
         self.model.v_bPV_setpoint.deactivate()
 
@@ -884,7 +872,8 @@ class ACOPF(AC, OPF):
             for b0 in self.model.b0:
                 self.model.v[b0].unfix()
 
-        def v_bounds(model, b):
+        @self.model.Constraint(self.model.Bpd)
+        def v_pyo(model, b):
             r"""Bound the voltage magnitude at bus `b` to its limits.
 
             $V_{min,b} \le v_b \le V_{max,b}$, taken from `net.bus.min_vm_pu` /
@@ -905,8 +894,6 @@ class ACOPF(AC, OPF):
             """
             return model.Vmin[b], model.v[b], model.Vmax[b]
 
-        self.model.v_pyo = pyo.Constraint(self.model.Bpd, rule=v_bounds)
-
         # Optional opt-in: pin voltage magnitude at every bus whose nominal
         # voltage matches `hv_bus_kv` to the base-case load-flow value. This
         # was the historical default at 110 kV in German distribution
@@ -920,7 +907,8 @@ class ACOPF(AC, OPF):
             fixed_buses = []
         self.model.Bfix = pyo.Set(initialize=fixed_buses)
 
-        def fixed_v_rule(model, b):
+        @self.model.Constraint(self.model.Bfix)
+        def v_fixed(model, b):
             """Pin bus `b` to its base-case voltage magnitude.
 
             Used only for the opt-in `fix_hv_buses` behaviour, which holds
@@ -936,8 +924,6 @@ class ACOPF(AC, OPF):
                 A Pyomo equality expression.
             """
             return model.v[b] == float(self.bus_data.loc[b, "v_m"])
-
-        self.model.v_fixed = pyo.Constraint(self.model.Bfix, rule=fixed_v_rule)
 
         # --- optional branch angle-difference limits ---
         # PowerModels.jl convention: angmin ≤ δ_from − δ_to ≤ angmax.
@@ -974,7 +960,8 @@ class ACOPF(AC, OPF):
                 context=f"{code.title} Q(U)",
             )
 
-        def QW_pos(model, w, k):
+        @self.model.Constraint(self.model.WINDc, self.model.QP_PIECE)
+        def QW_pos_pyo(model, w, k):
             r"""Upper Q(P) capability piece `k` for wind generator `w`.
 
             The grid-code capability area is a piecewise-linear envelope, so
@@ -1004,11 +991,12 @@ class ACOPF(AC, OPF):
             m, b = pieces[k]
             return model.qsG[w] <= m * model.psG[w] + b * model.PsG_inst[w]
 
-        def QW_neg(model, w, k):
+        @self.model.Constraint(self.model.WINDc, self.model.QP_PIECE)
+        def QW_neg_pyo(model, w, k):
             r"""Lower Q(P) capability piece `k` for wind generator `w`.
 
-            The mirror of `QW_pos`: the lower bound is the pointwise maximum of
-            the envelope's affine pieces, so each becomes
+            The mirror of `QW_pos_pyo`: the lower bound is the pointwise
+            maximum of the envelope's affine pieces, so each becomes
             $q \ge m \, p + b \, P_{inst}$.
 
             Args:
@@ -1027,13 +1015,6 @@ class ACOPF(AC, OPF):
                 return pyo.Constraint.Skip
             m, b = pieces[k]
             return model.qsG[w] >= m * model.psG[w] + b * model.PsG_inst[w]
-
-        self.model.QW_pos_pyo = pyo.Constraint(
-            self.model.WINDc, self.model.QP_PIECE, rule=QW_pos
-        )
-        self.model.QW_neg_pyo = pyo.Constraint(
-            self.model.WINDc, self.model.QP_PIECE, rule=QW_neg
-        )
 
         sGbs_lookup = {g: b for (g, b) in self.model.sGbs}
 
@@ -1065,79 +1046,85 @@ class ACOPF(AC, OPF):
                 v_bounds=v_span,
             )
 
-        def QV_min(model, w, k):
-            r"""Lower Q(U) capability piece `k` for wind generator `w`.
+        if qu_curve is None:
 
-            The grid-code Q(U) envelope is piecewise linear in the *terminal
-            voltage*, so each affine piece becomes $q \ge (m \, v_b + b) \,
-            P_{inst}$ at the generator's own bus. Together the pieces form the
-            pointwise maximum of the envelope.
+            @self.model.Constraint(self.model.WINDc, self.model.QU_PIECE)
+            def QU_min_pyo(model, w, k):
+                r"""Lower Q(U) capability piece `k` for wind generator `w`.
 
-            Only added when no Q(U) dead band was requested: a dead band makes
-            the feasible set non-convex, and is handled by pinning $q$ to the
-            characteristic instead (see `resolve_qu_curve`).
+                The grid-code Q(U) envelope is piecewise linear in the
+                *terminal voltage*, so each affine piece becomes
+                $q \ge (m \, v_b + b) \, P_{inst}$ at the generator's own
+                bus. Together the pieces form the pointwise maximum of the
+                envelope.
 
-            Args:
-                model: The Pyomo model being built.
-                w: Wind-generator index from `model.WINDc`.
-                k: Piece index from `model.QU_PIECE`.
+                Only added when no Q(U) dead band was requested: a dead
+                band makes the feasible set non-convex, and is handled by
+                pinning $q$ to the characteristic instead (see
+                `resolve_qu_curve`).
 
-            Returns:
-                A Pyomo inequality expression, or `Constraint.Skip` if the
-                generator has no bus in `model.sGbs` or no piece `k`.
-            """
-            if w not in sGbs_lookup:
-                return pyo.Constraint.Skip
-            pieces = qv_area.lower_pieces(
-                int(pyo.value(model.var_q[w])), v_span
-            )
-            if k >= len(pieces):
-                return pyo.Constraint.Skip
-            b_bus = sGbs_lookup[w]
-            m, b = pieces[k]
-            return model.qsG[w] >= (m * model.v[b_bus] + b) * model.PsG_inst[w]
+                Args:
+                    model: The Pyomo model being built.
+                    w: Wind-generator index from `model.WINDc`.
+                    k: Piece index from `model.QU_PIECE`.
+
+                Returns:
+                    A Pyomo inequality expression, or `Constraint.Skip` if the
+                    generator has no bus in `model.sGbs` or no piece `k`.
+                """
+                if w not in sGbs_lookup:
+                    return pyo.Constraint.Skip
+                pieces = qv_area.lower_pieces(
+                    int(pyo.value(model.var_q[w])), v_span
+                )
+                if k >= len(pieces):
+                    return pyo.Constraint.Skip
+                b_bus = sGbs_lookup[w]
+                m, b = pieces[k]
+                return (
+                    model.qsG[w]
+                    >= (m * model.v[b_bus] + b) * model.PsG_inst[w]
+                )
 
         if qu_curve is None:
-            self.model.QU_min_pyo = pyo.Constraint(
-                self.model.WINDc, self.model.QU_PIECE, rule=QV_min
-            )
 
-        def QV_max(model, w, k):
-            r"""Upper Q(U) capability piece `k` for wind generator `w`.
+            @self.model.Constraint(self.model.WINDc, self.model.QU_PIECE)
+            def QU_max_pyo(model, w, k):
+                r"""Upper Q(U) capability piece `k` for wind generator `w`.
 
-            The grid-code Q(U) envelope is piecewise linear in the *terminal
-            voltage*, so each affine piece becomes $q \le (m \, v_b + b) \,
-            P_{inst}$ at the generator's own bus. Together the pieces form the
-            pointwise minimum of the envelope.
+                The grid-code Q(U) envelope is piecewise linear in the
+                *terminal voltage*, so each affine piece becomes
+                $q \le (m \, v_b + b) \, P_{inst}$ at the generator's own
+                bus. Together the pieces form the pointwise minimum of the
+                envelope.
 
-            Only added when no Q(U) dead band was requested: a dead band makes
-            the feasible set non-convex, and is handled by pinning $q$ to the
-            characteristic instead (see `resolve_qu_curve`).
+                Only added when no Q(U) dead band was requested: a dead
+                band makes the feasible set non-convex, and is handled by
+                pinning $q$ to the characteristic instead (see
+                `resolve_qu_curve`).
 
-            Args:
-                model: The Pyomo model being built.
-                w: Wind-generator index from `model.WINDc`.
-                k: Piece index from `model.QU_PIECE`.
+                Args:
+                    model: The Pyomo model being built.
+                    w: Wind-generator index from `model.WINDc`.
+                    k: Piece index from `model.QU_PIECE`.
 
-            Returns:
-                A Pyomo inequality expression, or `Constraint.Skip` if the
-                generator has no bus in `model.sGbs` or no piece `k`.
-            """
-            if w not in sGbs_lookup:
-                return pyo.Constraint.Skip
-            pieces = qv_area.upper_pieces(
-                int(pyo.value(model.var_q[w])), v_span
-            )
-            if k >= len(pieces):
-                return pyo.Constraint.Skip
-            b_bus = sGbs_lookup[w]
-            m, b = pieces[k]
-            return model.qsG[w] <= (m * model.v[b_bus] + b) * model.PsG_inst[w]
-
-        if qu_curve is None:
-            self.model.QU_max_pyo = pyo.Constraint(
-                self.model.WINDc, self.model.QU_PIECE, rule=QV_max
-            )
+                Returns:
+                    A Pyomo inequality expression, or `Constraint.Skip` if the
+                    generator has no bus in `model.sGbs` or no piece `k`.
+                """
+                if w not in sGbs_lookup:
+                    return pyo.Constraint.Skip
+                pieces = qv_area.upper_pieces(
+                    int(pyo.value(model.var_q[w])), v_span
+                )
+                if k >= len(pieces):
+                    return pyo.Constraint.Skip
+                b_bus = sGbs_lookup[w]
+                m, b = pieces[k]
+                return (
+                    model.qsG[w]
+                    <= (m * model.v[b_bus] + b) * model.PsG_inst[w]
+                )
 
         # --- optional Q(P) / Q(U) for PV-type sgens ---
         # Normalise legacy bool to string mode; False/None → skip entirely.
@@ -1197,11 +1184,13 @@ class ACOPF(AC, OPF):
                 )
                 if _pv_mode in ("qp", "both"):
 
+                    @self.model.Constraint(self.model.PVc, self.model.QP_PIECE)
                     def PV_QP_pos(model, g, k):
                         r"""Upper Q(P) piece `k` for PV sgen `g`.
 
-                        The PV counterpart of `QW_pos`: $q \le m \, p + b \,
-                        P_{inst}$ for each affine piece of the grid-code Q(P)
+                        The PV counterpart of `QW_pos_pyo`:
+                        $q \le m \, p + b \, P_{inst}$ for each affine piece
+                        of the grid-code Q(P)
                         envelope, scaled by the installed capacity in
                         `PV_p_inst`.
 
@@ -1227,11 +1216,13 @@ class ACOPF(AC, OPF):
                             <= m * model.psG[g] + b * model.PV_p_inst[g]
                         )
 
+                    @self.model.Constraint(self.model.PVc, self.model.QP_PIECE)
                     def PV_QP_neg(model, g, k):
                         r"""Lower Q(P) piece `k` for PV sgen `g`.
 
-                        The PV counterpart of `QW_neg`: $q \ge m \, p + b \,
-                        P_{inst}$ for each affine piece of the grid-code Q(P)
+                        The PV counterpart of `QW_neg_pyo`:
+                        $q \ge m \, p + b \, P_{inst}$ for each affine piece
+                        of the grid-code Q(P)
                         envelope, scaled by the installed capacity in
                         `PV_p_inst`.
 
@@ -1257,89 +1248,84 @@ class ACOPF(AC, OPF):
                             >= m * model.psG[g] + b * model.PV_p_inst[g]
                         )
 
-                    self.model.PV_QP_pos = pyo.Constraint(
-                        self.model.PVc, self.model.QP_PIECE, rule=PV_QP_pos
-                    )
-                    self.model.PV_QP_neg = pyo.Constraint(
-                        self.model.PVc, self.model.QP_PIECE, rule=PV_QP_neg
-                    )
-
                 if _pv_mode in ("qu", "both"):
                     sGbs_lookup_pv = {g: b for (g, b) in self.model.sGbs}
 
-                    def PV_QU_min(model, g, k):
-                        r"""Lower Q(U) piece `k` for PV sgen `g`.
-
-                        As `QV_min` but for PV-type static generators: $q \ge
-                        (m \, v_b + b) \, P_{inst}$ at the generator's bus.
-
-                        Added only when `pv_q_control` selects `"qu"` or
-                        `"both"`.
-
-                        Args:
-                            model: The Pyomo model being built.
-                            g: PV static-generator index from `model.PVc`.
-                            k: Piece index from `model.QU_PIECE`.
-
-                        Returns:
-                            A Pyomo inequality expression, or `Constraint.Skip`
-                            if the generator has no bus entry or no piece `k`.
-                        """
-                        if g not in sGbs_lookup_pv:
-                            return pyo.Constraint.Skip
-                        v = int(pyo.value(model.PV_var_q[g]))
-                        pieces = qv_area.lower_pieces(v, v_span)
-                        if k >= len(pieces):
-                            return pyo.Constraint.Skip
-                        b_bus = sGbs_lookup_pv[g]
-                        m, b = pieces[k]
-                        return (
-                            model.qsG[g]
-                            >= (m * model.v[b_bus] + b) * model.PV_p_inst[g]
-                        )
-
-                    def PV_QU_max(model, g, k):
-                        r"""Upper Q(U) piece `k` for PV sgen `g`.
-
-                        As `QV_max` but for PV-type static generators: $q \le
-                        (m \, v_b + b) \, P_{inst}$ at the generator's bus.
-
-                        Added only when `pv_q_control` selects `"qu"` or
-                        `"both"`.
-
-                        Args:
-                            model: The Pyomo model being built.
-                            g: PV static-generator index from `model.PVc`.
-                            k: Piece index from `model.QU_PIECE`.
-
-                        Returns:
-                            A Pyomo inequality expression, or `Constraint.Skip`
-                            if the generator has no bus entry or no piece `k`.
-                        """
-                        if g not in sGbs_lookup_pv:
-                            return pyo.Constraint.Skip
-                        v = int(pyo.value(model.PV_var_q[g]))
-                        pieces = qv_area.upper_pieces(v, v_span)
-                        if k >= len(pieces):
-                            return pyo.Constraint.Skip
-                        b_bus = sGbs_lookup_pv[g]
-                        m, b = pieces[k]
-                        return (
-                            model.qsG[g]
-                            <= (m * model.v[b_bus] + b) * model.PV_p_inst[g]
-                        )
-
                     if qu_curve is None:
-                        self.model.PV_QU_min = pyo.Constraint(
-                            self.model.PVc,
-                            self.model.QU_PIECE,
-                            rule=PV_QU_min,
+
+                        @self.model.Constraint(
+                            self.model.PVc, self.model.QU_PIECE
                         )
-                        self.model.PV_QU_max = pyo.Constraint(
-                            self.model.PVc,
-                            self.model.QU_PIECE,
-                            rule=PV_QU_max,
+                        def PV_QU_min(model, g, k):
+                            r"""Lower Q(U) piece `k` for PV sgen `g`.
+
+                            As `QU_min_pyo` but for PV-type static
+                            generators: $q \ge (m \, v_b + b) \, P_{inst}$
+                            at the generator's bus.
+
+                            Added only when `pv_q_control` selects `"qu"` or
+                            `"both"`.
+
+                            Args:
+                                model: The Pyomo model being built.
+                                g: PV static-generator index from `model.PVc`.
+                                k: Piece index from `model.QU_PIECE`.
+
+                            Returns:
+                                A Pyomo inequality expression, or
+                                `Constraint.Skip` if the generator has no
+                                bus entry or no piece `k`.
+                            """
+                            if g not in sGbs_lookup_pv:
+                                return pyo.Constraint.Skip
+                            v = int(pyo.value(model.PV_var_q[g]))
+                            pieces = qv_area.lower_pieces(v, v_span)
+                            if k >= len(pieces):
+                                return pyo.Constraint.Skip
+                            b_bus = sGbs_lookup_pv[g]
+                            m, b = pieces[k]
+                            return (
+                                model.qsG[g]
+                                >= (m * model.v[b_bus] + b)
+                                * model.PV_p_inst[g]
+                            )
+
+                        @self.model.Constraint(
+                            self.model.PVc, self.model.QU_PIECE
                         )
+                        def PV_QU_max(model, g, k):
+                            r"""Upper Q(U) piece `k` for PV sgen `g`.
+
+                            As `QU_max_pyo` but for PV-type static
+                            generators: $q \le (m \, v_b + b) \, P_{inst}$
+                            at the generator's bus.
+
+                            Added only when `pv_q_control` selects `"qu"` or
+                            `"both"`.
+
+                            Args:
+                                model: The Pyomo model being built.
+                                g: PV static-generator index from `model.PVc`.
+                                k: Piece index from `model.QU_PIECE`.
+
+                            Returns:
+                                A Pyomo inequality expression, or
+                                `Constraint.Skip` if the generator has no
+                                bus entry or no piece `k`.
+                            """
+                            if g not in sGbs_lookup_pv:
+                                return pyo.Constraint.Skip
+                            v = int(pyo.value(model.PV_var_q[g]))
+                            pieces = qv_area.upper_pieces(v, v_span)
+                            if k >= len(pieces):
+                                return pyo.Constraint.Skip
+                            b_bus = sGbs_lookup_pv[g]
+                            m, b = pieces[k]
+                            return (
+                                model.qsG[g]
+                                <= (m * model.v[b_bus] + b)
+                                * model.PV_p_inst[g]
+                            )
                     else:
                         attach_deadband_qu(
                             self.model,
@@ -1380,7 +1366,8 @@ class ACOPF(AC, OPF):
                     initialize={g: float(s_inv_pu.at[g]) for g in inv_idx},
                 )
 
-                def sgen_inverter_s2_rule(model, g):
+                @self.model.Constraint(self.model.sGinv)
+                def sgen_inverter_s2(model, g):
                     r"""Inverter apparent-power circle for sgen `g`.
 
                     $p^2 + q^2 \le S_{inv}^2$: the converter rating bounds
@@ -1398,10 +1385,6 @@ class ACOPF(AC, OPF):
                         model.psG[g] ** 2 + model.qsG[g] ** 2
                         <= model.S_inv[g] ** 2
                     )
-
-                self.model.sgen_inverter_s2 = pyo.Constraint(
-                    self.model.sGinv, rule=sgen_inverter_s2_rule
-                )
 
                 # cos(φ) cone: |qsG[g]| ≤ psG[g] · tan(arccos(cos_phi_min))
                 # Per-sgen "cos_phi_min" column takes precedence over scalar.
@@ -1424,6 +1407,7 @@ class ACOPF(AC, OPF):
                         self.model.sGpf, initialize=pf_data
                     )
 
+                    @self.model.Constraint(self.model.sGpf)
                     def sgen_cos_phi_upper(model, g):
                         r"""Upper power-factor bound for static generator `g`.
 
@@ -1439,6 +1423,7 @@ class ACOPF(AC, OPF):
                         """
                         return model.qsG[g] <= model.tan_phi[g] * model.psG[g]
 
+                    @self.model.Constraint(self.model.sGpf)
                     def sgen_cos_phi_lower(model, g):
                         r"""Lower power-factor bound for static generator `g`.
 
@@ -1453,13 +1438,6 @@ class ACOPF(AC, OPF):
                             A Pyomo inequality expression.
                         """
                         return model.qsG[g] >= -model.tan_phi[g] * model.psG[g]
-
-                    self.model.sgen_cos_phi_upper = pyo.Constraint(
-                        self.model.sGpf, rule=sgen_cos_phi_upper
-                    )
-                    self.model.sgen_cos_phi_lower = pyo.Constraint(
-                        self.model.sGpf, rule=sgen_cos_phi_lower
-                    )
 
         # --- P(U) active-power curtailment (VDE-AR-N 4105 §8.5) ---
         if pu_curtail and "p_inst_mw" in self.net.sgen:
@@ -1534,7 +1512,8 @@ class ACOPF(AC, OPF):
                 )
                 sGbs_lookup_pu = {g: b for (g, b) in self.model.sGbs}
 
-                def sgen_pu_curtail_rule(model, g):
+                @self.model.Constraint(self.model.sGpu)
+                def sgen_pu_curtail(model, g):
                     r"""P(U) curtailment ramp for sgen `g`.
 
                     Above $V_{curtail}$ the admissible active power falls
@@ -1562,10 +1541,6 @@ class ACOPF(AC, OPF):
                         model.V_max_curtail[g] - model.v[b]
                     )
 
-                self.model.sgen_pu_curtail = pyo.Constraint(
-                    self.model.sGpu, rule=sgen_pu_curtail_rule
-                )
-
         # --- fixed cos(φ) equality ---
         # Per-sgen column takes precedence over scalar kwarg.
         _fcf_data: dict = {}
@@ -1586,7 +1561,8 @@ class ACOPF(AC, OPF):
                 self.model.sGfcf, initialize=_fcf_data
             )
 
-            def sgen_fixed_cos_phi_rule(model, g):
+            @self.model.Constraint(self.model.sGfcf)
+            def sgen_fixed_cos_phi(model, g):
                 r"""Fixed power factor for sgen `g`.
 
                 An *equality*, unlike the `sgen_cos_phi_*` cone: the unit is
@@ -1602,10 +1578,6 @@ class ACOPF(AC, OPF):
                     A Pyomo equality expression.
                 """
                 return model.qsG[g] == model.fixed_tan_phi[g] * model.psG[g]
-
-            self.model.sgen_fixed_cos_phi = pyo.Constraint(
-                self.model.sGfcf, rule=sgen_fixed_cos_phi_rule
-            )
 
         # --- cos(φ)(P) profile ---
         if cos_phi_p_profile and "cos_phi_min" in self.net.sgen:
@@ -1662,7 +1634,8 @@ class ACOPF(AC, OPF):
                     initialize={g: cpp_data[g]["pt"] for g in cpp_data},
                 )
 
-                def sgen_cpp_rule(model, g):
+                @self.model.Constraint(self.model.sGcpp)
+                def sgen_cpp(model, g):
                     r"""cos(phi)(P) characteristic for static generator `g`.
 
                     Ties reactive power to active power along the grid code's
@@ -1686,10 +1659,6 @@ class ACOPF(AC, OPF):
                     return model.qsG[g] * dPn == model.cpp_tan_phi[g] * (
                         model.psG[g] * (model.psG[g] - model.cpp_P_thresh[g])
                     )
-
-                self.model.sgen_cpp = pyo.Constraint(
-                    self.model.sGcpp, rule=sgen_cpp_rule
-                )
 
     def _add_branch_angle_limits(self):
         """Attach branch phase-angle-difference constraints to ``self.model``.
@@ -1775,7 +1744,8 @@ class ACOPF(AC, OPF):
             line_idx = list(line_bounds.keys())
             self.model.LineAngleSet = pyo.Set(initialize=line_idx)
 
-            def _line_angle_rule(model, l):
+            @self.model.Constraint(self.model.LineAngleSet)
+            def line_angle_diff(model, l):
                 r"""Phase-angle-difference limit on line `l`.
 
                 $\alpha_{min} \le \theta_f - \theta_t \le \alpha_{max}$, in
@@ -1793,15 +1763,12 @@ class ACOPF(AC, OPF):
                 f, t, amin, amax = line_bounds[l]
                 return amin, model.delta[f] - model.delta[t], amax
 
-            self.model.line_angle_diff = pyo.Constraint(
-                self.model.LineAngleSet, rule=_line_angle_rule
-            )
-
         if trafo_bounds:
             tr_idx = list(trafo_bounds.keys())
             self.model.TrafoAngleSet = pyo.Set(initialize=tr_idx)
 
-            def _trafo_angle_rule(model, l):
+            @self.model.Constraint(self.model.TrafoAngleSet)
+            def trafo_angle_diff(model, l):
                 r"""Phase-angle-difference limit on transformer `l`.
 
                 $\alpha_{min} \le \theta_f - \theta_t \le \alpha_{max}$, in
@@ -1819,10 +1786,6 @@ class ACOPF(AC, OPF):
                 f, t, amin, amax = trafo_bounds[l]
                 return amin, model.delta[f] - model.delta[t], amax
 
-            self.model.trafo_angle_diff = pyo.Constraint(
-                self.model.TrafoAngleSet, rule=_trafo_angle_rule
-            )
-
     def add_voltage_deviation_objective(self):
         """Minimise the summed squared voltage deviation from 1 p.u.
 
@@ -1833,7 +1796,8 @@ class ACOPF(AC, OPF):
             self.model.B, initialize=self.bus_data["v_m"][self.model.B]
         )
 
-        def voltage_deviation_objective(model):
+        @self.model.Objective(sense=pyo.minimize)
+        def obj_v_deviation(model):
             r"""Summed squared voltage deviation.
 
             $\sum_{b \notin b_0} (v_b - 1)^2 + \sum_{b \in b_0} (v_b -
@@ -1849,10 +1813,6 @@ class ACOPF(AC, OPF):
             return sum(
                 (model.v[b] - 1.0) ** 2 for b in model.B - model.b0
             ) + sum((model.v[b] - model.v_b0[b]) ** 2 for b in model.b0)
-
-        self.model.obj_v_deviation = pyo.Objective(
-            rule=voltage_deviation_objective, sense=pyo.minimize
-        )
 
     def add_active_change_objective(self):
         """Set up and minimise redispatch away from the base dispatch.
@@ -1968,7 +1928,8 @@ class ACOPF(AC, OPF):
         self.model.inj_mismatch_pos = pyo.Var(domain=pyo.NonNegativeReals)
         self.model.inj_mismatch_neg = pyo.Var(domain=pyo.NonNegativeReals)
 
-        def active_change_objective(model):
+        @self.model.Objective(sense=pyo.minimize)
+        def obj_loading(model):
             """Redispatch cost with soft balance and small regularisers.
 
             Sums, in order: the squared active redispatch of dispatchable
@@ -2009,11 +1970,8 @@ class ACOPF(AC, OPF):
 
             return disp_term + soft_term + qstor_pen + stor_term + qsg_pen
 
-        self.model.obj_loading = pyo.Objective(
-            rule=active_change_objective, sense=pyo.minimize
-        )
-
-        def total_injection_mismatch_rule(model):
+        @self.model.Constraint()
+        def total_injection_soft(model):
             r"""Tie the injection-mismatch slacks to the actual imbalance.
 
             $\sum p^{sgen} - \sum p^{stor}$ may drift from its reference; the
@@ -2038,17 +1996,14 @@ class ACOPF(AC, OPF):
                 total_now - total_ref
             ) == model.inj_mismatch_pos - model.inj_mismatch_neg
 
-        self.model.total_injection_soft = pyo.Constraint(
-            rule=total_injection_mismatch_rule
-        )
-
     def add_reactive_power_flow_objective(self):
         """Set objective to minimise total squared reactive generation.
 
         Minimises Σ qsG[g]² over all static generators.
         """
 
-        def reactive_objective(model):
+        @self.model.Objective(sense=pyo.minimize)
+        def obj_reactive(model):
             """Total squared reactive generation of static generators.
 
             Args:
@@ -2059,7 +2014,3 @@ class ACOPF(AC, OPF):
             """
             # Minimize the reactive power
             return sum(model.qsG[g] ** 2 for g in model.sG)
-
-        self.model.obj_reactive = pyo.Objective(
-            rule=reactive_objective, sense=pyo.minimize
-        )

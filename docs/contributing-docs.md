@@ -2,7 +2,9 @@
 
 This page is the documentation counterpart to
 [Licensing](licensing.md): what a docstring in this repository has to
-say, where prose belongs, and how to check it before pushing.
+say, where prose belongs, and how to check it before pushing. For how
+the modelling code itself is written, see
+[Pyomo Conventions](contributing-pyomo.md).
 
 The audience we write for is a power-system researcher who knows OPF but
 has never seen this codebase, and a Python developer who knows neither

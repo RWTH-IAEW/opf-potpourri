@@ -79,6 +79,20 @@ Device modules (all suffixed `_multi_period`, in `src/potpourri/technologies/`):
   writes **one** time step — the last of the horizon — because `net.res_*` has
   no time dimension; use `map_to_net(t)` for any other step.
 - Example scripts in `scripts/` are the primary usage examples (see `scripts/README.md`).
+- **Pyomo style** follows the
+  [MO-book style guide](https://mobook.github.io/MO-book/notebooks/appendix/pyomo-style-guide-update.html):
+  `import pyomo.environ as pyo` (never a star import — ruff's F403/F405
+  enforce it), component **decorators** rather than `rule=`, `domain=`
+  rather than `within=` on a `Var`, ALL_CAPS set names. The decorated
+  function's name *becomes* the component name, and those names are
+  public API — tests and scripts index into `model.line_lim_from`, so
+  renaming one is a breaking change, not a style edit. Decorate on the
+  expression that already holds the model (`@self.model.Constraint(...)`,
+  or `@model....` where the method takes it as a parameter); do not bind
+  `model = self.model` at the top of a method, because `create_model()`
+  overrides replace `self.model` partway through. Maths-derived names
+  (`qsG`, `pTlv`, `SLmax`, `l`) stay as they are. Full policy in
+  `docs/contributing-pyomo.md`.
 - **Docstrings are Google-style Markdown**, rendered by mkdocstrings —
   `$v_b$` for maths, `` [`X`][potpourri.a.b.X] `` for cross-references,
   never reStructuredText roles. Document units, sign conventions, ppc-vs-

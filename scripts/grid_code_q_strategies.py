@@ -39,7 +39,7 @@ Author: Steffen Kortmann (2024)
 import copy
 import warnings
 
-import pyomo.environ as pe
+import pyomo.environ as pyo
 import simbench as sb
 
 from potpourri.models.ACOPF_base import ACOPF
@@ -134,7 +134,7 @@ def compare_grid_codes(
         opf.add_voltage_deviation_objective()
         opf.solve(solver=solver, print_solver_output=False)
 
-        v = [pe.value(opf.model.v[b]) for b in opf.model.B]
+        v = [pyo.value(opf.model.v[b]) for b in opf.model.B]
         curves = compute_q_curves(code)
         # Q(P) envelope evaluated at the capability reference point.
         q_at_ref = (
@@ -144,7 +144,7 @@ def compare_grid_codes(
         results[label] = {
             "code": code.title,
             "provisional": bool(provisional),
-            "obj": pe.value(opf.model.obj_v_deviation),
+            "obj": pyo.value(opf.model.obj_v_deviation),
             "vmin": min(v),
             "vmax": max(v),
             "q_over_pn_at_ref": q_at_ref,
@@ -155,7 +155,7 @@ def compare_grid_codes(
         print(f"  Q/Pn at P = {code.qp_p_low:.2f} Pn : {q_at_ref:+.4f}")
         print(
             f"  objective sum (v-1)^2  : "
-            f"{pe.value(opf.model.obj_v_deviation):.6f}"
+            f"{pyo.value(opf.model.obj_v_deviation):.6f}"
         )
         print(f"  voltage band           : [{min(v):.4f}, {max(v):.4f}] p.u.")
         if provisional:
@@ -256,8 +256,8 @@ def assign_per_sgen_strategies(base_net, solver=SOLVER):
         f" {'cos(phi)':>9}"
     )
     for g, strategy in assignment.items():
-        p = pe.value(mpopf.model.psG[g, t0]) * base * 1e3
-        q = pe.value(mpopf.model.qsG[g, t0]) * base * 1e3
+        p = pyo.value(mpopf.model.psG[g, t0]) * base * 1e3
+        q = pyo.value(mpopf.model.qsG[g, t0]) * base * 1e3
         s = (p**2 + q**2) ** 0.5
         cos_phi = abs(p) / s if s > 1e-9 else float("nan")
         print(f"  {g:>5}  {strategy:<15} {p:>9.3f} {q:>10.3f} {cos_phi:>9.4f}")
@@ -275,7 +275,7 @@ def assign_per_sgen_strategies(base_net, solver=SOLVER):
     )
 
     v_all = [
-        pe.value(mpopf.model.v[b, t])
+        pyo.value(mpopf.model.v[b, t])
         for b in mpopf.model.B
         for t in mpopf.model.T
     ]
@@ -285,7 +285,7 @@ def assign_per_sgen_strategies(base_net, solver=SOLVER):
     )
     print(
         f"objective sum (v-1)^2    : "
-        f"{pe.value(mpopf.model.obj_v_deviation):.6f}"
+        f"{pyo.value(mpopf.model.obj_v_deviation):.6f}"
     )
 
     return {"assignment": assignment, "built": built}

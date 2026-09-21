@@ -190,12 +190,12 @@ opf.solve(solver='neos', neos_opt='ipopt')
 The raw Pyomo result object is stored on the model instance:
 
 ```python
-import pyomo.environ as pe
+import pyomo.environ as pyo
 
 opf.solve(solver='ipopt')
 
 print(opf.results.solver.termination_condition)   # TerminationCondition.optimal
-print(pe.value(opf.model.obj))                     # objective value
+print(pyo.value(opf.model.obj))                    # objective value
 ```
 
 If the solve is **infeasible** or the solver **times out**, `to_net` mapping is skipped and a warning is printed. Increase `time_limit` or relax constraints if this happens.

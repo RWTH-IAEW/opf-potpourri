@@ -33,7 +33,7 @@ import copy
 import warnings
 
 import pandapower as pp
-import pyomo.environ as pe
+import pyomo.environ as pyo
 import simbench as sb
 
 from potpourri.models.HC_ACOPF import HC_ACOPF
@@ -91,7 +91,7 @@ if __name__ == "__main__":
     if solved:
         try:
             print(
-                f"Objective (wind − losses): {pe.value(hc.model.obj):.4f} p.u."
+                f"Objective (wind − losses): {pyo.value(hc.model.obj):.4f} p.u."
             )
         except Exception:
             print(
@@ -103,10 +103,10 @@ if __name__ == "__main__":
         try:
             active = []
             for w in hc.model.WIND_HC:
-                y = pe.value(hc.model.y[w])
+                y = pyo.value(hc.model.y[w])
                 bus = hc.net.sgen.bus.iloc[w]
-                p_mw = pe.value(hc.model.psG[w]) * baseMVA
-                q_mvar = pe.value(hc.model.qsG[w]) * baseMVA
+                p_mw = pyo.value(hc.model.psG[w]) * baseMVA
+                q_mvar = pyo.value(hc.model.qsG[w]) * baseMVA
                 if y and y > 0.5:
                     active.append((w, bus, p_mw, q_mvar))
             print(f"\nActive wind sites ({len(active)}):")
@@ -127,12 +127,12 @@ if __name__ == "__main__":
         """Return (n_active, total_mw) or (None, None) if vars not initialized."""
         try:
             n = sum(
-                1 for w in m.WIND_HC if (v := pe.value(m.y[w])) and v > 0.5
+                1 for w in m.WIND_HC if (v := pyo.value(m.y[w])) and v > 0.5
             )
             tot = sum(
-                pe.value(m.psG[w]) * baseMVA
+                pyo.value(m.psG[w]) * baseMVA
                 for w in m.WIND_HC
-                if (v := pe.value(m.y[w])) and v > 0.5
+                if (v := pyo.value(m.y[w])) and v > 0.5
             )
             return n, tot
         except Exception:
@@ -174,7 +174,10 @@ if __name__ == "__main__":
             continue
         try:
             losses = sum(
-                (pe.value(hc_w.model.pLfrom[l]) + pe.value(hc_w.model.pLto[l]))
+                (
+                    pyo.value(hc_w.model.pLfrom[l])
+                    + pyo.value(hc_w.model.pLto[l])
+                )
                 * baseMVA
                 for l in hc_w.model.L
             )

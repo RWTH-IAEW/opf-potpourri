@@ -233,12 +233,12 @@ class Heatpump_multi_period(Flexibility_multi_period):
         an infeasible point. ``hp_p`` starts at 0, inside its own bounds.
         """
         model.hp_p = pyo.Var(
-            model.HP, model.T, within=pyo.Reals, initialize=0.0
+            model.HP, model.T, domain=pyo.Reals, initialize=0.0
         )
         model.temp = pyo.Var(
             model.HP,
             model.T,
-            within=pyo.Reals,
+            domain=pyo.Reals,
             initialize=0.5 * (self.temp_min + self.temp_max),
         )
         return True
@@ -246,7 +246,8 @@ class Heatpump_multi_period(Flexibility_multi_period):
     def get_all_constraints(self, model):
         """Add the power, temperature and thermal-update constraints."""
 
-        def hp_power_rule(model, h, t):
+        @model.Constraint(model.HP, model.T)
+        def hp_power_con(model, h, t):
             """Bound the heat pump's electrical power.
 
             Args:
@@ -259,11 +260,8 @@ class Heatpump_multi_period(Flexibility_multi_period):
             """
             return model.HP_Pmin[h], model.hp_p[h, t], model.HP_Pmax[h]
 
-        model.hp_power_con = pyo.Constraint(
-            model.HP, model.T, rule=hp_power_rule
-        )
-
-        def hp_temp_rule(model, h, t):
+        @model.Constraint(model.HP, model.T)
+        def hp_temp_con(model, h, t):
             """Keep the indoor temperature inside its band.
 
             Args:
@@ -276,11 +274,8 @@ class Heatpump_multi_period(Flexibility_multi_period):
             """
             return model.TempMin[h], model.temp[h, t], model.TempMax[h]
 
-        model.hp_temp_con = pyo.Constraint(
-            model.HP, model.T, rule=hp_temp_rule
-        )
-
-        def hp_temp_update_rule(model, h, t):
+        @model.Constraint(model.HP, model.T)
+        def hp_temp_update_con(model, h, t):
             """Carry the indoor temperature from one step to the next.
 
             The thermal analogue of a storage balance: the building's heat
@@ -305,9 +300,6 @@ class Heatpump_multi_period(Flexibility_multi_period):
                 / model.HP_ThermCap[h]
             )
 
-        model.hp_temp_update_con = pyo.Constraint(
-            model.HP, model.T, rule=hp_temp_update_rule
-        )
         return True
 
     def get_all_opf(self, model):

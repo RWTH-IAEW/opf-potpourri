@@ -149,7 +149,8 @@ def add_weighted_voltage_deviation_objective(
             kv = float(ac.net.bus.at[pp_idx, "vn_kv"])
             w[b] = weights_by_kv.get(kv, default_weight)
 
-    def weighted_obj(model: pyo.ConcreteModel) -> pyo.Expression:
+    @ac.model.Objective(sense=pyo.minimize)
+    def obj_weighted_v_dev(model: pyo.ConcreteModel) -> pyo.Expression:
         # Non-slack buses: penalise deviation from 1 p.u.
         non_slack = sum(
             w[b] * (model.v[b] - 1.0) ** 2 for b in model.B - model.b0
@@ -159,9 +160,6 @@ def add_weighted_voltage_deviation_objective(
         slack = sum(w[b] * (model.v[b] - model.v_b0[b]) ** 2 for b in model.b0)
         return non_slack + slack
 
-    ac.model.obj_weighted_v_dev = pyo.Objective(
-        rule=weighted_obj, sense=pyo.minimize
-    )
     return ac.model.obj_weighted_v_dev
 
 

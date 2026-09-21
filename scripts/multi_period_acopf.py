@@ -29,7 +29,7 @@ Author: Steffen Kortmann (2023)
 
 import warnings
 
-import pyomo.environ as pe
+import pyomo.environ as pyo
 import simbench as sb
 
 from potpourri.models_multi_period.ACOPF_multi_period import ACOPF_multi_period
@@ -87,16 +87,16 @@ if __name__ == "__main__":
     print(f"  {'Hour':>6}  {'P ext-grid (MW)':>18}")
     for t in list(opf.model.T)[::4]:
         hour = (t - FROM_T) / 4
-        p_mw = sum(pe.value(opf.model.pG[g, t]) * base for g in opf.model.eG)
+        p_mw = sum(pyo.value(opf.model.pG[g, t]) * base for g in opf.model.eG)
         print(f"  {hour:>5.0f}h  {p_mw:>18.4f}")
 
     # Voltage band over the day
     v_max_by_t = [
-        max(pe.value(opf.model.v[b, t]) for b in opf.model.B)
+        max(pyo.value(opf.model.v[b, t]) for b in opf.model.B)
         for t in opf.model.T
     ]
     v_min_by_t = [
-        min(pe.value(opf.model.v[b, t]) for b in opf.model.B)
+        min(pyo.value(opf.model.v[b, t]) for b in opf.model.B)
         for t in opf.model.T
     ]
     print(
@@ -106,7 +106,7 @@ if __name__ == "__main__":
     )
 
     # Objective value
-    obj_val = pe.value(opf.model.obj_v_deviation)
+    obj_val = pyo.value(opf.model.obj_v_deviation)
     print(f"\nObjective Σ(v−1)² over all buses and steps: {obj_val:.6f}")
 
     print(

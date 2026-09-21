@@ -171,7 +171,8 @@ class DC(Basemodel):
         )  # angle difference across transformers
 
         # --- Kirchoff's current law at each bus b ---
-        def KCL_def(model, b):
+        @self.model.Constraint(self.model.B)
+        def KCL_const(model, b):
             """Active-power balance at bus `b`.
 
             Args:
@@ -202,10 +203,9 @@ class DC(Basemodel):
                 return pyo.Constraint.Skip
             return kcl
 
-        self.model.KCL_const = pyo.Constraint(self.model.B, rule=KCL_def)
-
         # --- Kirchoff's voltage law at each line and transformer---
-        def KVL_real_fromend(model, l):
+        @self.model.Constraint(self.model.L)
+        def KVL_real_from(model, l):
             """Active power entering line `l` at its from bus.
 
             Args:
@@ -217,7 +217,8 @@ class DC(Basemodel):
             """
             return model.pLfrom[l] == (-model.BL[l]) * model.deltaL[l]
 
-        def KVL_real_toend(model, l):
+        @self.model.Constraint(self.model.L)
+        def KVL_real_to(model, l):
             """Active power entering line `l` at its to bus.
 
             Args:
@@ -229,14 +230,8 @@ class DC(Basemodel):
             """
             return model.pLto[l] == (model.BL[l]) * model.deltaL[l]
 
-        self.model.KVL_real_from = pyo.Constraint(
-            self.model.L, rule=KVL_real_fromend
-        )
-        self.model.KVL_real_to = pyo.Constraint(
-            self.model.L, rule=KVL_real_toend
-        )
-
-        def KVL_trans_fromend(model, l):
+        @self.model.Constraint(self.model.TRANSF)
+        def KVL_trans_from(model, l):
             """Active power entering transformer `l` at its HV bus.
 
             Args:
@@ -248,7 +243,8 @@ class DC(Basemodel):
             """
             return model.pThv[l] == (-model.BLT[l]) * (model.deltaLT[l])
 
-        def KVL_trans_toend(model, l):
+        @self.model.Constraint(self.model.TRANSF)
+        def KVL_trans_to(model, l):
             """Active power entering transformer `l` at its LV bus.
 
             Args:
@@ -260,15 +256,9 @@ class DC(Basemodel):
             """
             return model.pTlv[l] == (model.BLT[l]) * (model.deltaLT[l])
 
-        self.model.KVL_trans_from = pyo.Constraint(
-            self.model.TRANSF, rule=KVL_trans_fromend
-        )
-        self.model.KVL_trans_to = pyo.Constraint(
-            self.model.TRANSF, rule=KVL_trans_toend
-        )
-
         # --- phase angle pyo.Constraints ---
-        def phase_angle_diff1(model, l):
+        @self.model.Constraint(self.model.L)
+        def phase_diff1(model, l):
             """Upper bound on a branch's angle difference.
 
             Args:
@@ -283,16 +273,13 @@ class DC(Basemodel):
                 == model.delta[model.A[l, 1]] - model.delta[model.A[l, 2]]
             )
 
-        self.model.phase_diff1 = pyo.Constraint(
-            self.model.L, rule=phase_angle_diff1
-        )
-
         # --- phase angle pyo.Constraints ---
         # PowerModels' DC flow is p = -b (θ_from − θ_to): the transformer
         # phase shift does not enter it (nor does the tap).
         use_shift = self.dc_convention != "powermodels"
 
-        def phase_angle_diff2(model, l):
+        @self.model.Constraint(self.model.TRANSF)
+        def phase_diff2(model, l):
             """Lower bound on a branch's angle difference.
 
             Args:
@@ -306,7 +293,3 @@ class DC(Basemodel):
             if use_shift:
                 diff = diff - model.shift[l]
             return model.deltaLT[l] == diff
-
-        self.model.phase_diff2 = pyo.Constraint(
-            self.model.TRANSF, rule=phase_angle_diff2
-        )

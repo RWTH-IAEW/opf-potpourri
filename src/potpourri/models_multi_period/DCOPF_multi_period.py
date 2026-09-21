@@ -4,7 +4,6 @@
 
 """Multi-period DC OPF: linearised power flow plus limits."""
 
-from pyomo.environ import *
 from potpourri.models_multi_period.DC_multi_period import DC_multi_period
 from potpourri.models_multi_period.OPF_multi_period import OPF_multi_period
 

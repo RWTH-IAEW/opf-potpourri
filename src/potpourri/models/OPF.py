@@ -327,7 +327,8 @@ class OPF(Basemodel):
         # value pinned to within numerical tolerance.
         _DEGENERATE_EPS = 1e-9
 
-        def static_generation_real_power_bounds(model, g):
+        @self.model.Constraint(self.model.sGc)
+        def PsG_Constraint(model, g):
             """Bound a static generator's active power, freeing it first.
 
             Unfixes `psG[g]` and returns its bounds. A generator whose two
@@ -354,15 +355,12 @@ class OPF(Basemodel):
             model.psG[g].unfix()
             return model.sPGmin[g], model.psG[g], model.sPGmax[g]
 
-        self.model.PsG_Constraint = pyo.Constraint(
-            self.model.sGc, rule=static_generation_real_power_bounds
-        )
-
         # --- generation real power limits ---
-        def real_power_bounds(model, g):
+        @self.model.Constraint(self.model.G)
+        def PG_Constraint(model, g):
             """Bound a generator's active power, freeing it first.
 
-            As `static_generation_real_power_bounds`, for `model.G`.
+            As `PsG_Constraint`, for `model.G`.
 
             Args:
                 model: The Pyomo model being built.
@@ -382,12 +380,9 @@ class OPF(Basemodel):
             model.pG[g].unfix()
             return model.PGmin[g], model.pG[g], model.PGmax[g]
 
-        self.model.PG_Constraint = pyo.Constraint(
-            self.model.G, rule=real_power_bounds
-        )
-
         # --- demand limits ---
-        def real_demand_bounds(model, d):
+        @self.model.Constraint(self.model.Dc)
+        def PD_Constraint(model, d):
             """Bound a controllable load's active power, freeing it first.
 
             Args:
@@ -398,10 +393,6 @@ class OPF(Basemodel):
                 The Pyomo ranged 3-tuple `(lower, pD, upper)`.
             """
             return model.PDmin[d], model.pD[d], model.PDmax[d]
-
-        self.model.PD_Constraint = pyo.Constraint(
-            self.model.Dc, rule=real_demand_bounds
-        )
 
         # --- transformer tap ratio limits ---
 
@@ -614,7 +605,8 @@ class OPF(Basemodel):
             initialize=self.trafo_data.tap_max_data[self.model.TRANSF],
         )
 
-        def trafo_tap_linear_bounds(model, t):
+        @self.model.Constraint(self.model.TRANSF)
+        def Tap_linear_constr(model, t):
             """Bound the continuous tap ratio of transformer `t`.
 
             Used by the *linear* tap model, where the ratio may take any value
@@ -628,10 +620,6 @@ class OPF(Basemodel):
                 The Pyomo ranged 3-tuple `(Tap_min, Tap, Tap_max)`.
             """
             return model.Tap_min[t], model.Tap[t], model.Tap_max[t]
-
-        self.model.Tap_linear_constr = pyo.Constraint(
-            self.model.TRANSF, rule=trafo_tap_linear_bounds
-        )
 
         self.unfix_vars("Tap")
 
@@ -658,7 +646,7 @@ class OPF(Basemodel):
         )
 
         self.model.Tap_pos = pyo.Var(
-            self.model.TRANSF, within=pyo.Integers, initialize=0.0
+            self.model.TRANSF, domain=pyo.Integers, initialize=0.0
         )  # transformer tap position
         self.model.Tap_pos_min = pyo.Param(
             self.model.TRANSF,
@@ -685,7 +673,8 @@ class OPF(Basemodel):
             initialize=self.trafo_data.tap_side_data[self.model.TRANSF],
         )  # transformer tap side; 0: hv, 1: lv
 
-        def trafo_tap_pos_min_max(model, t):
+        @self.model.Constraint(self.model.TRANSF)
+        def Tap_pos_constr(model, t):
             """Bound the integer tap position of transformer `t`.
 
             Args:
@@ -697,11 +686,8 @@ class OPF(Basemodel):
             """
             return model.Tap_pos_min[t], model.Tap_pos[t], model.Tap_pos_max[t]
 
-        self.model.Tap_pos_constr = pyo.Constraint(
-            self.model.TRANSF, rule=trafo_tap_pos_min_max
-        )
-
-        def trafo_tap_discrete(model, t):
+        @self.model.Constraint(self.model.TRANSF)
+        def Tap_discrete_constr(model, t):
             """Tie the tap ratio to the integer tap position.
 
             Turns the discrete tap changer into an equality between the ratio
@@ -729,9 +715,5 @@ class OPF(Basemodel):
                 == 1.0
                 + (model.Tap_pos[t] - model.Tap_neutral[t]) * model.Tap_step[t]
             )
-
-        self.model.Tap_discrete_constr = pyo.Constraint(
-            self.model.TRANSF, rule=trafo_tap_discrete
-        )
 
         self.unfix_vars("Tap")

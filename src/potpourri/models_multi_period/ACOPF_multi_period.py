@@ -4,7 +4,7 @@
 
 """Multi-period AC OPF: AC power flow plus operating limits."""
 
-from pyomo.environ import *
+import pyomo.environ as pyo
 from potpourri.models_multi_period.AC_multi_period import AC_multi_period
 from potpourri.models_multi_period.OPF_multi_period import OPF_multi_period
 from potpourri.technologies.generator import Generator_multi_period
@@ -297,15 +297,15 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
         # voltage limits DONE: make non time dependent
         # Over Bpd only: auxiliary ppc buses have no pandapower row and so
         # no user-supplied limits; their voltage follows from the equations.
-        self.model.Vmax = Param(
+        self.model.Vmax = pyo.Param(
             self.model.Bpd,
-            within=NonNegativeReals,
+            within=pyo.NonNegativeReals,
             initialize=self.v_limits[0][self.model.Bpd],
             mutable=True,
         )  # max voltage (p.u.)
-        self.model.Vmin = Param(
+        self.model.Vmin = pyo.Param(
             self.model.Bpd,
-            within=NonNegativeReals,
+            within=pyo.NonNegativeReals,
             initialize=self.v_limits[1][self.model.Bpd],
             mutable=True,
         )  # min voltage (p.u.)
@@ -316,7 +316,8 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
         if thermal_limit == "current":
             # |S|² ≤ SLmax² · v² (i.e. |I| ≤ I_max). Varies with voltage;
             # physically meaningful for a thermal current rating.
-            def line_lim_from_def(model, l, t):
+            @self.model.Constraint(self.model.L, self.model.T)
+            def line_lim_from(model, l, t):
                 r"""Current-based thermal limit at the from end of line `l`.
 
                 $p^2 + q^2 \le S_{max}^2 v^2$; see `ACOPF_base` for why the two
@@ -335,7 +336,8 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
                     <= model.SLmax[l] ** 2 * model.v[model.A[l, 1], t] ** 2
                 )
 
-            def line_lim_to_def(model, l, t):
+            @self.model.Constraint(self.model.L, self.model.T)
+            def line_lim_to(model, l, t):
                 """Current-based thermal limit at the to end of line `l`.
 
                 Args:
@@ -351,7 +353,8 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
                     <= model.SLmax[l] ** 2 * model.v[model.A[l, 2], t] ** 2
                 )
 
-            def transf_lim1_def(model, l, t):
+            @self.model.Constraint(self.model.TRANSF, self.model.T)
+            def transf_lim1(model, l, t):
                 """Current-based thermal limit at the HV side of trafo `l`.
 
                 Args:
@@ -367,7 +370,8 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
                     <= model.SLmaxT[l] ** 2 * model.v[model.AT[l, 1], t] ** 2
                 )
 
-            def transf_lim2_def(model, l, t):
+            @self.model.Constraint(self.model.TRANSF, self.model.T)
+            def transf_lim2(model, l, t):
                 """Current-based thermal limit at the LV side of trafo `l`.
 
                 Args:
@@ -385,7 +389,8 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
         else:
             # |S|² ≤ SLmax² (constant-MVA limit, matches MATPOWER /
             # PowerModels' constraint_thermal_limit_* and PGLib-OPF rate_a).
-            def line_lim_from_def(model, l, t):
+            @self.model.Constraint(self.model.L, self.model.T)
+            def line_lim_from(model, l, t):
                 r"""Constant-MVA thermal limit at the from end of line `l`.
 
                 $p^2 + q^2 \le S_{max}^2$, the MATPOWER/PGLib convention.
@@ -403,7 +408,8 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
                     <= model.SLmax[l] ** 2
                 )
 
-            def line_lim_to_def(model, l, t):
+            @self.model.Constraint(self.model.L, self.model.T)
+            def line_lim_to(model, l, t):
                 """Constant-MVA thermal limit at the to end of line `l`.
 
                 Args:
@@ -419,7 +425,8 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
                     <= model.SLmax[l] ** 2
                 )
 
-            def transf_lim1_def(model, l, t):
+            @self.model.Constraint(self.model.TRANSF, self.model.T)
+            def transf_lim1(model, l, t):
                 """Constant-MVA thermal limit at the HV side of trafo `l`.
 
                 Args:
@@ -435,7 +442,8 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
                     <= model.SLmaxT[l] ** 2
                 )
 
-            def transf_lim2_def(model, l, t):
+            @self.model.Constraint(self.model.TRANSF, self.model.T)
+            def transf_lim2(model, l, t):
                 """Constant-MVA thermal limit at the LV side of trafo `l`.
 
                 Args:
@@ -451,20 +459,6 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
                     <= model.SLmaxT[l] ** 2
                 )
 
-        self.model.line_lim_from = Constraint(
-            self.model.L, self.model.T, rule=line_lim_from_def
-        )
-        self.model.line_lim_to = Constraint(
-            self.model.L, self.model.T, rule=line_lim_to_def
-        )
-
-        self.model.transf_lim1 = Constraint(
-            self.model.TRANSF, self.model.T, rule=transf_lim1_def
-        )
-        self.model.transf_lim2 = Constraint(
-            self.model.TRANSF, self.model.T, rule=transf_lim2_def
-        )
-
         # --- slack voltage magnitude ---
         # AC_multi_period pins v[b0, t] to the base-case magnitude while
         # building the power flow. For a true AC OPF it should float within
@@ -476,7 +470,8 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
                     self.model.v[b0, t].unfix()
 
         # voltage bounds are time-dependent
-        def v_bounds(model, b, t):
+        @self.model.Constraint(self.model.Bpd, self.model.T)
+        def v_constraint(model, b, t):
             """Bound the voltage magnitude at bus `b`, time `t`.
 
             Indexed over `model.Bpd`: auxiliary ppc buses carry no user voltage
@@ -492,10 +487,6 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
             """
             return model.Vmin[b], model.v[b, t], model.Vmax[b]
 
-        self.model.v_constraint = Constraint(
-            self.model.Bpd, self.model.T, rule=v_bounds
-        )
-
         # --- optional branch angle-difference limits ---
         if angle_limits:
             self._add_branch_angle_limits()
@@ -506,11 +497,12 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
         Set objective to minimise sum of squared bus voltage deviations
         from 1 p.u. over all time steps.
         """
-        self.model.vm = Param(
+        self.model.vm = pyo.Param(
             self.model.B, initialize=self.bus_data["v_m"][self.model.B]
         )
 
-        def voltage_deviation_objective(model, t):
+        @self.model.Objective(sense=pyo.minimize)
+        def obj_v_deviation(model, t):
             """Summed squared voltage deviation over buses and time.
 
             Args:
@@ -530,10 +522,6 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
                 for t in model.T
             )
 
-        self.model.obj_v_deviation = Objective(
-            rule=voltage_deviation_objective, sense=minimize
-        )
-
     def add_minimize_power_objective(self):
         """Minimise the total demand served over all loads and steps.
 
@@ -541,7 +529,8 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
         time steps.
         """
 
-        def power_minimization_objective(model):
+        @self.model.Objective(sense=pyo.minimize)
+        def Objective(model):
             """Total demand served over all loads and time steps.
 
             Args:
@@ -552,10 +541,6 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
             """
             return sum(model.pD[d, t] for d in model.D for t in model.T)
 
-        self.model.Objective = Objective(
-            rule=power_minimization_objective, sense=minimize
-        )
-
     def add_generation_objective(self):
         """Minimise the summed squared generator active power.
 
@@ -563,7 +548,8 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
         injections.
         """
 
-        def minimize_generation(model):
+        @self.model.Objective(sense=pyo.minimize)
+        def obj(model):
             """Summed squared generator active power over time.
 
             Args:
@@ -574,12 +560,11 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
             """
             return sum(model.pG[(g, t)] ** 2 for g in model.G for t in model.T)
 
-        self.model.obj = Objective(rule=minimize_generation, sense=minimize)
-
     def add_weighted_generation_objective(self):
         """Minimise a weighted sum of external-grid and sgen power."""
 
-        def weighted_generation_objective(model):
+        @self.model.Objective(sense=pyo.minimize)
+        def obj(model):
             """Weighted sum of external-grid and static-generator power.
 
             The weights trade importing from the grid against running local
@@ -597,7 +582,3 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
             return c1 * sum(
                 model.pG[(g, t)] for g in model.G for t in model.T
             ) + c3 * sum(model.psG[(g, t)] for g in model.sG for t in model.T)
-
-        self.model.obj = Objective(
-            rule=weighted_generation_objective, sense=minimize
-        )

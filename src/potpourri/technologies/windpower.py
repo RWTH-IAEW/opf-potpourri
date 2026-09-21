@@ -225,7 +225,7 @@ class Windpower_multi_period(Sgens_multi_period):
     def get_hc_acopf_variables(self, model):
         """Attach binary HC placement variable y for each wind generator."""
         model.y = pyo.Var(
-            self.Windpot_tuple, within=pyo.Binary, initialize=1.0
+            self.Windpot_tuple, domain=pyo.Binary, initialize=1.0
         )
         return True
 
@@ -317,7 +317,8 @@ class Windpower_multi_period(Sgens_multi_period):
     def get_objective(self, model):
         """Add a wind-maximisation objective that subtracts line losses."""
 
-        def obj_wind_loss_rule(model):
+        @model.Objective(sense=pyo.maximize)
+        def obj(model):
             """Wind infeed minus network losses.
 
             Maximised, so the objective rewards hosting capacity and charges
@@ -334,8 +335,6 @@ class Windpower_multi_period(Sgens_multi_period):
                 - sum(model.pLfrom[l] + model.pLto[l] for l in model.L)
                 - sum(model.pThv[t] + model.pTlv[t] for t in model.TRANSF)
             )
-
-        model.obj = pyo.Objective(rule=obj_wind_loss_rule, sense=pyo.maximize)
 
     def get_constraints(self, model, net):
         """Add the Q(P) and Q(U) capability constraints.

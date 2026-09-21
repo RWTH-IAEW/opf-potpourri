@@ -45,7 +45,8 @@ class DCOPF(DC, OPF):
 
         # --- line power limits (check sending end; DC is approximately
         # lossless) ---
-        def line_lim_upper(model, l):
+        @self.model.Constraint(self.model.L)
+        def line_lim_from(model, l):
             """Upper branch-flow limit on line `l`.
 
             Args:
@@ -57,7 +58,8 @@ class DCOPF(DC, OPF):
             """
             return model.pLfrom[l] <= model.SLmax[l]
 
-        def line_lim_lower(model, l):
+        @self.model.Constraint(self.model.L)
+        def line_lim_to(model, l):
             """Lower branch-flow limit on line `l`.
 
             Args:
@@ -69,15 +71,9 @@ class DCOPF(DC, OPF):
             """
             return model.pLfrom[l] >= -model.SLmax[l]
 
-        self.model.line_lim_from = pyo.Constraint(
-            self.model.L, rule=line_lim_upper
-        )
-        self.model.line_lim_to = pyo.Constraint(
-            self.model.L, rule=line_lim_lower
-        )
-
         # --- transformer power limits ---
-        def transf_lim_upper(model, l):
+        @self.model.Constraint(self.model.TRANSF)
+        def transf_lim1(model, l):
             """Upper branch-flow limit on transformer `l`.
 
             Args:
@@ -89,7 +85,8 @@ class DCOPF(DC, OPF):
             """
             return model.pThv[l] <= model.SLmaxT[l]
 
-        def transf_lim_lower(model, l):
+        @self.model.Constraint(self.model.TRANSF)
+        def transf_lim2(model, l):
             """Lower branch-flow limit on transformer `l`.
 
             Args:
@@ -100,13 +97,6 @@ class DCOPF(DC, OPF):
                 A Pyomo expression.
             """
             return model.pThv[l] >= -model.SLmaxT[l]
-
-        self.model.transf_lim1 = pyo.Constraint(
-            self.model.TRANSF, rule=transf_lim_upper
-        )
-        self.model.transf_lim2 = pyo.Constraint(
-            self.model.TRANSF, rule=transf_lim_lower
-        )
 
         if angle_limits:
             self._add_dc_branch_angle_limits()
@@ -188,7 +178,8 @@ class DCOPF(DC, OPF):
             line_idx = list(line_bounds.keys())
             self.model.LineAngleSet = pyo.Set(initialize=line_idx)
 
-            def _line_angle_rule(model, l):
+            @self.model.Constraint(self.model.LineAngleSet)
+            def line_angle_diff(model, l):
                 r"""Phase-angle-difference limit on line `l`.
 
                 $\alpha_{min} \le \theta_f - \theta_t \le \alpha_{max}$, in
@@ -204,15 +195,12 @@ class DCOPF(DC, OPF):
                 f, t, amin, amax = line_bounds[l]
                 return amin, model.delta[f] - model.delta[t], amax
 
-            self.model.line_angle_diff = pyo.Constraint(
-                self.model.LineAngleSet, rule=_line_angle_rule
-            )
-
         if trafo_bounds:
             tr_idx = list(trafo_bounds.keys())
             self.model.TrafoAngleSet = pyo.Set(initialize=tr_idx)
 
-            def _trafo_angle_rule(model, l):
+            @self.model.Constraint(self.model.TrafoAngleSet)
+            def trafo_angle_diff(model, l):
                 """Phase-angle-difference limit on transformer `l`.
 
                 Args:
@@ -224,7 +212,3 @@ class DCOPF(DC, OPF):
                 """
                 f, t, amin, amax = trafo_bounds[l]
                 return amin, model.delta[f] - model.delta[t], amax
-
-            self.model.trafo_angle_diff = pyo.Constraint(
-                self.model.TrafoAngleSet, rule=_trafo_angle_rule
-            )

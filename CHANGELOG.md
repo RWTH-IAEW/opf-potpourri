@@ -5,6 +5,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.6.0] — 2026-09-21
+
+A housekeeping release: licensing metadata, documentation, and the Pyomo
+style of the modelling code. No behaviour changed and no public name moved.
+Every Python file now carries an SPDX header and a gate keeps it that way;
+every public object is documented and a coverage gate keeps it that way; and
+the model files follow the community Pyomo style guide — one import
+convention, component decorators instead of `rule=`, `domain=` instead of
+`within=` — with the generated optimisation problem verified byte-identical
+across 35 model configurations and seven reference solves.
+
+Pyomo is pinned at 6.10.1, the current release; the package uses none of the
+APIs removed in 6.10 and raises no deprecation warning against it.
+
 ### Added
 
 - **Every Python file carries an SPDX licensing header.** pandapower's
@@ -17,6 +33,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   second copyright line mirroring it, so both holders are recorded and
   neither replaces the other. `LICENSES/MIT.txt` adds the licence text in
   the REUSE layout.
+- **A `Pyomo Conventions` page under Contributing.**
+  `docs/contributing-pyomo.md` states the conventions, links the upstream
+  MO-book style guide, and records what a reader would otherwise have to
+  rediscover: that component names are public API, that the decorator goes on
+  the expression already holding the model rather than on a
+  `model = self.model` binding (`create_model()` overrides replace
+  `self.model` partway through), that a decorator constructs where the `def`
+  is, and that `rule=` is still right for a run-time component name. It also
+  records the two deliberate departures from the guide — maths-derived names
+  (`qsG`, `pTlv`, `SLmax`, `l`) and class-plus-mix-in model construction — so
+  neither is "fixed" later. `CLAUDE.md` carries the short form.
 - **A licensing gate runs in pre-commit and CI.** `tools/` holds the policy,
   a read-only checker, a writer that previews by default, and the inventory
   generator. The gate covers every tracked and newly added Python file, only
@@ -38,6 +65,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **The modelling code follows the Pyomo style guide.** It used to mix three
+  idioms for the same job, which made the model files harder to read than the
+  mathematics they encode and left a new contributor guessing which pattern to
+  copy. Nothing about the generated model changed: a 35-scenario fingerprint —
+  component declaration order, index sets, rendered constraint and objective
+  expressions, variable domains, bounds and fixed state — is byte-identical
+  before and after, and the objective and `net.res_*` of seven reference
+  solves agree to nine significant digits.
+    - *One import convention.* `import pyomo.environ as pyo` everywhere,
+      replacing `from pyomo.environ import *` in seven multi-period modules,
+      explicit-name imports in three, and `as pe` in six scripts. With the
+      star imports gone, `F403`/`F405` come out of ruff's ignore list, so the
+      linter now holds the convention instead of review.
+    - *Decorators instead of `rule=`.* All 256 registrations. The component
+      name appears once instead of three times and the indexing set sits next
+      to the rule that consumes it. **Component names are unchanged** — under
+      a decorator the function name becomes the component name, so each
+      decorated rule takes the old component name and `model.line_lim_from`
+      still resolves. One `rule=` survives, in `technologies/q_control.py`,
+      where the component name is built at run time.
+    - *`domain=` rather than `within=` on a `Var`*, 12 sites.
+      `Set(within=...)` is untouched: there it declares a super-set
+      containment check, which is a different thing.
 - **Copyright is institutional, and `LICENSE` carries the project's real
   span.** Settled by the maintainer on 2026-09-21, resolving two of the
   three questions the licensing audit raised. The 15 personal

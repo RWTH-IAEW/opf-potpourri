@@ -48,7 +48,7 @@ Author: Steffen Kortmann (2023)
 import logging
 import warnings
 
-import pyomo.environ as pe
+import pyomo.environ as pyo
 import simbench as sb
 
 from potpourri.models_multi_period.ACOPF_multi_period import ACOPF_multi_period
@@ -96,7 +96,7 @@ if __name__ == "__main__":
     # magnitude v_b0, so a hand-rolled Σ(v−1)² over *all* buses measures a
     # different quantity — and can move in the opposite direction to the value
     # actually being minimised.
-    v_dev_base = pe.value(opf_base.model.obj_v_deviation)
+    v_dev_base = pyo.value(opf_base.model.obj_v_deviation)
     print(f"  Baseline  objective = {v_dev_base:.6f}")
 
     # ── 2. With battery storage — scenario 1 (≈ 8 % penetration) ─────────
@@ -110,7 +110,7 @@ if __name__ == "__main__":
     opf_bat.add_voltage_deviation_objective()
     opf_bat.solve(solver=SOLVER, print_solver_output=False)
 
-    v_dev_bat = pe.value(opf_bat.model.obj_v_deviation)
+    v_dev_bat = pyo.value(opf_bat.model.obj_v_deviation)
     change = (v_dev_base - v_dev_bat) / v_dev_base * 100
     print(f"  Batteries objective = {v_dev_bat:.6f}")
     print(f"  Objective reduction: {change:+.2f} %")
@@ -124,7 +124,7 @@ if __name__ == "__main__":
         hour = (t - FROM_T) / 4
         row = f"  {hour:>5.0f}h"
         for b in bats:
-            row += f"  {pe.value(opf_bat.model.BAT_SOC[b, t]):>5.2f}"
+            row += f"  {pyo.value(opf_bat.model.BAT_SOC[b, t]):>5.2f}"
         print(row)
 
     # ── 4. Reactive support from the converter ────────────────────────────
@@ -171,16 +171,16 @@ if __name__ == "__main__":
         opf_q.add_voltage_deviation_objective()
         results = opf_q.solve(solver=SOLVER, print_solver_output=False)
 
-        if not pe.check_optimal_termination(results):
+        if not pyo.check_optimal_termination(results):
             print(
                 f"  {label:<24s} no feasible dispatch — the voltage band "
                 f"cannot be held with this reactive capability"
             )
             continue
 
-        dev = pe.value(opf_q.model.obj_v_deviation)
+        dev = pyo.value(opf_q.model.obj_v_deviation)
         q_peak = max(
-            abs(pe.value(opf_q.model.BAT_Q[b, t]))
+            abs(pyo.value(opf_q.model.BAT_Q[b, t]))
             for b in opf_q.model.BAT
             for t in opf_q.model.T
         )

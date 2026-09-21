@@ -50,15 +50,7 @@ import math
 import matplotlib.pyplot as plt
 import numpy as np
 import simbench as sb
-from pyomo.environ import (
-    Constraint,
-    Objective,
-    Param,
-    check_optimal_termination,
-    maximize,
-    minimize,
-    value,
-)
+import pyomo.environ as pyo
 
 # from shapely import concave_hull, MultiPoint, convex_hull
 # import geopandas as gpd
@@ -97,33 +89,30 @@ def run_feasible_operation_region(opf):
     boundary_P_values = [[] for _ in range(n_ext_grids)]
     boundary_Q_values = [[] for _ in range(n_ext_grids)]
 
-    opf.model.obj = Objective(
+    opf.model.obj = pyo.Objective(
         expr=sum(
             opf.model.pG[b0] ** 2 + opf.model.qG[b0] ** 2
             for b0 in opf.model.eG
         ),
-        sense=maximize,
+        sense=pyo.maximize,
     )
 
-    opf.model.tan_theta = Param(mutable=True, initialize=0.0)
+    opf.model.tan_theta = pyo.Param(mutable=True, initialize=0.0)
 
-    def constrain_pf(model, b0):
+    @opf.model.Constraint(opf.model.eG)
+    def power_factor_constraint(model, b0):
         return model.qG[b0] == model.tan_theta * model.pG[b0]
-
-    opf.model.power_factor_constraint = Constraint(
-        opf.model.eG, rule=constrain_pf
-    )
 
     for theta in theta_values:
         opf.model.tan_theta = np.tan(theta)
         opf.solve()
 
         for g in opf.model.eG:
-            print(value(opf.model.pG[g]))
+            print(pyo.value(opf.model.pG[g]))
 
         for b0 in opf.model.eG:
-            boundary_P_values[b0].append(value(opf.model.pG[b0]))
-            boundary_Q_values[b0].append(value(opf.model.qG[b0]))
+            boundary_P_values[b0].append(pyo.value(opf.model.pG[b0]))
+            boundary_Q_values[b0].append(pyo.value(opf.model.qG[b0]))
 
     return boundary_P_values, boundary_Q_values
 
@@ -159,24 +148,21 @@ def for_angle_based_sampling(opf, n=36):
     boundary_Q_values = [[] for _ in range(n_ext_grids)]
     boundary_U_values = [[] for _ in range(n_ext_grids)]
 
-    opf.model.tan_theta = Param(mutable=True, initialize=0.0)
+    opf.model.tan_theta = pyo.Param(mutable=True, initialize=0.0)
 
-    def constrain_pf(model, b0):
+    @opf.model.Constraint(opf.model.eG)
+    def power_factor_constraint(model, b0):
         return model.qG[b0] == model.tan_theta * model.pG[b0]
 
-    opf.model.power_factor_constraint = Constraint(
-        opf.model.eG, rule=constrain_pf
-    )
-
-    opf.model.a = Param(initialize=-1, mutable=True)
-    opf.model.b = Param(initialize=-1, mutable=True)
-    opf.model.obj = Objective(
+    opf.model.a = pyo.Param(initialize=-1, mutable=True)
+    opf.model.b = pyo.Param(initialize=-1, mutable=True)
+    opf.model.obj = pyo.Objective(
         expr=sum(
             opf.model.a * opf.model.pG[b0]
             + opf.model.b * abs(opf.model.tan_theta) * opf.model.qG[b0]
             for b0 in opf.model.eG
         ),
-        sense=minimize,
+        sense=pyo.minimize,
     )
 
     for quad_idx, theta_i in enumerate(theta_splits):
@@ -188,12 +174,12 @@ def for_angle_based_sampling(opf, n=36):
             opf.solve()
 
             for g in opf.model.eG:
-                print(value(opf.model.pG[g]))
+                print(pyo.value(opf.model.pG[g]))
 
             for b0 in opf.model.eG:
-                boundary_P_values[b0].append(value(opf.model.pG[b0]))
-                boundary_Q_values[b0].append(value(opf.model.qG[b0]))
-                boundary_U_values[b0].append(value(opf.model.v[b0]))
+                boundary_P_values[b0].append(pyo.value(opf.model.pG[b0]))
+                boundary_Q_values[b0].append(pyo.value(opf.model.qG[b0]))
+                boundary_U_values[b0].append(pyo.value(opf.model.v[b0]))
 
     return boundary_P_values, boundary_Q_values, boundary_U_values
 
@@ -223,8 +209,8 @@ def for_setpoint_based(opf, n=36):
         (0, -1),
         (1, -1),
     ]
-    opf.model.alpha = Param(initialize=0, mutable=True)
-    opf.model.beta = Param(initialize=0, mutable=True)
+    opf.model.alpha = pyo.Param(initialize=0, mutable=True)
+    opf.model.beta = pyo.Param(initialize=0, mutable=True)
 
     def setpoint_based(model):
         return sum(
@@ -232,7 +218,7 @@ def for_setpoint_based(opf, n=36):
             for g in model.eG
         )
 
-    opf.model.obj = Objective(expr=setpoint_based, sense=minimize)
+    opf.model.obj = pyo.Objective(expr=setpoint_based, sense=pyo.minimize)
 
     n_ext_grids = len(list(opf.model.eG))
     boundary_P_values = [[] for _ in range(n_ext_grids)]
@@ -242,14 +228,14 @@ def for_setpoint_based(opf, n=36):
         opf.model.alpha = alpha
         opf.model.beta = beta
         opf.solve()
-        print(value(opf.model.obj))
+        print(pyo.value(opf.model.obj))
 
         for g in opf.model.eG:
-            print(value(opf.model.pG[g]))
+            print(pyo.value(opf.model.pG[g]))
 
         for b0 in opf.model.eG:
-            boundary_P_values[b0].append(value(opf.model.pG[b0]))
-            boundary_Q_values[b0].append(value(opf.model.qG[b0]))
+            boundary_P_values[b0].append(pyo.value(opf.model.pG[b0]))
+            boundary_Q_values[b0].append(pyo.value(opf.model.qG[b0]))
 
     return boundary_P_values, boundary_Q_values
 
@@ -295,8 +281,8 @@ def for_setpoint_based_with_directions(opf, stepsize=100, solver="ipopt"):
     range_ext_grids = range(n_ext_grids)
 
     def _set_objective_function(model):
-        model.alpha = Param(initialize=0, mutable=True)
-        model.beta = Param(initialize=0, mutable=True)
+        model.alpha = pyo.Param(initialize=0, mutable=True)
+        model.beta = pyo.Param(initialize=0, mutable=True)
 
         def setpoint_based(model):
             return sum(
@@ -304,7 +290,7 @@ def for_setpoint_based_with_directions(opf, stepsize=100, solver="ipopt"):
                 for g in model.eG
             )
 
-        model.obj = Objective(expr=setpoint_based, sense=maximize)
+        model.obj = pyo.Objective(expr=setpoint_based, sense=pyo.maximize)
 
     _set_objective_function(opf.model)
 
@@ -323,9 +309,9 @@ def for_setpoint_based_with_directions(opf, stepsize=100, solver="ipopt"):
         opf.solve(solver=solver)
 
         for b0 in opf.model.eG:
-            p[b0].append(value(opf.model.pG[b0]))
-            q[b0].append(value(opf.model.qG[b0]))
-            v[b0].append(value(opf.model.v[b0]))
+            p[b0].append(pyo.value(opf.model.pG[b0]))
+            q[b0].append(pyo.value(opf.model.qG[b0]))
+            v[b0].append(pyo.value(opf.model.v[b0]))
 
     for g in range_ext_grids:
         boundary_P_values[g].append(p[g])
@@ -360,29 +346,25 @@ def for_setpoint_based_with_directions(opf, stepsize=100, solver="ipopt"):
 
     def _add_setpoint_constraints(model):
         """Add mutable P and Q setpoint band constraints to the model."""
-        model.p_sp = Param(model.eG, mutable=True)
+        model.p_sp = pyo.Param(model.eG, mutable=True)
 
-        def p_eg_upper(model, g):
+        @model.Constraint(model.eG)
+        def p_eg_max(model, g):
             return model.pG[g] <= model.p_sp[g] + tol
 
-        model.p_eg_max = Constraint(model.eG, rule=p_eg_upper)
-
-        def p_eg_lower(model, g):
+        @model.Constraint(model.eG)
+        def p_eg_min(model, g):
             return model.pG[g] >= model.p_sp[g] - tol
 
-        model.p_eg_min = Constraint(model.eG, rule=p_eg_lower)
+        model.q_sp = pyo.Param(model.eG, mutable=True)
 
-        model.q_sp = Param(model.eG, mutable=True)
-
-        def q_eg_upper(model, g):
+        @model.Constraint(model.eG)
+        def q_eg_max(model, g):
             return model.qG[g] <= model.q_sp[g] + tol
 
-        model.q_eg_max = Constraint(model.eG, rule=q_eg_upper)
-
-        def q_eg_lower(model, g):
+        @model.Constraint(model.eG)
+        def q_eg_min(model, g):
             return model.qG[g] >= model.q_sp[g] - tol
-
-        model.q_eg_min = Constraint(model.eG, rule=q_eg_lower)
 
     _add_setpoint_constraints(opf.model)
 
@@ -436,12 +418,12 @@ def for_setpoint_based_with_directions(opf, stepsize=100, solver="ipopt"):
                 opf.model.p_sp[g] = p_sp[g, step]
             opf.solve(solver=solver)
 
-            if check_optimal_termination(opf.results):
+            if pyo.check_optimal_termination(opf.results):
                 for g in opf.model.eG:
-                    p[g].append(value(opf.model.pG[g]))
-                    q[g].append(value(opf.model.qG[g]))
+                    p[g].append(pyo.value(opf.model.pG[g]))
+                    q[g].append(pyo.value(opf.model.qG[g]))
                 for b in opf.model.b0:
-                    v[b].append(value(opf.model.v[b]))
+                    v[b].append(pyo.value(opf.model.v[b]))
 
     for i in range_ext_grids:
         boundary_P_values[i].append(p[i])
@@ -498,13 +480,13 @@ def for_setpoint_based_with_directions(opf, stepsize=100, solver="ipopt"):
                 opf.model.q_sp[g] = q_sp[g, step]
             opf.solve(solver=solver)
             for g in opf.model.eG:
-                print(value(opf.model.pG[g]))
-            if check_optimal_termination(opf.results):
+                print(pyo.value(opf.model.pG[g]))
+            if pyo.check_optimal_termination(opf.results):
                 for g in opf.model.eG:
-                    p[g].append(value(opf.model.pG[g]))
-                    q[g].append(value(opf.model.qG[g]))
+                    p[g].append(pyo.value(opf.model.pG[g]))
+                    q[g].append(pyo.value(opf.model.qG[g]))
                 for b in opf.model.b0:
-                    v[b].append(value(opf.model.v[b]))
+                    v[b].append(pyo.value(opf.model.v[b]))
 
     for i in range_ext_grids:
         boundary_P_values[i].append(p[i])
@@ -548,13 +530,13 @@ def node_for_setpoint_based_with_directions(opf, w, stepsize=100):
     range_ext_grids = range(n_ext_grids)
 
     def _set_objective_function(model):
-        model.alpha = Param(initialize=0, mutable=True)
-        model.beta = Param(initialize=0, mutable=True)
+        model.alpha = pyo.Param(initialize=0, mutable=True)
+        model.beta = pyo.Param(initialize=0, mutable=True)
 
         def setpoint_based(model):
             return model.psG[w] * model.alpha + model.qsG[w] * model.beta
 
-        model.obj = Objective(expr=setpoint_based, sense=maximize)
+        model.obj = pyo.Objective(expr=setpoint_based, sense=pyo.maximize)
 
     _set_objective_function(opf.model)
 
@@ -573,8 +555,8 @@ def node_for_setpoint_based_with_directions(opf, w, stepsize=100):
         opf.solve()
 
         for b0 in range_ext_grids:
-            p[b0].append(value(opf.model.psG[w]))
-            q[b0].append(value(opf.model.qsG[w]))
+            p[b0].append(pyo.value(opf.model.psG[w]))
+            q[b0].append(pyo.value(opf.model.qsG[w]))
 
     for g in range_ext_grids:
         boundary_P_values[g].append(p[g])
@@ -653,10 +635,10 @@ def node_for_setpoint_based_with_directions(opf, w, stepsize=100):
                 opf.model.p_sp[w] = p_sp[g, step]
             opf.solve()
 
-            if check_optimal_termination(opf.results):
+            if pyo.check_optimal_termination(opf.results):
                 for g in range_ext_grids:
-                    p[g].append(value(opf.model.psG[w]))
-                    q[g].append(value(opf.model.qsG[w]))
+                    p[g].append(pyo.value(opf.model.psG[w]))
+                    q[g].append(pyo.value(opf.model.qsG[w]))
 
     for i in range_ext_grids:
         boundary_P_values[i].append(p[i])
@@ -709,10 +691,10 @@ def node_for_setpoint_based_with_directions(opf, w, stepsize=100):
                 opf.model.q_sp[w] = q_sp[g, step]
             opf.solve()
 
-            if check_optimal_termination(opf.results):
+            if pyo.check_optimal_termination(opf.results):
                 for g in range_ext_grids:
-                    p[g].append(value(opf.model.psG[w]))
-                    q[g].append(value(opf.model.qsG[w]))
+                    p[g].append(pyo.value(opf.model.psG[w]))
+                    q[g].append(pyo.value(opf.model.qsG[w]))
 
     for i in range_ext_grids:
         boundary_P_values[i].append(p[i])

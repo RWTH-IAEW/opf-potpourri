@@ -137,10 +137,11 @@ class HC_ACOPF(ACOPF):
             )
 
         self.model.y = pyo.Var(
-            self.model.WIND_HC, within=pyo.Binary, initialize=1.0
+            self.model.WIND_HC, domain=pyo.Binary, initialize=1.0
         )
 
-        def obj_wind_loss_rule(model):
+        @self.model.Objective(sense=pyo.maximize)
+        def obj(model):
             r"""Wind infeed minus network losses.
 
             $\sum_w p_w - \sum_l (p^{from}_l + p^{to}_l) - \sum_t (p^{hv}_t +
@@ -162,11 +163,8 @@ class HC_ACOPF(ACOPF):
                 - sum(model.pThv[t] + model.pTlv[t] for t in model.TRANSF)
             )
 
-        self.model.obj = pyo.Objective(
-            rule=obj_wind_loss_rule, sense=pyo.maximize
-        )
-
-        def SW_max(model, w):
+        @self.model.Constraint(self.model.WIND_HC)
+        def SW_max_constraint(model, w):
             r"""Upper apparent-power limit of candidate wind unit `w`.
 
             $p^2 + q^2 \le S_{max}^2 y_w$ with $y_w$ binary: when the unit is
@@ -186,12 +184,13 @@ class HC_ACOPF(ACOPF):
                 <= model.SWmax[w] ** 2 * model.y[w]
             )
 
-        def SW_min(model, w):
+        @self.model.Constraint(self.model.WIND_HC)
+        def SW_min_constraint(model, w):
             r"""Lower apparent-power limit of candidate wind unit `w`.
 
             $p^2 + q^2 \ge S_{min}^2 y_w$: a selected unit must run at or above
             a minimum size, while $y_w = 0$ makes the bound vacuous. Together
-            with `SW_max` this is a semi-continuous sizing.
+            with `SW_max_constraint` this is a semi-continuous sizing.
 
             Args:
                 model: The Pyomo model being built.
@@ -205,20 +204,14 @@ class HC_ACOPF(ACOPF):
                 >= model.SWmin[w] ** 2 * model.y[w]
             )
 
-        self.model.SW_max_constraint = pyo.Constraint(
-            self.model.WIND_HC, rule=SW_max
-        )
-        self.model.SW_min_constraint = pyo.Constraint(
-            self.model.WIND_HC, rule=SW_min
-        )
-
         # --- generator power ---
         for w in self.model.WIND_HC:
             self.model.psG[w].unfix()
             self.model.qsG[w].unfix()
 
         # HC Q-P bounds (VDE-AR-N 4105; configurable via qp_min / qp_max)
-        def QW_min(model, w):
+        @self.model.Constraint(self.model.WIND_HC)
+        def QW_min_constraint(model, w):
             r"""Lower Q(P) bound for candidate `w`.
 
             $q \ge \underline{m} \, p$, the simplified straight-line form of
@@ -234,10 +227,11 @@ class HC_ACOPF(ACOPF):
             """
             return model.qsG[w] >= self.qp_min * model.psG[w]
 
-        def QW_max(model, w):
+        @self.model.Constraint(self.model.WIND_HC)
+        def QW_max_constraint(model, w):
             r"""Upper Q(P) bound for candidate `w`.
 
-            $q \le \overline{m} \, p$, the mirror of `QW_min`.
+            $q \le \overline{m} \, p$, the mirror of `QW_min_constraint`.
 
             Args:
                 model: The Pyomo model being built.
@@ -248,16 +242,10 @@ class HC_ACOPF(ACOPF):
             """
             return model.qsG[w] <= self.qp_max * model.psG[w]
 
-        self.model.QW_min_constraint = pyo.Constraint(
-            self.model.WIND_HC, rule=QW_min
-        )
-        self.model.QW_max_constraint = pyo.Constraint(
-            self.model.WIND_HC, rule=QW_max
-        )
-
         hc_sGbs_lookup = {g: b for (g, b) in self.model.sGbs}
 
-        def QU_min_hc(model, w):
+        @self.model.Constraint(self.model.WIND_HC)
+        def QU_min_hc_constraint(model, w):
             r"""Lower Q(U) bound for candidate `w`.
 
             $q \ge (m \, v_b + c) \, p$ at the candidate's own bus: the
@@ -280,14 +268,11 @@ class HC_ACOPF(ACOPF):
                 >= (self.m_qu_min * model.v[b] + self.qu_min) * model.psG[w]
             )
 
-        self.model.QU_min_hc_constraint = pyo.Constraint(
-            self.model.WIND_HC, rule=QU_min_hc
-        )
-
-        def QU_max_hc(model, w):
+        @self.model.Constraint(self.model.WIND_HC)
+        def QU_max_hc_constraint(model, w):
             r"""Upper Q(U) bound for candidate `w`.
 
-            The mirror of `QU_min_hc`: $q \le (m \, v_b + c) \, p$.
+            The mirror of `QU_min_hc_constraint`: $q \le (m \, v_b + c) \, p$.
 
             Args:
                 model: The Pyomo model being built.
@@ -305,13 +290,10 @@ class HC_ACOPF(ACOPF):
                 <= (self.m_qu_max * model.v[b] + self.qu_max) * model.psG[w]
             )
 
-        self.model.QU_max_hc_constraint = pyo.Constraint(
-            self.model.WIND_HC, rule=QU_max_hc
-        )
-
         if "windpot_p_mw" in self.net.bus:
 
-            def PW_max(model, w):
+            @self.model.Constraint(self.model.WIND_HC)
+            def PW_max_constraint(model, w):
                 """Cap candidate `w` at the bus's wind potential.
 
                 Added only when `net.bus` carries a `windpot_p_mw` column,
@@ -326,10 +308,6 @@ class HC_ACOPF(ACOPF):
                 """
                 return model.psG[w] <= model.pWmax[w]
 
-            self.model.PW_max_constraint = pyo.Constraint(
-                self.model.WIND_HC, rule=PW_max
-            )
-
     def add_loss_obj(self):
         """Replace default objective with a weighted wind-vs-loss objective.
 
@@ -342,7 +320,10 @@ class HC_ACOPF(ACOPF):
             domain=pyo.Reals, initialize=1.0, mutable=True
         )
 
-        def objective_pwind_loss(model):
+        self.model.obj.deactivate()
+
+        @self.model.Objective(sense=pyo.maximize)
+        def OBJ_with_loss(model):
             """Weighted trade-off between wind infeed and network losses.
 
             Args:
@@ -354,8 +335,3 @@ class HC_ACOPF(ACOPF):
             return model.eps * sum(model.psG[w] for w in model.WIND_HC) + (
                 1 - model.eps
             ) * (-sum(model.pLfrom[l] + model.pLto[l] for l in model.L))
-
-        self.model.obj.deactivate()
-        self.model.OBJ_with_loss = pyo.Objective(
-            rule=objective_pwind_loss, sense=pyo.maximize
-        )

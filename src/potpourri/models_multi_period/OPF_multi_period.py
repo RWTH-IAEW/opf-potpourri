@@ -11,7 +11,7 @@ indexed over the model's time set.
 import copy
 
 import numpy as np
-from pyomo.environ import *
+import pyomo.environ as pyo
 
 from potpourri.models_multi_period.basemodel_multi_period import (
     Basemodel_multi_period,
@@ -269,15 +269,15 @@ class OPF_multi_period(Basemodel_multi_period):
         self.rebuild_kcl()
 
         # lines and transformer chracteristics and ratings
-        self.model.SLmax = Param(
+        self.model.SLmax = pyo.Param(
             self.model.L,
-            within=NonNegativeReals,
+            within=pyo.NonNegativeReals,
             initialize=self.line_data["SLmax_data"][self.model.L],
             mutable=True,
         )  # real power line limit
-        self.model.SLmaxT = Param(
+        self.model.SLmaxT = pyo.Param(
             self.model.TRANSF,
-            within=NonNegativeReals,
+            within=pyo.NonNegativeReals,
             initialize=self.trafo_data.SLmaxT_data[self.model.TRANSF],
             mutable=True,
         )  # real power transformer limit
@@ -332,9 +332,10 @@ class OPF_multi_period(Basemodel_multi_period):
         )
 
         if line_bounds:
-            self.model.LineAngleSet = Set(initialize=list(line_bounds))
+            self.model.LineAngleSet = pyo.Set(initialize=list(line_bounds))
 
-            def _line_angle_rule(model, l, t):
+            @self.model.Constraint(self.model.LineAngleSet, self.model.T)
+            def line_angle_diff(model, l, t):
                 r"""Phase-angle-difference limit on line `l`.
 
                 $\alpha_{min} \le \theta_f - \theta_t \le \alpha_{max}$, in
@@ -351,14 +352,11 @@ class OPF_multi_period(Basemodel_multi_period):
                 f, to, amin, amax = line_bounds[l]
                 return amin, model.delta[f, t] - model.delta[to, t], amax
 
-            self.model.line_angle_diff = Constraint(
-                self.model.LineAngleSet, self.model.T, rule=_line_angle_rule
-            )
-
         if trafo_bounds:
-            self.model.TrafoAngleSet = Set(initialize=list(trafo_bounds))
+            self.model.TrafoAngleSet = pyo.Set(initialize=list(trafo_bounds))
 
-            def _trafo_angle_rule(model, l, t):
+            @self.model.Constraint(self.model.TrafoAngleSet, self.model.T)
+            def trafo_angle_diff(model, l, t):
                 """Phase-angle-difference limit on transformer `l`.
 
                 Args:
@@ -371,10 +369,6 @@ class OPF_multi_period(Basemodel_multi_period):
                 """
                 f, to, amin, amax = trafo_bounds[l]
                 return amin, model.delta[f, t] - model.delta[to, t], amax
-
-            self.model.trafo_angle_diff = Constraint(
-                self.model.TrafoAngleSet, self.model.T, rule=_trafo_angle_rule
-            )
 
     def add_tap_changer_linear(self, max_tap_change_per_step=None):
         """Enable continuous (linear) OLTC tap-ratio optimisation.
@@ -394,18 +388,19 @@ class OPF_multi_period(Basemodel_multi_period):
             **{"tap_min_data": ratio_min, "tap_max_data": ratio_max}
         )
 
-        self.model.Tap_min = Param(
+        self.model.Tap_min = pyo.Param(
             self.model.TRANSF,
-            within=Reals,
+            within=pyo.Reals,
             initialize=self.trafo_data.tap_min_data[self.model.TRANSF],
         )
-        self.model.Tap_max = Param(
+        self.model.Tap_max = pyo.Param(
             self.model.TRANSF,
-            within=Reals,
+            within=pyo.Reals,
             initialize=self.trafo_data.tap_max_data[self.model.TRANSF],
         )
 
-        def trafo_tap_linear_bounds(model, tr, t):
+        @self.model.Constraint(self.model.TRANSF, self.model.T)
+        def Tap_linear_constr(model, tr, t):
             """Bound the continuous tap ratio of transformer `t`.
 
             Args:
@@ -418,15 +413,13 @@ class OPF_multi_period(Basemodel_multi_period):
             """
             return model.Tap_min[tr], model.Tap[tr, t], model.Tap_max[tr]
 
-        self.model.Tap_linear_constr = Constraint(
-            self.model.TRANSF, self.model.T, rule=trafo_tap_linear_bounds
-        )
         self.unfix_vars("Tap")
 
         if max_tap_change_per_step is not None:
             t_list = sorted(self.model.T)
             t_pairs = list(zip(t_list[:-1], t_list[1:]))
 
+            @self.model.Constraint(self.model.TRANSF, t_pairs)
             def tap_rate_up(model, tr, t_prev, t_next):
                 """Limit how far a tap may move up between time steps.
 
@@ -444,6 +437,7 @@ class OPF_multi_period(Basemodel_multi_period):
                     <= max_tap_change_per_step
                 )
 
+            @self.model.Constraint(self.model.TRANSF, t_pairs)
             def tap_rate_down(model, tr, t_prev, t_next):
                 """Limit how far a tap may move down between time steps.
 
@@ -460,13 +454,6 @@ class OPF_multi_period(Basemodel_multi_period):
                     model.Tap[tr, t_next] - model.Tap[tr, t_prev]
                     >= -max_tap_change_per_step
                 )
-
-            self.model.tap_rate_up = Constraint(
-                self.model.TRANSF, t_pairs, rule=tap_rate_up
-            )
-            self.model.tap_rate_down = Constraint(
-                self.model.TRANSF, t_pairs, rule=tap_rate_down
-            )
 
     def add_tap_changer_discrete(self):
         """Enable discrete OLTC tap-position optimisation.
@@ -491,38 +478,39 @@ class OPF_multi_period(Basemodel_multi_period):
             }
         )
 
-        self.model.Tap_pos = Var(
+        self.model.Tap_pos = pyo.Var(
             self.model.TRANSF,
             self.model.T,
-            within=Integers,
+            domain=pyo.Integers,
             initialize=0,
         )
-        self.model.Tap_pos_min = Param(
+        self.model.Tap_pos_min = pyo.Param(
             self.model.TRANSF,
-            within=Integers,
+            within=pyo.Integers,
             initialize=self.trafo_data.tap_pos_min[self.model.TRANSF],
         )
-        self.model.Tap_pos_max = Param(
+        self.model.Tap_pos_max = pyo.Param(
             self.model.TRANSF,
-            within=Integers,
+            within=pyo.Integers,
             initialize=self.trafo_data.tap_pos_max[self.model.TRANSF],
         )
-        self.model.Tap_neutral = Param(
+        self.model.Tap_neutral = pyo.Param(
             self.model.TRANSF,
-            within=Integers,
+            within=pyo.Integers,
             initialize=self.trafo_data.tap_neutral[self.model.TRANSF],
         )
-        self.model.Tap_step = Param(
+        self.model.Tap_step = pyo.Param(
             self.model.TRANSF,
-            within=Reals,
+            within=pyo.Reals,
             initialize=self.trafo_data.tap_step[self.model.TRANSF],
         )
-        self.model.Tap_side = Param(
+        self.model.Tap_side = pyo.Param(
             self.model.TRANSF,
             initialize=self.trafo_data.tap_side_data[self.model.TRANSF],
         )
 
-        def trafo_tap_pos_min_max(model, tr, t):
+        @self.model.Constraint(self.model.TRANSF, self.model.T)
+        def Tap_pos_constr(model, tr, t):
             """Bound the integer tap position of transformer `t`.
 
             Args:
@@ -539,11 +527,8 @@ class OPF_multi_period(Basemodel_multi_period):
                 model.Tap_pos_max[tr],
             )
 
-        self.model.Tap_pos_constr = Constraint(
-            self.model.TRANSF, self.model.T, rule=trafo_tap_pos_min_max
-        )
-
-        def trafo_tap_discrete(model, tr, t):
+        @self.model.Constraint(self.model.TRANSF, self.model.T)
+        def Tap_discrete_constr(model, tr, t):
             """Tie the tap ratio to the integer tap position.
 
             An LV-side tap enters as a reciprocal. The integer variable makes
@@ -570,7 +555,4 @@ class OPF_multi_period(Basemodel_multi_period):
                 * model.Tap_step[tr]
             )
 
-        self.model.Tap_discrete_constr = Constraint(
-            self.model.TRANSF, self.model.T, rule=trafo_tap_discrete
-        )
         self.unfix_vars("Tap")

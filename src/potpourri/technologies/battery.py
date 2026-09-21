@@ -324,16 +324,17 @@ class Battery_multi_period(Flexibility_multi_period):
         """
         idle_soc = self.bat_initial_soc_fraction * self.bat_soc_max
         model.BAT_Pchg = pyo.Var(
-            model.BAT, model.T, within=pyo.NonNegativeReals, initialize=0.0
+            model.BAT, model.T, domain=pyo.NonNegativeReals, initialize=0.0
         )
         model.BAT_Pdis = pyo.Var(
-            model.BAT, model.T, within=pyo.NonNegativeReals, initialize=0.0
+            model.BAT, model.T, domain=pyo.NonNegativeReals, initialize=0.0
         )
         model.BAT_SOC = pyo.Var(
-            model.BAT, model.T, within=pyo.Reals, initialize=idle_soc
+            model.BAT, model.T, domain=pyo.Reals, initialize=idle_soc
         )
 
-        def bat_injection_rule(model, b, t):
+        @model.Expression(model.BAT, model.T)
+        def BAT_P(model, b, t):
             """Net active power of battery `b` at time `t`.
 
             $P_{chg} - P_{dis}$, in the **load** convention: positive while
@@ -350,10 +351,6 @@ class Battery_multi_period(Flexibility_multi_period):
             """
             return model.BAT_Pchg[b, t] - model.BAT_Pdis[b, t]
 
-        model.BAT_P = pyo.Expression(
-            model.BAT, model.T, rule=bat_injection_rule
-        )
-
         # Reactive power, generator convention (positive = capacitive
         # injection), matching qsG. AC-style models only.
         #
@@ -367,7 +364,7 @@ class Battery_multi_period(Flexibility_multi_period):
             model.BAT_Q = pyo.Var(
                 model.BAT,
                 model.T,
-                within=pyo.Reals,
+                domain=pyo.Reals,
                 bounds=(-s_inv, s_inv),
                 initialize=0.0,
             )
@@ -376,7 +373,8 @@ class Battery_multi_period(Flexibility_multi_period):
     def get_all_constraints(self, model):
         """Add power-bound, SOC-bound, SOC-update and terminal constraints."""
 
-        def bat_chg_limit_rule(model, b, t):
+        @model.Constraint(model.BAT, model.T)
+        def bat_chg_limit_con(model, b, t):
             r"""Cap the charging power of battery `b` at time `t`.
 
             Args:
@@ -389,7 +387,8 @@ class Battery_multi_period(Flexibility_multi_period):
             """
             return model.BAT_Pchg[b, t] <= model.BAT_Pmax[b]
 
-        def bat_dis_limit_rule(model, b, t):
+        @model.Constraint(model.BAT, model.T)
+        def bat_dis_limit_con(model, b, t):
             r"""Cap the discharging power of battery `b` at time `t`.
 
             Args:
@@ -404,14 +403,8 @@ class Battery_multi_period(Flexibility_multi_period):
             # injection, so its magnitude bounds the discharge leg.
             return model.BAT_Pdis[b, t] <= -model.BAT_Pmin[b]
 
-        model.bat_chg_limit_con = pyo.Constraint(
-            model.BAT, model.T, rule=bat_chg_limit_rule
-        )
-        model.bat_dis_limit_con = pyo.Constraint(
-            model.BAT, model.T, rule=bat_dis_limit_rule
-        )
-
-        def bat_power_rule(model, b, t):
+        @model.Constraint(model.BAT, model.T)
+        def bat_power_con(model, b, t):
             r"""Discourage charging and discharging `b` at the same time.
 
             $P_{chg} + P_{dis} \le P_{max}$: the convex relaxation of the
@@ -436,11 +429,8 @@ class Battery_multi_period(Flexibility_multi_period):
                 <= model.BAT_Pmax[b]
             )
 
-        model.bat_power_con = pyo.Constraint(
-            model.BAT, model.T, rule=bat_power_rule
-        )
-
-        def bat_soc_rule(model, b, t):
+        @model.Constraint(model.BAT, model.T)
+        def bat_soc_con(model, b, t):
             """Pin the initial state of charge, bound it afterwards.
 
             At the first step the SOC is fixed to `BAT_SOC_init`, which is what
@@ -464,11 +454,8 @@ class Battery_multi_period(Flexibility_multi_period):
                 model.BAT_SOCmax[b],
             )
 
-        model.bat_soc_con = pyo.Constraint(
-            model.BAT, model.T, rule=bat_soc_rule
-        )
-
-        def bat_soc_update_rule(model, b, t):
+        @model.Constraint(model.BAT, model.T)
+        def bat_soc_update_con(model, b, t):
             r"""Carry the state of charge from one step to the next.
 
             $$SOC_t = SOC_{t-1} + \frac{\Delta t\,
@@ -488,7 +475,7 @@ class Battery_multi_period(Flexibility_multi_period):
 
             Returns:
                 A Pyomo equality expression, or `Constraint.Skip` at the first
-                step, which has no predecessor and is pinned by `bat_soc_rule`
+                step, which has no predecessor and is pinned by `bat_soc_con`
                 instead.
             """
             if t == model.T.at(1):
@@ -506,13 +493,10 @@ class Battery_multi_period(Flexibility_multi_period):
                 / model.BAT_Cap[b]
             )
 
-        model.bat_soc_update_con = pyo.Constraint(
-            model.BAT, model.T, rule=bat_soc_update_rule
-        )
-
         if self.bat_terminal_soc is not None:
 
-            def bat_terminal_soc_rule(model, b):
+            @model.Constraint(model.BAT)
+            def bat_terminal_soc_con(model, b):
                 """Impose the terminal state of charge of battery `b`.
 
                 Added only when `bat_terminal_soc` was given. `"cyclic"` closes
@@ -535,10 +519,6 @@ class Battery_multi_period(Flexibility_multi_period):
                 if self.bat_terminal_soc == "cyclic":
                     return model.BAT_SOC[b, last] == model.BAT_SOC_init[b]
                 return model.BAT_SOC[b, last] == self.bat_terminal_soc
-
-            model.bat_terminal_soc_con = pyo.Constraint(
-                model.BAT, rule=bat_terminal_soc_rule
-            )
 
         if self._has_reactive(model):
             self._add_reactive_constraints(model)
