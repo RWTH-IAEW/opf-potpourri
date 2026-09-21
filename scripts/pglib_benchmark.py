@@ -44,6 +44,21 @@ import pandas as pd
 
 warnings.filterwarnings("ignore")
 
+# IPOPT's linear solver and the BLAS underneath it are multi-threaded by
+# default; one solve then takes about ten cores, and ``N_WORKERS`` solves
+# oversubscribe the host several times over, which slows every one of them
+# down. Pin them to a single thread each — the solver runs as a child
+# process and inherits this environment — so that ``N_WORKERS`` alone
+# decides how much of the machine the run uses. Export the variables to
+# override.
+for _threads in (
+    "OMP_NUM_THREADS",
+    "OPENBLAS_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "NUMEXPR_NUM_THREADS",
+):
+    os.environ.setdefault(_threads, "1")
+
 # ── Configuration ─────────────────────────────────────────────────────────────
 SOLVER = "ipopt"
 GROUPS = ("typ", "api", "sad")  # PGLib operating conditions to run
@@ -51,7 +66,7 @@ MAX_BUSES = None  # None → every case; an int skips cases with more buses
 RUN_DC = True  # include DC-OPF column
 RUN_AC = True  # include AC-OPF column
 CASES = None  # None → all cases of each group; list of bare names to override
-N_WORKERS = 8  # parallel worker processes (IPOPT is single-threaded)
+N_WORKERS = 8  # parallel worker processes, one solver thread each
 TIME_LIMIT_S = 3600  # IPOPT wall-time limit per solve
 DC_CONVENTION = "powermodels"  # DC linearisation convention, see DCOPF
 RESULTS_DIR = Path(__file__).parent / "results"
