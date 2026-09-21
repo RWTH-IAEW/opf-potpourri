@@ -15,7 +15,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   model; one results table per group. `parse_baseline_md` now keeps the rows
   whose reference reads `inf.` (PowerModels.jl found the problem infeasible;
   45 SAD cases have no DC-OPF solution), returning `inf`, and the script counts
-  an infeasible potpourri result on such a row as agreement.
+  an infeasible potpourri result on such a row as agreement. Two details the
+  full run needed: the solver's own threads are pinned to one per worker
+  (IPOPT's linear solver and the BLAS underneath it take about ten cores each
+  by default, so the workers spent their time fighting over the machine), and
+  an AC solve that does not reach optimality is repeated from the starts in
+  `RETRY_STARTS` — flat voltages with every unit at the middle of its range,
+  then the DC-OPF solution of the same case. The congested files' shipped
+  setpoint is far from feasible and IPOPT stops at a locally infeasible point
+  on cases that do have a solution; `case179_goc__api` reaches the published
+  value exactly from the mid-range start. The results table gains a `start`
+  column saying which start produced each row.
 - **`DCOPF(net, dc_convention="powermodels")` selects the DC linearisation
   convention.** The default stays MATPOWER's `-1/x` with the phase shift. PowerModels'
   `DCPPowerModel`, which produced the PGLib DC references, uses the series
