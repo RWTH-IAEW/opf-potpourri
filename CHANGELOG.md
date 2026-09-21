@@ -86,7 +86,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `NaN` lower bound is still 0, so distribution networks are unaffected; only
   an explicitly negative bound behaves differently. Four units of PGLib
   `case588_sdet` are of that kind, and the case now matches the reference in
-  both formulations (DC and AC were 1.6 % and 1.5 % above it).
+  both formulations (DC and AC were 1.6 % and 1.5 % above it). The
+  multi-period `Sgens_multi_period` carried the same clip and is fixed with
+  it.
 
 ## [0.5.2] — 2026-09-20
 

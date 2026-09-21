@@ -207,3 +207,25 @@ def test_mp_acopf_add_opf_does_not_raise(lv_net):
     # AC must keep its reactive-power bounds
     assert hasattr(opf.model, "QsGmax")
     assert hasattr(opf.model, "QsGmin")
+
+
+def test_mp_static_generation_may_be_negative(lv_net):
+    """``psG`` must not carry a non-negative domain.
+
+    The domain would override ``net.sgen.min_p_mw`` wherever that bound is
+    negative, exactly as it did in the single-period model (see
+    ``test_sgen_negative_limits``). A missing or ``NaN`` bound still means 0.
+    """
+    import copy
+
+    import pyomo.environ as pyo
+
+    net = copy.deepcopy(lv_net)
+    net.sgen["min_p_mw"] = -0.5
+    net.sgen["max_p_mw"] = net.sgen.p_mw
+    net.sgen["controllable"] = True
+    opf = DCOPF_multi_period(net, toT=2)
+    opf.add_OPF()
+    index = list(opf.model.psG)[0]
+    assert opf.model.psG[index].domain is pyo.Reals
+    assert pyo.value(opf.model.sPGmin[index]) < 0

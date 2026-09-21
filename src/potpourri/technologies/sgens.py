@@ -443,8 +443,9 @@ class Sgens_multi_period(Flexibility_multi_period):
     def get_variables(self, model):
         # --- Variables ---
         model.psG = pyo.Var(
-            self.PsG_tuple, domain=pyo.NonNegativeReals
-        )  # real static generator power
+            self.PsG_tuple, domain=pyo.Reals
+        )  # real static generator power; the lower bound comes from
+        # net.sgen.min_p_mw and may be negative for a unit that can consume
         model.qsG = pyo.Var(
             self.QsG_tuple, domain=pyo.Reals
         )  # reactive power of static generators
