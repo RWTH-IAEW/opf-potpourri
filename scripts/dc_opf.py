@@ -1,3 +1,8 @@
+# SPDX-FileCopyrightText: 2023-2026 Institute for High Voltage Equipment and Grids, Digitalization and Energy Economics (IAEW), RWTH Aachen University
+# SPDX-FileCopyrightText: 2023 Steffen Kortmann
+#
+# SPDX-License-Identifier: MIT
+
 """DC Optimal Power Flow example for potpourri.
 
 Demonstrates the linearised DC power flow formulation in two steps:

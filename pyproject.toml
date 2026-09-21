@@ -1,5 +1,9 @@
 [build-system]
-requires = ["setuptools>=69", "wheel"]
+# >=77 is required, not cosmetic: `project.license` as an SPDX expression
+# and `project.license-files` are PEP 639 fields that setuptools only
+# understands from 77.0.0 on. Older backends silently fall back to the
+# legacy free-text `License:` metadata instead of `License-Expression:`.
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -9,7 +13,9 @@ description = "Multi-period Optimal Power Flow for distribution grids with stora
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
 license = "MIT"
-license-files = ["LICENSE"]
+# LICENSE is the canonical text; LICENSES/MIT.txt is the byte-identical
+# copy the REUSE specification expects, and a test keeps the two in step.
+license-files = ["LICENSE", "LICENSES/*.txt"]
 authors = [
     { name = "Steffen Kortmann", email = "s.kortmann@iaew.rwth-aachen.de" },
     { name = "Andreas Bong",     email = "a.bong@iaew.rwth-aachen.de" },

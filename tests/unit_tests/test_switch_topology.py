@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2023-2026 Institute for High Voltage Equipment and Grids, Digitalization and Energy Economics (IAEW), RWTH Aachen University
+#
+# SPDX-License-Identifier: MIT
+
 """Regression tests for switch handling and branch endpoint numbering.
 
 Two defects were found while reproducing the linear AC-OPF study on the

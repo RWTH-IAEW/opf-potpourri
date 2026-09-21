@@ -1,3 +1,8 @@
+# SPDX-FileCopyrightText: 2023-2026 Institute for High Voltage Equipment and Grids, Digitalization and Energy Economics (IAEW), RWTH Aachen University
+# SPDX-FileCopyrightText: 2023 Steffen Kortmann
+#
+# SPDX-License-Identifier: MIT
+
 """AC-OPF objective function tradeoff demo for potpourri.
 
 Shows how four different objectives steer the same AC-OPF to measurably

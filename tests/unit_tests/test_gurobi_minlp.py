@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2023-2026 Institute for High Voltage Equipment and Grids, Digitalization and Energy Economics (IAEW), RWTH Aachen University
+#
+# SPDX-License-Identifier: MIT
+
 """Tests for the 'gurobi_direct_minlp' solver path.
 
 Pyomo's ``gurobi_direct_minlp`` interface (Pyomo >= 6.10, gurobipy >= 12) maps

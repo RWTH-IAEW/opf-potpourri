@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2023-2026 Institute for High Voltage Equipment and Grids, Digitalization and Energy Economics (IAEW), RWTH Aachen University
+#
+# SPDX-License-Identifier: MIT
+
 """DC power flow mixin: adds linearised DC equations (voltage angles only)
 to Basemodel."""
 

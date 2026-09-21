@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2023-2026 Institute for High Voltage Equipment and Grids, Digitalization and Energy Economics (IAEW), RWTH Aachen University
+#
+# SPDX-License-Identifier: MIT
+
 """Post-processing for multi-period models: reads Pyomo solution at time t
 into net.res_* DataFrames."""
 

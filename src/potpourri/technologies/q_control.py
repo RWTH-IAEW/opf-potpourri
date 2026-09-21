@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2023-2026 Institute for High Voltage Equipment and Grids, Digitalization and Energy Economics (IAEW), RWTH Aachen University
+#
+# SPDX-License-Identifier: MIT
+
 """Grid-code reactive-power capability parameters, aligned with pandapower.
 
 The German technical connection rules (TAR) are represented as selectable

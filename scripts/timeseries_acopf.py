@@ -1,3 +1,8 @@
+# SPDX-FileCopyrightText: 2023-2026 Institute for High Voltage Equipment and Grids, Digitalization and Energy Economics (IAEW), RWTH Aachen University
+# SPDX-FileCopyrightText: 2023 Steffen Kortmann
+#
+# SPDX-License-Identifier: MIT
+
 """Time-series AC OPF via pandapower's run_timeseries.
 
 Demonstrates how to integrate potpourri's single-period AC OPF into

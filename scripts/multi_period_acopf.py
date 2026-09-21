@@ -1,3 +1,8 @@
+# SPDX-FileCopyrightText: 2023-2026 Institute for High Voltage Equipment and Grids, Digitalization and Energy Economics (IAEW), RWTH Aachen University
+# SPDX-FileCopyrightText: 2023 Steffen Kortmann
+#
+# SPDX-License-Identifier: MIT
+
 """Multi-period AC OPF example for potpourri.
 
 Demonstrates how to solve a 24-hour AC OPF over a SimBench low-voltage

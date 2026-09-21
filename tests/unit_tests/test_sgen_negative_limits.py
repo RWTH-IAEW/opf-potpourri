@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2023-2026 Institute for High Voltage Equipment and Grids, Digitalization and Energy Economics (IAEW), RWTH Aachen University
+#
+# SPDX-License-Identifier: MIT
+
 """A static generator whose ``min_p_mw`` is negative must be allowed to consume.
 
 ``psG`` used to be declared over the non-negative reals, which overrode the

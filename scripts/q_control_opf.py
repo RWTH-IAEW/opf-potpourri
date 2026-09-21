@@ -1,3 +1,8 @@
+# SPDX-FileCopyrightText: 2023-2026 Institute for High Voltage Equipment and Grids, Digitalization and Energy Economics (IAEW), RWTH Aachen University
+# SPDX-FileCopyrightText: 2024 Steffen Kortmann
+#
+# SPDX-License-Identifier: MIT
+
 """VDE-AR-N 4105 reactive-power control — single- and multi-period example.
 
 Demonstrates how to annotate a simbench network with grid-code Q-control data

@@ -1,9 +1,23 @@
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Ruff version.
-    rev: v0.16.0
+    rev: v0.16.8
     hooks:
       # Run the linter.
       - id: ruff-check
       # Run the formatter.
       - id: ruff-format
+
+  - repo: local
+    hooks:
+      # Every in-scope Python file must carry an SPDX header, not just
+      # the ones touched by this commit -- hence pass_filenames: false
+      # and always_run. The hook is read-only; it never repairs a file.
+      # See docs/licensing.md.
+      - id: license-headers
+        name: SPDX licensing headers
+        entry: python tools/check_license_headers.py
+        language: python
+        additional_dependencies: ["packaging>=24.2"]
+        pass_filenames: false
+        always_run: true

@@ -1,3 +1,8 @@
+# SPDX-FileCopyrightText: 2023-2026 Institute for High Voltage Equipment and Grids, Digitalization and Energy Economics (IAEW), RWTH Aachen University
+# SPDX-FileCopyrightText: 2023 Steffen Kortmann
+#
+# SPDX-License-Identifier: MIT
+
 """Time-series snapshot OPF demo for potpourri.
 
 Demonstrates how potpourri can solve an independent AC-OPF for each of a

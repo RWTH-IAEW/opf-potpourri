@@ -1,4 +1,9 @@
+# SPDX-FileCopyrightText: 2023-2026 Institute for High Voltage Equipment and Grids, Digitalization and Energy Economics (IAEW), RWTH Aachen University
+#
+# SPDX-License-Identifier: MIT
+#
 # tests/installation_with_pip/test_public_api.py
+
 from importlib.metadata import version
 
 from potpourri import __version__

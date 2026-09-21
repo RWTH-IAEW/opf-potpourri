@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2023-2026 Institute for High Voltage Equipment and Grids, Digitalization and Energy Economics (IAEW), RWTH Aachen University
+#
+# SPDX-License-Identifier: MIT
+
 """Compare NEOS solver backends on SimBench networks.
 
 Solves six SimBench benchmark networks with the ``AC`` power flow model via

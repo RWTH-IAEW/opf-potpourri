@@ -60,6 +60,36 @@ ruff format .      # format (auto-fix)
 
 CI will reject pull requests that fail either check. Run both locally before pushing.
 
+## Licensing headers
+
+Every Python file must start with this, as **real comments** before anything
+else — a new module without it fails CI:
+
+```python
+# SPDX-FileCopyrightText: 2023-2026 Institute for High Voltage Equipment and Grids, Digitalization and Energy Economics (IAEW), RWTH Aachen University
+#
+# SPDX-License-Identifier: MIT
+```
+
+```bash
+python tools/check_license_headers.py   # read-only gate (pre-commit + CI)
+python tools/fix_license_headers.py     # preview the header it would write
+```
+
+The same notice inside a docstring or a string literal does **not** count;
+the tooling reads the physical header. Copy the holder wording verbatim
+rather than shortening it, and keep it on one line.
+
+**Contributing code you did not write?** Do not run the fixer over it and do
+not relabel it MIT. Keep every upstream copyright line, licence block and
+attribution, add the licence text under `LICENSES/`, and register the file in
+`LICENSE_EXCEPTIONS` in `tools/license_headers.py` with its provenance.
+Importing a dependency is not copying it; pasting or porting source is.
+
+If you are unsure who owns a contribution, say so in the pull request instead
+of guessing a holder or a year. [`docs/licensing.md`](docs/licensing.md) has
+the full policy and the questions still open.
+
 ## Commit messages
 
 Follow [Conventional Commits](https://www.conventionalcommits.org/):

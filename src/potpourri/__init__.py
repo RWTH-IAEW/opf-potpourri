@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2023-2026 Institute for High Voltage Equipment and Grids, Digitalization and Energy Economics (IAEW), RWTH Aachen University
+#
+# SPDX-License-Identifier: MIT
+
 """potpourri — multi-period Optimal Power Flow for distribution grids.
 
 Built on Pyomo and pandapower.  Key entry points::

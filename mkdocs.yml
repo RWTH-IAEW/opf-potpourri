@@ -60,3 +60,4 @@ nav:
       - Multi-Period Models: api/multi-period.md
       - Flexible Devices: api/devices.md
       - Utilities: api/utilities.md
+  - Licensing: licensing.md

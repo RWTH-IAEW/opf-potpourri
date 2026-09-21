@@ -17,9 +17,31 @@ jobs:
       # Pinned to the same version as .pre-commit-config.yaml. An unpinned
       # install silently follows ruff's latest release, so a new ruff could
       # fail this job on untouched code. Bump both together.
-      - run: pip install ruff==0.16.0
+      - run: pip install ruff==0.16.8
       - run: ruff check .
       - run: ruff format --check .
+
+  licensing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The checker enumerates files with git; a shallow checkout is
+          # enough, but the submodule is not needed at all.
+          submodules: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # The charset-normalizer extra is required, not optional: reuse
+      # needs an encoding-detection backend, and a bare `pip install
+      # reuse` aborts on import with NoEncodingModuleError wherever
+      # libmagic is absent.
+      - run: pip install "packaging>=24.2" "reuse[charset-normalizer]"
+      # Project policy: SPDX tags in the physical Python header. This job
+      # is strictly read-only -- CI never repairs a header.
+      - run: python tools/check_license_headers.py
+      # Independent cross-check with the REUSE reference implementation.
+      - run: git ls-files -z -- '*.py' '*.pyi' '*.pyw' | xargs -0 reuse lint-file
 
   docs:
     runs-on: ubuntu-latest

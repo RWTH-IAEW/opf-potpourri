@@ -271,3 +271,12 @@ Zenodo DOI is registered for the release.
 ## License
 
 `potpourri` is released under the [MIT License](LICENSE).
+
+Every Python file carries an SPDX header, and `LICENSES/MIT.txt` holds the
+licence text in the [REUSE](https://reuse.software/) layout. The header
+policy, how to handle copied third-party code, and the open ownership
+questions are documented in [`docs/licensing.md`](docs/licensing.md).
+
+```bash
+python tools/check_license_headers.py   # verify SPDX headers
+```

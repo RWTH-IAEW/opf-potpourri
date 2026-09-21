@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2023-2026 Institute for High Voltage Equipment and Grids, Digitalization and Energy Economics (IAEW), RWTH Aachen University
+#
+# SPDX-License-Identifier: MIT
+
 """Basemodel needs a power flow only for the ppc tables and a starting point.
 When Newton-Raphson diverges from the flat start it must fall back to a DC
 power flow instead of refusing to build the model."""

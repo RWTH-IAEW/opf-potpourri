@@ -79,3 +79,9 @@ Device modules (all suffixed `_multi_period`, in `src/potpourri/technologies/`):
   writes **one** time step — the last of the horizon — because `net.res_*` has
   no time dimension; use `map_to_net(t)` for any other step.
 - Example scripts in `scripts/` are the primary usage examples (see `scripts/README.md`).
+- **Every Python file needs an SPDX header** — an `SPDX-FileCopyrightText`
+  line plus an `SPDX-License-Identifier` line naming MIT, as real comments at
+  the very top, new files included. Enforced in pre-commit and CI by
+  `python tools/check_license_headers.py`. Never relabel copied third-party
+  code as MIT or invent a copyright holder to make the check pass; the policy
+  and the open ownership questions live in `docs/licensing.md`.

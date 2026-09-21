@@ -1,3 +1,8 @@
+# SPDX-FileCopyrightText: 2023-2026 Institute for High Voltage Equipment and Grids, Digitalization and Energy Economics (IAEW), RWTH Aachen University
+# SPDX-FileCopyrightText: 2026 Steffen Kortmann
+#
+# SPDX-License-Identifier: MIT
+
 """Custom objective function: per-voltage-level weighted voltage deviation.
 
 potpourri does not restrict you to the built-in objectives (such as

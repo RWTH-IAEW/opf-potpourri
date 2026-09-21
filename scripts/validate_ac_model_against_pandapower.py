@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2023-2026 Institute for High Voltage Equipment and Grids, Digitalization and Energy Economics (IAEW), RWTH Aachen University
+#
+# SPDX-License-Identifier: MIT
+
 """Validation of the potpourri AC power flow model against pandapower.
 
 Solves the AC power flow on six SimBench benchmark networks with the

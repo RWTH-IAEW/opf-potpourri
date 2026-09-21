@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2023-2026 Institute for High Voltage Equipment and Grids, Digitalization and Energy Economics (IAEW), RWTH Aachen University
+#
+# SPDX-License-Identifier: MIT
+
 """Regression tests for GitLab issue #16.
 
 A 12-step midday window on ``1-LV-rural1--0-sw`` reported a locally infeasible
