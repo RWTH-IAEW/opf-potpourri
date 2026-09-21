@@ -5,6 +5,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **The issue-16 window converges from the cold start.** A side effect of
+  0.5.3's static-generator fix: with the lower bound expressed as a constraint
+  instead of a variable domain, IPOPT takes a different path and the 12-step
+  `1-LV-rural1--0-sw` window that motivated `warm_start_from_pf()` now solves
+  without the seed. The canary test that pinned the old failure asserts the
+  new behaviour; the seed remains the default.
+
 ## [0.5.3] — 2026-09-21
 
 A patch release around the PGLib-OPF benchmark. The benchmark now covers the

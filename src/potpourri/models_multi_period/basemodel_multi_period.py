@@ -548,7 +548,10 @@ class Basemodel_multi_period:
         both available and feasible. Seeding a *consistent* operating point
         fixes it. The seed need not be near the optimum — an uncurtailed,
         curtailed, or half-curtailed seed all converge to the same solution —
-        it only has to satisfy the power flow.
+        it only has to satisfy the power flow. Since 0.5.3 that window also
+        converges from the cold start (the static-generation lower bound is a
+        constraint rather than a variable domain, which changes IPOPT's path);
+        the seed remains the safer start and stays the default.
 
         Args:
             curtailment: Factor applied to the static-generation profile in the

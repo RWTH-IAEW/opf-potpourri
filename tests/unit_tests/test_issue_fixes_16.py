@@ -79,20 +79,26 @@ def test_issue16_reported_window_converges(lv_net):
 
 
 @pytest.mark.integration
-def test_issue16_failure_returns_without_the_warm_start(lv_net):
-    """Pins the diagnosis, not just the symptom.
+def test_issue16_cold_start_converges_since_the_sgen_bound_fix(lv_net):
+    """The cold start of the reported window converges too, since 0.5.3.
 
-    If this ever starts passing, the cold start stopped being the cause and the
-    explanation in ``warm_start_from_pf`` needs revisiting.
+    Until then this test pinned the opposite: from the cold start IPOPT
+    reported a locally infeasible point, and the seed was the cure. 0.5.3
+    moved the static-generation lower bound from the variable's domain into
+    the ``PsG_Constraint`` (so that a negative ``min_p_mw`` is honoured), and
+    with the bound expressed that way IPOPT's barrier path differs and the
+    same window solves cold. Putting the bound back on the variable brings
+    the failure back, which is how the cause was verified. The seed remains
+    the default because it is the safer start; this test keeps the record.
     """
     opf = _reported_case(lv_net)
     res = opf.solve(
         solver="ipopt", print_solver_output=False, warm_start=False
     )
-    assert not pyo.check_optimal_termination(res), (
-        "the cold start unexpectedly converged; the #16 diagnosis may no "
-        "longer hold"
-    )
+    assert pyo.check_optimal_termination(res)
+    vs = _voltages(opf)
+    assert min(vs) > 0.9
+    assert max(vs) <= 1.05 + 1e-6
 
 
 @pytest.mark.integration
