@@ -79,6 +79,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   now receives it as `max_wall_time` (IPOPT 3.14 or newer). The default
   changed from 600 to `None`: IPOPT runs that never passed a limit behave as
   before, Gurobi and mindtpy keep their 600 s default when none is given.
+- **Static generators may run below zero when their data says so.** The
+  `psG` variable was declared over the non-negative reals, which silently
+  overrode `net.sgen.min_p_mw` whenever that bound was negative, so a unit
+  able to consume was held at zero. The OPF's own default for a missing or
+  `NaN` lower bound is still 0, so distribution networks are unaffected; only
+  an explicitly negative bound behaves differently. Four units of PGLib
+  `case588_sdet` are of that kind, and the case now matches the reference in
+  both formulations (DC and AC were 1.6 % and 1.5 % above it).
 
 ## [0.5.2] — 2026-09-20
 

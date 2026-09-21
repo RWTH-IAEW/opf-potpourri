@@ -440,8 +440,10 @@ class Basemodel:
             self.model.D, domain=pyo.Reals
         )  # real power demand delivered
         self.model.psG = pyo.Var(
-            self.model.sG, domain=pyo.NonNegativeReals
-        )  # real static generator power
+            self.model.sG, domain=pyo.Reals
+        )  # real static generator power; the lower bound comes from
+        # net.sgen.min_p_mw (OPF) or from the fixed setpoint, and may be
+        # negative for a unit that can consume
         self.model.pG = pyo.Var(
             self.model.G, domain=pyo.Reals, initialize=self.model.PG
         )  # real power injection from static generators
