@@ -68,6 +68,7 @@ RUN_AC = True  # include AC-OPF column
 CASES = None  # None → all cases of each group; list of bare names to override
 N_WORKERS = 8  # parallel worker processes, one solver thread each
 TIME_LIMIT_S = 3600  # IPOPT wall-time limit per solve
+RETRY_STARTS = ("midrange", "dc")  # starts to retry a failed AC solve from
 DC_CONVENTION = "powermodels"  # DC linearisation convention, see DCOPF
 RESULTS_DIR = Path(__file__).parent / "results"
 # ──────────────────────────────────────────────────────────────────────────────
@@ -147,10 +148,92 @@ def _select_cases(
     return out
 
 
+def _midrange_start(model) -> None:
+    """Put the model on a start that ignores the network's own setpoint.
+
+    Flat voltages and every dispatchable unit at the middle of its range. The
+    shipped setpoint of the congested (API) files is far from anything
+    feasible, and IPOPT then converges to a locally infeasible point although
+    the problem has a solution. Nothing about the problem changes here, only
+    the point the solver starts from.
+    """
+    import pyomo.environ as pyo
+
+    m = model.model
+    for b in m.B:
+        if hasattr(m, "v") and not m.v[b].fixed:
+            m.v[b].set_value(1.0)
+        if not m.delta[b].fixed:
+            m.delta[b].set_value(0.0)
+    for g in m.G:
+        if not m.pG[g].fixed:
+            lo = pyo.value(m.PGmin[g])
+            hi = pyo.value(m.PGmax[g])
+            m.pG[g].set_value((lo + hi) / 2)
+    for s in getattr(m, "sGc", ()):
+        if not m.psG[s].fixed:
+            lo = pyo.value(m.sPGmin[s])
+            hi = pyo.value(m.sPGmax[s])
+            m.psG[s].set_value((lo + hi) / 2)
+
+
+def _dc_start(model, case_name: str) -> bool:
+    """Put the model on the DC-OPF solution of the same case.
+
+    The DC-OPF is a linear program: its own start does not matter, it solves
+    in seconds, and its dispatch and bus angles are a much better guess for
+    the AC-OPF than a setpoint the case file never meant as one. Returns
+    False when the DC-OPF itself does not solve.
+    """
+    import pyomo.environ as pyo
+
+    from potpourri.benchmarks import load_pglib_case
+    from potpourri.models.cost_objective import add_poly_cost_objective
+    from potpourri.models.DCOPF import DCOPF
+
+    dc = DCOPF(load_pglib_case(case_name), dc_convention=DC_CONVENTION)
+    dc.add_OPF(angle_limits=True)
+    add_poly_cost_objective(dc, allow_quadratic=True)
+    res = dc.solve(
+        solver=SOLVER,
+        print_solver_output=False,
+        time_limit=TIME_LIMIT_S,
+        to_net=False,
+    )
+    if not pyo.check_optimal_termination(res):
+        return False
+
+    m, d = model.model, dc.model
+    for b in m.B:
+        if hasattr(m, "v") and not m.v[b].fixed:
+            m.v[b].set_value(1.0)
+        if not m.delta[b].fixed and b in d.delta:
+            m.delta[b].set_value(pyo.value(d.delta[b]))
+    for g in m.G:
+        if not m.pG[g].fixed and g in d.pG:
+            m.pG[g].set_value(pyo.value(d.pG[g]))
+    for s in m.sG:
+        if not m.psG[s].fixed and s in d.psG:
+            m.psG[s].set_value(pyo.value(d.psG[s]))
+    return True
+
+
+_STARTS = {"midrange": _midrange_start}
+
+
 def _solve(
-    builder, case_name: str, opf_kwargs: dict, model_kwargs: dict | None = None
+    builder,
+    case_name: str,
+    opf_kwargs: dict,
+    model_kwargs: dict | None = None,
+    retries: tuple[str, ...] = (),
 ) -> dict:
-    """Build and solve one model; return objective, status and timings."""
+    """Build and solve one model; return objective, status and timings.
+
+    A solve that does not reach optimality is repeated from each start named
+    in ``retries`` until one succeeds; ``start`` says which one produced the
+    reported result.
+    """
     import pyomo.environ as pyo
 
     from potpourri.benchmarks import load_pglib_case
@@ -163,18 +246,34 @@ def _solve(
     add_poly_cost_objective(model, allow_quadratic=True)
     t_build = time.perf_counter() - t0
 
+    def _run():
+        return model.solve(
+            solver=SOLVER, print_solver_output=False, time_limit=TIME_LIMIT_S
+        )
+
     t0 = time.perf_counter()
-    res = model.solve(
-        solver=SOLVER, print_solver_output=False, time_limit=TIME_LIMIT_S
-    )
+    res = _run()
+    ok = res is not None and pyo.check_optimal_termination(res)
+    start = "setpoint"
+    for name in retries:
+        if ok:
+            break
+        if name == "dc":
+            if not _dc_start(model, case_name):
+                continue
+        else:
+            _STARTS[name](model)
+        res = _run()
+        ok = res is not None and pyo.check_optimal_termination(res)
+        start = name
     t_solve = time.perf_counter() - t0
 
-    ok = res is not None and pyo.check_optimal_termination(res)
     term = str(res.solver.termination_condition) if res is not None else "none"
     return {
         "obj": pyo.value(model.model.obj_poly_cost) if ok else float("nan"),
         "ok": ok,
         "termination": term,
+        "start": start,
         "t_build": t_build,
         "t_solve": t_solve,
     }
@@ -190,6 +289,8 @@ def run_dcopf(case_name: str) -> dict:
     # PowerModels convention here makes the DC column a like-for-like
     # comparison (it closed gaps of up to 2.8 % on the API cases and
     # reproduces the SAD infeasibilities).
+    # No retries: the DC-OPF is a linear program, its optimum does not depend
+    # on the starting point.
     return _solve(
         DCOPF,
         case_name,
@@ -211,6 +312,7 @@ def run_acopf(case_name: str) -> dict:
             fix_hv_buses=False,
             angle_limits=True,
         ),
+        retries=RETRY_STARTS,
     )
 
 
@@ -242,12 +344,14 @@ def run_case(group: str, full_name: str, nodes: int) -> dict:
             row[f"{tag}_obj"] = r["obj"]
             row[f"{tag}_ok"] = r["ok"]
             row[f"{tag}_termination"] = r["termination"]
+            row[f"{tag}_start"] = r["start"]
             row[f"{tag}_t_build"] = r["t_build"]
             row[f"{tag}_t_solve"] = r["t_solve"]
         except Exception as e:  # noqa: BLE001 — one bad case must not end the run
             row[f"{tag}_obj"] = float("nan")
             row[f"{tag}_ok"] = False
             row[f"{tag}_termination"] = "exception"
+            row[f"{tag}_start"] = "none"
             row[f"{tag}_t_build"] = float("nan")
             row[f"{tag}_t_solve"] = float("nan")
             row[f"{tag}_err"] = f"{type(e).__name__}: {str(e)[:120]}"
