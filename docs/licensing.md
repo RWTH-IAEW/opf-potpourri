@@ -191,7 +191,7 @@ added by this work (93 total). No `.pyi` or `.pyw` files exist. Covered
 | Third-party or mixed-origin | 0 |
 | Already compliant before the audit | 0 |
 | Outside editable scope | submodule `benchmarks/pglib-opf` (no Python) |
-| Unresolved | 0 files blocked; see open questions below |
+| Unresolved | 0 files blocked; see [Still open](#still-open) |
 
 Provenance was checked rather than assumed. References to MATPOWER, PYPOWER and
 pandapower were each traced:
