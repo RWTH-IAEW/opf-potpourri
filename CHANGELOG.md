@@ -5,6 +5,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.3] — 2026-09-21
+
+A patch release around the PGLib-OPF benchmark. The benchmark now covers the
+Typical, Congested and Small-Angle-Difference groups and every case size, and
+the work of making all 198 cases agree with the published references exposed
+six model defects (angle limits missing on impedance branches, an
+out-of-bounds start after the DC fallback, a nodal balance without variables
+that Pyomo refused, no model at all for a network with a zero-reactance
+branch, a solver time limit that never reached IPOPT, and static generators
+clipped at zero), two loader defects (no reference bus when the slack bus has
+no usable generator) and one convention difference (the DC linearisation),
+all fixed below. The only API additions are `DCOPF(net, dc_convention=...)` and
+the benchmark's configuration constants.
+
+17 new regression tests, suite at 377.
+
 ### Added
 
 - **The PGLib benchmark covers all three operating conditions and every case
