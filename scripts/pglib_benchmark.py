@@ -68,7 +68,9 @@ RUN_AC = True  # include AC-OPF column
 CASES = None  # None → all cases of each group; list of bare names to override
 N_WORKERS = 8  # parallel worker processes, one solver thread each
 TIME_LIMIT_S = 3600  # IPOPT wall-time limit per solve
-RETRY_STARTS = ("midrange", "dc")  # starts to retry a failed AC solve from
+RETRY_STARTS = (
+    "midrange",
+)  # retry starts for a failed AC solve; "dc" also available
 DC_CONVENTION = "powermodels"  # DC linearisation convention, see DCOPF
 RESULTS_DIR = Path(__file__).parent / "results"
 # ──────────────────────────────────────────────────────────────────────────────
