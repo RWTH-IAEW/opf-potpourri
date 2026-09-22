@@ -21,6 +21,7 @@ python scripts/minimal_ac_power_flow.py
 |--------|---------------------|
 | `minimal_ac_power_flow.py` | End-to-end AC power flow: pandapower network → Pyomo AC model → IPOPT solve → compare against pandapower Newton-Raphson |
 | `pandapower_to_pyomo_inspection.py` | How each pandapower table maps to Pyomo sets, parameters, variables, and constraints; prints a structured model summary |
+| `opf_diagnostics_demo.py` | `opf.diagnose()` on five deliberately broken networks and one healthy solved one — why an OPF is infeasible, named in pandapower terms, plus which limits shape a solution that did work |
 | `dc_opf.py` | Linearised DC power flow and DC OPF (maximise local generation, line-loading constraint); solved with GLPK in milliseconds |
 | `ehv_grid_opf.py` | Feasibility test on the large EHV/HV simbench grid (`1-EHVHV-mixed-all-0-no_sw`); runs both DC-OPF (GLPK) and AC-OPF (IPOPT) and reports solve time, voltage range, and ext-grid dispatch |
 
@@ -70,6 +71,7 @@ python scripts/minimal_ac_power_flow.py
 |--------|--------------|
 | `minimal_ac_power_flow.py` | IPOPT |
 | `pandapower_to_pyomo_inspection.py` | none (model inspection only) |
+| `opf_diagnostics_demo.py` | IPOPT (only for the final solved case; the five broken ones need none) |
 | `dc_opf.py` | GLPK |
 | `acopf_loadcase_analysis.py` | IPOPT |
 | `objective_tradeoff_demo.py` | IPOPT |

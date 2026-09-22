@@ -72,6 +72,12 @@ from pandapower.toolbox import create_continuous_bus_index
 
 from potpourri.models.pyo_to_net import pyo_sol_to_net_res
 
+#: Key under which `preprocess_grid` stores `{caller bus index: model bus
+#: index}` on the preprocessed network. Read it through
+#: `potpourri.diagnostics.mappings`, which also handles the models that do
+#: no preprocessing at all.
+BUS_ORIGIN_KEY = "_potpourri_bus_origin"
+
 
 class Basemodel:
     """Pyomo-based optimization model for single-period power system analysis.
@@ -552,6 +558,52 @@ class Basemodel:
         # --- reference bus constraint ---
         for b in self.model.b0:
             self.model.delta[b].fix(self.model.delta_b0[b])
+
+    def diagnose(self, level: str = "standard", **options):
+        """Work out why this OPF failed, or why its answer looks odd.
+
+        Runs the diagnostic suite over the network, the Pyomo model, the
+        solver's verdict and the solution, and reports what it finds in
+        terms of the pandapower objects the network is made of rather
+        than in terms of Pyomo component names. Both are kept: every
+        finding carries the pandapower element *and* the Pyomo component
+        behind it.
+
+        Safe to call at any point — before `add_OPF()`, after a failed
+        solve, or after a successful one. Checks that cannot run in the
+        current state say so in `report.skipped` instead of raising, and
+        nothing here modifies the model.
+
+        Args:
+            level: `"basic"` runs no solver and no power flow;
+                `"standard"` (the default) adds plausibility checks and a
+                power-flow cross-check; `"deep"` adds structural and
+                conditioning analysis and, for an infeasible model, a
+                relaxation that quantifies what would have to give.
+            **options: Forwarded to
+                `potpourri.diagnostics.runner.diagnose`, e.g.
+                `print_report=True` or `tol=1e-8`.
+
+        Returns:
+            A `DiagnosticReport`. Print it for the terminal view, or use
+            `report.issues`, `report.to_dict()` and
+            `report.to_dataframe()` to work with the findings
+            programmatically.
+
+        Examples:
+            >>> import pandapower as pp
+            >>> from potpourri.models.ACOPF_base import ACOPF
+            >>> net = pp.networks.simple_four_bus_system()
+            >>> opf = ACOPF(net)  # doctest: +SKIP
+            >>> report = opf.diagnose(level="basic")  # doctest: +SKIP
+            >>> report.ok  # doctest: +SKIP
+            True
+        """
+        # Imported here, not at module scope: the diagnostics package
+        # imports from this module, so a top-level import would be a cycle.
+        from potpourri.diagnostics.runner import diagnose as _diagnose
+
+        return _diagnose(self, level=level, **options)
 
     def solve(
         self,
@@ -1082,6 +1134,7 @@ def preprocess_grid(grid):
     is no longer silently dropped before ``create_continuous_bus_index``.
     """
     grid = copy.deepcopy(grid)
+    original_buses = list(grid.bus.index)
 
     def _present(name):
         """Whether `grid` has a non-empty table of this name.
@@ -1200,6 +1253,19 @@ def preprocess_grid(grid):
     if _present("switch"):
         bb = grid.switch.index[grid.switch["et"] == "b"]
         grid.switch.drop(bb, inplace=True)
-    create_continuous_bus_index(grid, start=0)
+    renumber = create_continuous_bus_index(grid, start=0)
+
+    # Record where every bus of the *caller's* network ended up. Both steps
+    # above move bus indices -- merging drops the fused-away bus, and the
+    # reindex renumbers what is left to 0..n-1 -- so `grid.bus.index` no
+    # longer means what the caller's `net.bus.index` means. Diagnostics have
+    # to name the network the user handed in, not this internal copy, and
+    # without this map that is guesswork. Stored on the grid so it survives
+    # the deep copies the models take.
+    grid[BUS_ORIGIN_KEY] = {
+        int(original): int(renumber[_resolve(original)])
+        for original in original_buses
+        if _resolve(original) in renumber
+    }
 
     return grid

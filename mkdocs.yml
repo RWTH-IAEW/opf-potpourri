@@ -86,6 +86,7 @@ nav:
       - Flexible Devices: user-guide/devices.md
       - Reactive-Power Control: user-guide/reactive-power-control.md
       - Solvers: user-guide/solvers.md
+      - OPF Diagnostics: user-guide/diagnostics.md
       - Logging: user-guide/logging.md
   - Examples:
       - Overview: scripts/examples.md
@@ -98,6 +99,7 @@ nav:
       - Multi-Period Models: api/multi-period.md
       - Flexible Devices: api/devices.md
       - Utilities: api/utilities.md
+      - Diagnostics: api/diagnostics.md
   - Contributing:
       - Documentation: contributing-docs.md
       - Pyomo Conventions: contributing-pyomo.md

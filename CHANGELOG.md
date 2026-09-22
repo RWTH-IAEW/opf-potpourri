@@ -5,7 +5,68 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.7.0] — 2026-09-22
+
+Adds `opf.diagnose()`, a diagnostic framework for working out why an OPF
+did not solve or why its answer looks wrong, answering GitHub issue #1.
+A solver says `infeasible`; this says which bus, which line and which
+limit, in terms of the pandapower network the user built, while keeping
+the Pyomo identifier alongside so the trail back to the formulation
+stays intact.
+
+Also in this release: multi-period hosting capacity, which could not run
+at all before, is formulated over the horizon; the release workflow now
+fails on a tag that disagrees with the tree instead of publishing
+nothing and reporting success; and the Scientific Work page renders its
+bibliography again after a duplicate YAML key had silently disabled the
+plugin.
+
 ### Added
+
+- **`opf.diagnose()` explains why an OPF failed, or why its answer looks
+  wrong** (GitHub #1). An OPF that does not solve tells you almost nothing
+  by itself: `infeasible` is a verdict, and the solver has no idea that
+  `line_lim_from[23]` is the from-side current limit of a particular cable.
+  The new `potpourri.diagnostics` package closes that gap, reporting in
+  terms of the pandapower objects the user built while keeping the Pyomo
+  identifier alongside, so the trail from report to constraint to
+  formulation stays intact.
+
+  Findings are typed, not strings: a `DiagnosticIssue` carries a stable
+  `code`, the pandapower element, the Pyomo component and index, the
+  measured value, the bounds, the violation in absolute and relative terms,
+  the unit, and the time step for multi-period models.
+  `report.to_dict()` and `report.to_dataframe()` make them machine-readable;
+  printing the report gives a terminal summary.
+
+  Three levels keep the default worth running: `basic` calls no solver and
+  no power flow, `standard` (the default) adds plausibility checks and an
+  independent pandapower cross-check, and `deep` adds structural and
+  conditioning analysis plus a feasibility relaxation that quantifies what
+  would have to give. Checks that cannot run in the current state — no
+  solution loaded, SciPy absent, `add_OPF()` not yet called — are recorded
+  in `report.skipped` with the reason rather than raising or staying
+  silent, and nothing the diagnostics do modifies the model.
+
+  The part that makes it trustworthy is the index mapping. potpourri
+  renumbers buses internally: `preprocess_grid` merges buses joined by
+  closed zero-impedance switches and reindexes the rest to `0..n-1`, and
+  `model.B` is in ppc numbering on top of that. A report naming
+  `net.bus[2]` when the user's network has buses 10, 20 and 30 would be
+  worse than no report, so `preprocess_grid` now records the caller's
+  bus mapping and `potpourri.diagnostics.mappings` composes the spaces
+  back together — including auxiliary ppc buses, which resolve to
+  "unmapped" rather than to a wrong bus, and `model.L`, which spans both
+  `net.line` and `net.impedance` and is resolved positionally.
+
+  Deliberately not claimed: none of this proves feasibility. The adequacy
+  and island checks are necessary conditions, and say so. Nothing
+  establishes causality — the report says which limits are in tension, not
+  which one caused the failure. And "locally infeasible" is reported as
+  what it is, a statement about where a local solver stopped, not about
+  the problem.
 
 - **The tag creates the GitHub release.** `publish.yml` published to PyPI
   and archived to Zenodo but created no release, so pushing a tag left the
@@ -54,7 +115,63 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   with no such layer to one with it. `tests/unit_tests/test_hc_multi_period.py`
   pins each of the failures above.
 
+- **Hosting capacity is formulated over the horizon.** The whole
+  capability layer in `Windpower_multi_period` was single-period code
+  sitting in a multi-period class — the module said so itself, with a
+  `# TODO make multiperiod` — and eleven constraints, the objective and
+  the unfix helper all indexed `psG[w]` against a model whose `psG` is
+  indexed `(g, t)`. Its sets and parameters also read
+  `static_generation_data` as a DataFrame, which in the multi-period sgen
+  class is a dict of time-indexed arrays.
+
+  What replaces it separates the two decisions a hosting-capacity study
+  actually makes. **Sizing happens once per candidate:** the selection
+  `y[w]` and the squared installed rating `SW2[w]` carry no time index,
+  because a plant is built once. **Dispatch happens per step:**
+  `psG[w, t]` and `qsG[w, t]` move over the horizon, bounded at every step
+  by `p² + q² ≤ SW2[w]`, with the grid-code Q(P) and Q(U) limits binding
+  per `(w, t)` and the objective summing infeed over `model.T` against the
+  losses it causes. Holding the rating as its *square* is what keeps that
+  per-step limit a convex quadratic; the binary is the only nonconvexity
+  the layer adds.
+
+  The old per-step `SW_min` is gone. A minimum *dispatch* at every step is
+  wrong for wind, which is zero at night; the minimum now applies to the
+  installed size, as `hc_size_lower`. `HC_ACOPF_multi_period.hosting_capacity_mva()`
+  returns the apparent power each candidate reaches, which is the
+  meaningful capacity figure — the objective rewards energy and nothing
+  prices `SW2`, so `SW2` is an upper envelope rather than a tight rating.
+  Maximising installed capacity directly would need a wind-availability
+  profile per candidate; see issue #22.
+
+  Verified against a 52-configuration model fingerprint: 51 are
+  byte-identical and only the hosting-capacity one changes, from a model
+  with no such layer to one with it. `tests/unit_tests/test_hc_multi_period.py`
+  pins each of the failures above.
+
 ### Fixed
+
+- **`pandapower.diagnostic()` was left to mutate the network it inspected.**
+  It runs trial power flows and leaves their results behind, which poisoned
+  the warm start the new cross-check takes from `net.res_bus` and made an
+  otherwise healthy model report a failed power-flow replay. It now runs on
+  a copy.
+
+- **`HC_ACOPF_multi_period` works.** It could not run at all: every path
+  through it raised, and the failures were independent, so fixing one only
+  exposed the next. The constructor placed a candidate sgen on every
+  non-slack bus with no SimBench profile, and the multi-period base
+  resolves a profile for every sgen, so construction died on any network
+  without a `wind_hc` column. `_calc_opf_parameters` called
+  `_calc_wind_opf_parameters(self.net, SWmax=…, SWmin=…)` against a
+  signature of `(model, sw_max_mva=…, sw_min_mva=…)`. The wind device was
+  attached only when `net.bus` carried the optional `windpot_p_mw` column,
+  so without it `add_OPF()` returned a plain ACOPF that looked like a
+  hosting-capacity model and had none of its variables — wind potential
+  caps hosting capacity, it is not a precondition for computing it, and a
+  model that cannot answer the question now says so instead of reporting
+  success. `add_loss_obj()` deactivated `obj_hc`, a name nothing in the
+  package creates; the objective is `obj`.
 
 - **`HC_ACOPF_multi_period` works.** It could not run at all: every path
   through it raised, and the failures were independent, so fixing one only
@@ -85,7 +202,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   section for the version, since that is where the release notes now come
   from. `tests/unit_tests/test_release_scripts.py` covers it, including the
   exact 0.6.0 shape — `pyproject.toml` bumped, `CITATION.cff` left behind.
-
 ## [0.6.0] — 2026-09-21
 
 A housekeeping release: licensing metadata, documentation, and the Pyomo

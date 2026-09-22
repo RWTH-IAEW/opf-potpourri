@@ -366,6 +366,52 @@ class Basemodel_multi_period:
         for b in self.model.b0:
             self.model.delta[b, t].fix(self.model.delta_b0[b])
 
+    def diagnose(self, level: str = "standard", **options):
+        """Work out why this OPF failed, or why its answer looks odd.
+
+        Runs the diagnostic suite over the network, the Pyomo model, the
+        solver's verdict and the solution, and reports what it finds in
+        terms of the pandapower objects the network is made of rather
+        than in terms of Pyomo component names. Both are kept: every
+        finding carries the pandapower element *and* the Pyomo component
+        behind it.
+
+        Safe to call at any point — before `add_OPF()`, after a failed
+        solve, or after a successful one. Checks that cannot run in the
+        current state say so in `report.skipped` instead of raising, and
+        nothing here modifies the model.
+
+        Args:
+            level: `"basic"` runs no solver and no power flow;
+                `"standard"` (the default) adds plausibility checks and a
+                power-flow cross-check; `"deep"` adds structural and
+                conditioning analysis and, for an infeasible model, a
+                relaxation that quantifies what would have to give.
+            **options: Forwarded to
+                `potpourri.diagnostics.runner.diagnose`, e.g.
+                `print_report=True` or `tol=1e-8`.
+
+        Returns:
+            A `DiagnosticReport`. Print it for the terminal view, or use
+            `report.issues`, `report.to_dict()` and
+            `report.to_dataframe()` to work with the findings
+            programmatically.
+
+        Examples:
+            >>> import pandapower as pp
+            >>> from potpourri.models.ACOPF_base import ACOPF
+            >>> net = pp.networks.simple_four_bus_system()
+            >>> opf = ACOPF(net)  # doctest: +SKIP
+            >>> report = opf.diagnose(level="basic")  # doctest: +SKIP
+            >>> report.ok  # doctest: +SKIP
+            True
+        """
+        # Imported here, not at module scope: the diagnostics package
+        # imports from this module, so a top-level import would be a cycle.
+        from potpourri.diagnostics.runner import diagnose as _diagnose
+
+        return _diagnose(self, level=level, **options)
+
     def solve(
         self,
         to_net: bool = True,
