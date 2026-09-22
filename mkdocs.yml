@@ -10,6 +10,11 @@ repo_name: RWTH-IAEW/opf-potpourri
 theme:
   name: readthedocs
 
+# One `plugins:` key only. A second one does not extend this list, it
+# replaces it: duplicate mapping keys are legal YAML and the last wins
+# silently. That is how the bibtex plugin was lost once already, leaving
+# a literal \bibliography on the Scientific Work page while the strict
+# build stayed green. tests/unit_tests/test_docs_config.py guards it.
 plugins:
   - search
   - bibtex:
@@ -19,9 +24,6 @@ plugins:
       # decorator such as `@model.Constraint(...)` in a code example is read
       # as a citation key and fails the strict build.
       enable_inline_citations: false
-
-plugins:
-  - search
   # API pages are generated from the source docstrings so signatures and
   # descriptions cannot drift away from the code. Google-style sections,
   # matching [tool.ruff.lint.pydocstyle] in pyproject.toml.
