@@ -83,16 +83,20 @@ class ACOPF_multi_period(AC_multi_period, OPF_multi_period):
         if "cos_phi_p_profile" in self.net.sgen:
             sgens_object.static_generation_cpp_data(self.net)
 
-        # get the object of class 'Windpower' from the 'flexibilities' list
-        if "windpot_p_mw" in self.net.bus:
-            windpower_object = next(
-                (
-                    obj
-                    for obj in self.flexibilities
-                    if isinstance(obj, Windpower_multi_period)
-                ),
-                None,
-            )
+        # Get the 'Windpower' object from 'flexibilities', if one is
+        # attached. Keyed on the device rather than on net.bus.windpot_p_mw:
+        # that column is an optional per-site cap, and gating on it left the
+        # wind device without its grid code -- and so without `self.grid_code`
+        # -- on every network that did not happen to carry it.
+        windpower_object = next(
+            (
+                obj
+                for obj in self.flexibilities
+                if isinstance(obj, Windpower_multi_period)
+            ),
+            None,
+        )
+        if windpower_object is not None:
             windpower_object.static_generation_wind_var_q(
                 self.net, grid_code=getattr(self, "_grid_code", None)
             )

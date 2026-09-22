@@ -5,7 +5,72 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **The tag creates the GitHub release.** `publish.yml` published to PyPI
+  and archived to Zenodo but created no release, so pushing a tag left the
+  releases page showing the previous version as Latest until somebody
+  noticed — missed for 0.5.0 and again for 0.6.0. A `github-release` job
+  now takes the notes from the matching `CHANGELOG.md` section, so the
+  release page and the changelog cannot drift apart, and titles the release
+  plainly `vX.Y.Z`. It depends on the PyPI job rather than on Zenodo, so a
+  Zenodo hiccup is not what leaves the releases page stale all over again,
+  and it updates an existing release instead of failing, so re-running the
+  job is safe.
+
+### Changed
+
+- **Hosting capacity is formulated over the horizon.** The whole
+  capability layer in `Windpower_multi_period` was single-period code
+  sitting in a multi-period class — the module said so itself, with a
+  `# TODO make multiperiod` — and eleven constraints, the objective and
+  the unfix helper all indexed `psG[w]` against a model whose `psG` is
+  indexed `(g, t)`. Its sets and parameters also read
+  `static_generation_data` as a DataFrame, which in the multi-period sgen
+  class is a dict of time-indexed arrays.
+
+  What replaces it separates the two decisions a hosting-capacity study
+  actually makes. **Sizing happens once per candidate:** the selection
+  `y[w]` and the squared installed rating `SW2[w]` carry no time index,
+  because a plant is built once. **Dispatch happens per step:**
+  `psG[w, t]` and `qsG[w, t]` move over the horizon, bounded at every step
+  by `p² + q² ≤ SW2[w]`, with the grid-code Q(P) and Q(U) limits binding
+  per `(w, t)` and the objective summing infeed over `model.T` against the
+  losses it causes. Holding the rating as its *square* is what keeps that
+  per-step limit a convex quadratic; the binary is the only nonconvexity
+  the layer adds.
+
+  The old per-step `SW_min` is gone. A minimum *dispatch* at every step is
+  wrong for wind, which is zero at night; the minimum now applies to the
+  installed size, as `hc_size_lower`. `HC_ACOPF_multi_period.hosting_capacity_mva()`
+  returns the apparent power each candidate reaches, which is the
+  meaningful capacity figure — the objective rewards energy and nothing
+  prices `SW2`, so `SW2` is an upper envelope rather than a tight rating.
+  Maximising installed capacity directly would need a wind-availability
+  profile per candidate; see issue #22.
+
+  Verified against a 52-configuration model fingerprint: 51 are
+  byte-identical and only the hosting-capacity one changes, from a model
+  with no such layer to one with it. `tests/unit_tests/test_hc_multi_period.py`
+  pins each of the failures above.
+
 ### Fixed
+
+- **`HC_ACOPF_multi_period` works.** It could not run at all: every path
+  through it raised, and the failures were independent, so fixing one only
+  exposed the next. The constructor placed a candidate sgen on every
+  non-slack bus with no SimBench profile, and the multi-period base
+  resolves a profile for every sgen, so construction died on any network
+  without a `wind_hc` column. `_calc_opf_parameters` called
+  `_calc_wind_opf_parameters(self.net, SWmax=…, SWmin=…)` against a
+  signature of `(model, sw_max_mva=…, sw_min_mva=…)`. The wind device was
+  attached only when `net.bus` carried the optional `windpot_p_mw` column,
+  so without it `add_OPF()` returned a plain ACOPF that looked like a
+  hosting-capacity model and had none of its variables — wind potential
+  caps hosting capacity, it is not a precondition for computing it, and a
+  model that cannot answer the question now says so instead of reporting
+  success. `add_loss_obj()` deactivated `obj_hc`, a name nothing in the
+  package creates; the objective is `obj`.
 
 - **A release tag that disagrees with the tree no longer publishes nothing
   and reports success.** The version guard in `publish.yml` ended in
@@ -20,19 +85,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   section for the version, since that is where the release notes now come
   from. `tests/unit_tests/test_release_scripts.py` covers it, including the
   exact 0.6.0 shape — `pyproject.toml` bumped, `CITATION.cff` left behind.
-
-### Added
-
-- **The tag creates the GitHub release.** `publish.yml` published to PyPI
-  and archived to Zenodo but created no release, so pushing a tag left the
-  releases page showing the previous version as Latest until somebody
-  noticed — missed for 0.5.0 and again for 0.6.0. A `github-release` job
-  now takes the notes from the matching `CHANGELOG.md` section, so the
-  release page and the changelog cannot drift apart, and titles the release
-  plainly `vX.Y.Z`. It depends on the PyPI job rather than on Zenodo, so a
-  Zenodo hiccup is not what leaves the releases page stale all over again,
-  and it updates an existing release instead of failing, so re-running the
-  job is safe.
 
 ## [0.6.0] — 2026-09-21
 

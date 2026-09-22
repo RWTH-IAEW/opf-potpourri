@@ -114,34 +114,68 @@ class Windpower_multi_period(Sgens_multi_period):
         self.get_opf_parameters(model)
 
     def get_opf_sets(self, model):
-        """Define WIND_HC, WIND, and WINDc sets."""
-        model.WIND_HC = pyo.Set(
-            within=model.sG,
-            initialize=self.static_generation_data.index[
-                self.static_generation_data["wind_hc"]
-                & self.static_generation_data.in_service
-            ],
-        )
+        """Define the WIND_HC, WIND and WINDc sets.
+
+        `WIND_HC` holds the hosting-capacity candidates, `WIND` adds the
+        wind units already in the network, and `WINDc` narrows that to the
+        ones that are controllable and declare a Q-capability variant.
+
+        The flags are read from `net.sgen` rather than from
+        `static_generation_data`, which in the multi-period sgen class is a
+        dict of time-indexed arrays and has no `.index` to filter on.
+
+        Args:
+            model: The Pyomo model being extended, with `model.sG` and
+                `model.sGc` already declared.
+
+        Returns:
+            True, once the sets are attached to `model`.
+        """
+        sgen = self.net.sgen
+        # `Windpower_multi_period.get_all` is a no-op and `get_all_opf` calls
+        # this directly, so the base class's `get_sets` -- and with it
+        # `sgens_in_service_list` -- has not necessarily run.
+        in_service = set(sgen.index[sgen.in_service.astype(bool)])
+
+        wind_hc = sgen.get("wind_hc")
+        if wind_hc is None:
+            hc_candidates = []
+        else:
+            hc_candidates = [
+                g
+                for g in sgen.index[wind_hc.fillna(False).astype(bool)]
+                if g in in_service
+            ]
+        model.WIND_HC = pyo.Set(within=model.sG, initialize=hc_candidates)
+
         # Match every SimBench wind spelling, not just the HV one; see
         # DEFAULT_WIND_SGEN_TYPES. Shared with the single-period path so the
         # two cannot drift apart.
         wind_types = getattr(self, "wind_sgen_types", DEFAULT_WIND_SGEN_TYPES)
+        existing_wind = (
+            [
+                g
+                for g in sgen.index[sgen["type"].isin(wind_types)]
+                if g in in_service
+            ]
+            if "type" in sgen
+            else []
+        )
         model.WIND = model.WIND_HC | pyo.Set(
-            within=model.sG,
-            initialize=self.static_generation_data.index[
-                self.static_generation_data["type"].isin(wind_types)
-                & self.static_generation_data.in_service
-            ],
+            within=model.sG, initialize=existing_wind
         )
-        model.WINDc = (
-            model.WIND
-            & model.sGc
-            & pyo.Set(
-                initialize=self.static_generation_data.index[
-                    self.static_generation_data["var_q"].values != None  # noqa: E711
-                ],
-            )
+
+        var_q = sgen.get("var_q")
+        with_variant = (
+            []
+            if var_q is None
+            else [
+                g
+                for g in sgen.index
+                if var_q[g] is not None and not pd.isna(var_q[g])
+            ]
         )
+        model.WINDc = model.WIND & model.sGc & pyo.Set(initialize=with_variant)
         return True
 
     def _calc_wind_opf_parameters(
@@ -169,22 +203,22 @@ class Windpower_multi_period(Sgens_multi_period):
 
         if "windpot_p_mw" in self.net.bus:
             # pWmax bounds psG, which is per-unit, so convert from MW.
-            self.static_generation_data["windpot"] = (
-                self.net.bus.windpot_p_mw[self.net.sgen.bus.values].values
-                / self.baseMVA
+            self.windpot = dict(
+                zip(
+                    self.net.sgen.index,
+                    self.net.bus.windpot_p_mw[self.net.sgen.bus.values].values
+                    / self.baseMVA,
+                )
             )
 
         wind_hc_set = np.arange(len(self.net.sgen))[
-            self.net.sgen.wind_hc & self.net.sgen.in_service
+            self.net.sgen.wind_hc.fillna(False).astype(bool)
+            & self.net.sgen.in_service
         ]
+        # Sizing bounds, so per candidate and not spread over model.T: a
+        # candidate is installed once, and only its dispatch varies.
         self.SWmax_data = pd.Series(sw_max_mva / self.baseMVA, wind_hc_set)
-        self.SWmax_data_dict, self.SWmax_tuple = self.make_to_dict(
-            model.WIND_HC, model.T, self.SWmax_data
-        )
         self.SWmin_data = pd.Series(sw_min_mva / self.baseMVA, wind_hc_set)
-        self.SWmin_data_dict, self.SWmin_tuple = self.make_to_dict(
-            model.WIND_HC, model.T, self.SWmin_data
-        )
 
         # Q(U) slopes from the selected grid code's characteristic.
         # Slope from low-voltage to high-voltage point; intercepts at V3 and V1
@@ -203,49 +237,112 @@ class Windpower_multi_period(Sgens_multi_period):
         return True
 
     def get_hc_acopf_parameters(self, model, net):
-        """Attach SWmax, SWmin, and optional pWmax parameters for HC-ACOPF."""
+        """Attach the per-candidate sizing bounds, and pWmax if available.
+
+        These are **sizing** bounds, so they carry no time index: a
+        candidate is installed once and the same plant is there at every
+        step. Only the dispatch varies over the horizon.
+
+        Args:
+            model: The Pyomo model being extended, with `model.WIND_HC`.
+            net: The pandapower network; `net.bus.windpot_p_mw` caps a
+                candidate's active power when the column is present.
+
+        Returns:
+            True, once the parameters are attached to `model`.
+        """
         model.SWmax = pyo.Param(
-            self.SWmax_tuple, initialize=self.SWmax_data_dict, mutable=True
+            model.WIND_HC,
+            initialize=self.SWmax_data.to_dict(),
+            mutable=True,
         )
         model.SWmin = pyo.Param(
-            self.SWmin_data_dict, initialize=self.SWmin_data_dict, mutable=True
+            model.WIND_HC,
+            initialize=self.SWmin_data.to_dict(),
+            mutable=True,
         )
 
         if "windpot_p_mw" in self.net.bus:
-            self.Windpot_data_dict, self.Windpot_tuple = self.make_to_dict(
-                model.WIND_HC, model.T, self.static_generation_data["windpot"]
-            )
             model.pWmax = pyo.Param(
-                self.Windpot_tuple,
-                initialize=self.Windpot_data_dict,
+                model.WIND_HC,
+                initialize={w: float(self.windpot[w]) for w in model.WIND_HC},
                 mutable=True,
             )
         return True
 
     def get_hc_acopf_variables(self, model):
-        """Attach binary HC placement variable y for each wind generator."""
-        model.y = pyo.Var(
-            self.Windpot_tuple, domain=pyo.Binary, initialize=1.0
+        """Attach the sizing variables: selection `y` and rating `SW2`.
+
+        Both are per candidate rather than per time step. `SW2` is the
+        **squared** installed apparent power, which is what makes the
+        per-step limit `p² + q² ≤ SW2` a convex quadratic rather than a
+        bilinear one; the installed rating itself is `sqrt(SW2)`.
+
+        Args:
+            model: The Pyomo model being extended, with `model.WIND_HC`.
+
+        Returns:
+            True, once the variables are attached to `model`.
+        """
+        model.y = pyo.Var(model.WIND_HC, domain=pyo.Binary, initialize=1.0)
+        model.SW2 = pyo.Var(
+            model.WIND_HC,
+            domain=pyo.NonNegativeReals,
+            bounds=lambda m, w: (0.0, float(pyo.value(m.SWmax[w])) ** 2),
+            initialize=lambda m, w: float(pyo.value(m.SWmax[w])) ** 2,
         )
         return True
 
     def get_opf_parameters(self, model):
-        """Attach the variant and installed-capacity parameters.
+        """Attach the Q-variant and installed-capacity parameters.
 
-        Attach var_q and PsG_inst parameters for controllable wind
-        generators.
+        Both are constant over the horizon -- the grid-code variant a unit
+        declares and the capacity it has installed do not change between
+        time steps -- but they are declared over `model.T` as well, because
+        the capability rules are evaluated per `(w, t)`.
+
+        Args:
+            model: The Pyomo model being extended, with `model.WINDc`.
+
+        Returns:
+            True, once the parameters are attached to `model`.
         """
         model.var_q = pyo.Param(
             model.WINDc,
             model.T,
-            initialize=self.static_generation_data["var_q"][model.WINDc],
+            initialize={
+                (g, t): int(self.net.sgen.var_q[g])
+                for g in model.WINDc
+                for t in model.T
+            },
         )
         model.PsG_inst = pyo.Param(
             model.WINDc,
             model.T,
-            initialize=self.static_generation_data["p_inst"][model.WINDc],
+            initialize={
+                (g, t): float(self._installed_p(g))
+                for g in model.WINDc
+                for t in model.T
+            },
         )
         return True
+
+    def _installed_p(self, g):
+        """Installed active power of sgen `g`, in per unit.
+
+        `p_inst_mw` is the nameplate rating where the network carries it;
+        otherwise the present `p_mw` is the best available stand-in.
+
+        Args:
+            g: Static-generator index.
+
+        Returns:
+            The installed active power, divided by `baseMVA`.
+        """
+        sgen = self.net.sgen
+        if "p_inst_mw" in sgen and not pd.isna(sgen.p_inst_mw[g]):
+            return float(sgen.p_inst_mw[g]) / self.baseMVA
+        return float(sgen.p_mw[g]) / self.baseMVA
 
     def static_generation_wind_var_q(self, net, grid_code=None):
         """Populate ``static_generation_data`` Q limits from the grid code.
@@ -315,14 +412,25 @@ class Windpower_multi_period(Sgens_multi_period):
             self.static_generation_data["wind_hc"] = False
 
     def get_objective(self, model):
-        """Add a wind-maximisation objective that subtracts line losses."""
+        """Add a wind-maximisation objective that subtracts network losses.
+
+        Args:
+            model: The Pyomo model being extended.
+
+        Returns:
+            None. The objective is attached to `model` as `obj`.
+        """
 
         @model.Objective(sense=pyo.maximize)
         def obj(model):
-            """Wind infeed minus network losses.
+            """Wind energy over the horizon, minus the losses carrying it.
 
             Maximised, so the objective rewards hosting capacity and charges
-            for the losses needed to carry it.
+            for the losses it causes. Both terms are summed over `model.T`:
+            what a multi-period study is asking is how much wind the network
+            can absorb across the whole horizon, not at one instant, and a
+            single step would let a candidate look free at the hour that
+            happens to suit it.
 
             Args:
                 model: The Pyomo model being extended.
@@ -330,11 +438,20 @@ class Windpower_multi_period(Sgens_multi_period):
             Returns:
                 A Pyomo expression.
             """
-            return (
-                sum(model.psG[w] for w in model.WIND_HC)
-                - sum(model.pLfrom[l] + model.pLto[l] for l in model.L)
-                - sum(model.pThv[t] + model.pTlv[t] for t in model.TRANSF)
+            infeed = sum(
+                model.psG[w, t] for w in model.WIND_HC for t in model.T
             )
+            line_losses = sum(
+                model.pLfrom[line, t] + model.pLto[line, t]
+                for line in model.L
+                for t in model.T
+            )
+            trafo_losses = sum(
+                model.pThv[tr, t] + model.pTlv[tr, t]
+                for tr in model.TRANSF
+                for t in model.T
+            )
+            return infeed - line_losses - trafo_losses
 
     def get_constraints(self, model, net):
         """Add the Q(P) and Q(U) capability constraints.
@@ -355,216 +472,283 @@ class Windpower_multi_period(Sgens_multi_period):
         )
         model.W_QU_PIECE = pyo.RangeSet(0, qv_area.max_pieces(v_span) - 1)
 
-        @model.Constraint(model.WINDc, model.W_QP_PIECE)
-        def QW_pos(model, w, k):
-            """Upper Q(P) capability piece for wind unit `w`.
+        @model.Constraint(model.WINDc, model.T, model.W_QP_PIECE)
+        def QW_pos(model, w, t, k):
+            """Upper Q(P) capability piece for wind unit `w` at step `t`.
 
             Args:
                 model: The Pyomo model being extended.
-                w: Wind-generator index.
+                w: Wind-generator index from `model.WINDc`.
+                t: Time step from `model.T`.
                 k: Piece index of the piecewise envelope.
 
             Returns:
-                A Pyomo expression.
+                A Pyomo inequality expression, or `Constraint.Skip` when the
+                envelope has fewer than `k + 1` pieces.
             """
             pieces = pq_area.upper_pieces(
-                int(pyo.value(model.var_q[w])), DEFAULT_P_RANGE_PU
+                int(pyo.value(model.var_q[w, t])), DEFAULT_P_RANGE_PU
             )
             if k >= len(pieces):
                 return pyo.Constraint.Skip
             m, b = pieces[k]
-            return model.qsG[w] <= m * model.psG[w] + b * model.PsG_inst[w]
+            return (
+                model.qsG[w, t]
+                <= m * model.psG[w, t] + b * model.PsG_inst[w, t]
+            )
 
-        @model.Constraint(model.WINDc, model.W_QP_PIECE)
-        def QW_neg(model, w, k):
-            """Lower Q(P) capability piece for wind unit `w`.
+        @model.Constraint(model.WINDc, model.T, model.W_QP_PIECE)
+        def QW_neg(model, w, t, k):
+            """Lower Q(P) capability piece for wind unit `w` at step `t`.
 
             Args:
                 model: The Pyomo model being extended.
-                w: Wind-generator index.
+                w: Wind-generator index from `model.WINDc`.
+                t: Time step from `model.T`.
                 k: Piece index of the piecewise envelope.
 
             Returns:
-                A Pyomo expression.
+                A Pyomo inequality expression, or `Constraint.Skip` when the
+                envelope has fewer than `k + 1` pieces.
             """
             pieces = pq_area.lower_pieces(
-                int(pyo.value(model.var_q[w])), DEFAULT_P_RANGE_PU
+                int(pyo.value(model.var_q[w, t])), DEFAULT_P_RANGE_PU
             )
             if k >= len(pieces):
                 return pyo.Constraint.Skip
             m, b = pieces[k]
-            return model.qsG[w] >= m * model.psG[w] + b * model.PsG_inst[w]
+            return (
+                model.qsG[w, t]
+                >= m * model.psG[w, t] + b * model.PsG_inst[w, t]
+            )
 
-        @model.Constraint(model.WINDc, model.W_QU_PIECE)
-        def QV_min(model, w, k):
-            """Lower Q(U) capability piece for wind unit `w`.
+        @model.Constraint(model.WINDc, model.T, model.W_QU_PIECE)
+        def QV_min(model, w, t, k):
+            """Lower Q(U) capability piece for wind unit `w` at step `t`.
 
             Args:
                 model: The Pyomo model being extended.
-                w: Wind-generator index.
+                w: Wind-generator index from `model.WINDc`.
+                t: Time step from `model.T`.
                 k: Piece index of the piecewise envelope.
 
             Returns:
-                A Pyomo expression.
+                A Pyomo inequality expression, or `Constraint.Skip` when the
+                unit has no bus entry or the envelope has fewer than `k + 1`
+                pieces.
             """
             if w not in sGbs_lookup:
                 return pyo.Constraint.Skip
             pieces = qv_area.lower_pieces(
-                int(pyo.value(model.var_q[w])), v_span
+                int(pyo.value(model.var_q[w, t])), v_span
             )
             if k >= len(pieces):
                 return pyo.Constraint.Skip
             b_bus = sGbs_lookup[w]
             m, b = pieces[k]
-            return model.qsG[w] >= (m * model.v[b_bus] + b) * model.PsG_inst[w]
+            return (
+                model.qsG[w, t]
+                >= (m * model.v[b_bus, t] + b) * model.PsG_inst[w, t]
+            )
 
-        @model.Constraint(model.WINDc, model.W_QU_PIECE)
-        def QV_max(model, w, k):
-            """Upper Q(U) capability piece for wind unit `w`.
+        @model.Constraint(model.WINDc, model.T, model.W_QU_PIECE)
+        def QV_max(model, w, t, k):
+            """Upper Q(U) capability piece for wind unit `w` at step `t`.
 
             Args:
                 model: The Pyomo model being extended.
-                w: Wind-generator index.
+                w: Wind-generator index from `model.WINDc`.
+                t: Time step from `model.T`.
                 k: Piece index of the piecewise envelope.
 
             Returns:
-                A Pyomo expression.
+                A Pyomo inequality expression, or `Constraint.Skip` when the
+                unit has no bus entry or the envelope has fewer than `k + 1`
+                pieces.
             """
             if w not in sGbs_lookup:
                 return pyo.Constraint.Skip
             pieces = qv_area.upper_pieces(
-                int(pyo.value(model.var_q[w])), v_span
+                int(pyo.value(model.var_q[w, t])), v_span
             )
             if k >= len(pieces):
                 return pyo.Constraint.Skip
             b_bus = sGbs_lookup[w]
             m, b = pieces[k]
-            return model.qsG[w] <= (m * model.v[b_bus] + b) * model.PsG_inst[w]
+            return (
+                model.qsG[w, t]
+                <= (m * model.v[b_bus, t] + b) * model.PsG_inst[w, t]
+            )
 
+        # --- sizing: decided once per candidate, not per time step ---
         @model.Constraint(model.WIND_HC)
-        def SW_max(model, w):
-            r"""Upper apparent-power limit of candidate `w`.
+        def hc_size_upper(model, w):
+            r"""Cap the installed rating of candidate `w`, and gate it on `y`.
 
-            $p^2 + q^2 \le S_{max}^2 y_w$: a zero selection variable forces the
-            unit off, which makes the model a MINLP.
+            $S^2_w \le S_{max,w}^2 y_w$. A zero selection variable forces the
+            rating to zero, which is what makes the problem a MINLP; the
+            binary is the only nonconvexity the hosting-capacity layer adds.
 
             Args:
                 model: The Pyomo model being extended.
-                w: Wind-generator index.
+                w: Candidate index from `model.WIND_HC`.
 
             Returns:
-                A Pyomo expression.
+                A Pyomo inequality expression.
             """
-            return (
-                model.psG[w] ** 2 + model.qsG[w] ** 2
-                <= model.SWmax[w] ** 2 * model.y[w]
-            )
+            return model.SW2[w] <= model.SWmax[w] ** 2 * model.y[w]
 
         @model.Constraint(model.WIND_HC)
-        def SW_min(model, w):
-            """Lower apparent-power limit of candidate `w`.
+        def hc_size_lower(model, w):
+            r"""A selected candidate has to be at least `SWmin` in size.
 
-            A selected unit must run at or above a minimum size.
+            $S^2_w \ge S_{min,w}^2 y_w$. This is the multi-period home of
+            what used to be a per-step minimum *dispatch*, which was wrong
+            for wind: a plant that has to produce at every step cannot exist
+            in a network whose wind is zero at night. A minimum makes sense
+            for the size, not for the output.
 
             Args:
                 model: The Pyomo model being extended.
-                w: Wind-generator index.
+                w: Candidate index from `model.WIND_HC`.
 
             Returns:
-                A Pyomo expression.
+                A Pyomo inequality expression.
             """
-            return (
-                model.psG[w] ** 2 + model.qsG[w] ** 2
-                >= model.SWmin[w] ** 2 * model.y[w]
-            )
+            return model.SW2[w] >= model.SWmin[w] ** 2 * model.y[w]
+
+        # --- dispatch: bound at every step by the size chosen above ---
+        @model.Constraint(model.WIND_HC, model.T)
+        def SW_max(model, w, t):
+            r"""Keep candidate `w` inside its installed rating at step `t`.
+
+            $p_{w,t}^2 + q_{w,t}^2 \le S^2_w$. Convex, because `SW2` carries
+            the *squared* rating: writing the same thing against a rating
+            variable would put a variable square on the right-hand side.
+
+            Args:
+                model: The Pyomo model being extended.
+                w: Candidate index from `model.WIND_HC`.
+                t: Time step from `model.T`.
+
+            Returns:
+                A Pyomo inequality expression.
+            """
+            return model.psG[w, t] ** 2 + model.qsG[w, t] ** 2 <= model.SW2[w]
 
         # Simplified HC Q-P bounds: the widest band the grid code offers
-        @model.Constraint(model.WIND_HC)
-        def QW_min(model, w):
-            """Lower Q(P) bound for candidate `w`.
+        @model.Constraint(model.WIND_HC, model.T)
+        def QW_min(model, w, t):
+            """Lower Q(P) bound for candidate `w` at step `t`.
 
             Args:
                 model: The Pyomo model being extended.
-                w: Wind-generator index.
+                w: Candidate index from `model.WIND_HC`.
+                t: Time step from `model.T`.
 
             Returns:
-                A Pyomo expression.
+                A Pyomo inequality expression.
             """
-            return model.qsG[w] >= self.qp_min * model.psG[w]
+            return model.qsG[w, t] >= self.qp_min * model.psG[w, t]
 
-        @model.Constraint(model.WIND_HC)
-        def QW_max(model, w):
-            """Upper Q(P) bound for candidate `w`.
+        @model.Constraint(model.WIND_HC, model.T)
+        def QW_max(model, w, t):
+            """Upper Q(P) bound for candidate `w` at step `t`.
 
             Args:
                 model: The Pyomo model being extended.
-                w: Wind-generator index.
+                w: Candidate index from `model.WIND_HC`.
+                t: Time step from `model.T`.
 
             Returns:
-                A Pyomo expression.
+                A Pyomo inequality expression.
             """
-            return model.qsG[w] <= self.qp_max * model.psG[w]
+            return model.qsG[w, t] <= self.qp_max * model.psG[w, t]
 
-        @model.Constraint(model.WIND_HC)
-        def QU_min_hc(model, w):
-            """Lower Q(U) bound for candidate `w`.
+        @model.Constraint(model.WIND_HC, model.T)
+        def QU_min_hc(model, w, t):
+            """Lower Q(U) bound for candidate `w` at step `t`.
 
-            Bilinear in the bus voltage and the active power, hence nonconvex.
+            Bilinear in the bus voltage and the active power, hence
+            nonconvex.
 
             Args:
                 model: The Pyomo model being extended.
-                w: Wind-generator index.
+                w: Candidate index from `model.WIND_HC`.
+                t: Time step from `model.T`.
 
             Returns:
-                A Pyomo expression.
+                A Pyomo inequality expression, or `Constraint.Skip` when the
+                candidate has no bus entry in `model.sGbs`.
             """
-            for g, b in model.sGbs:
-                if g == w:
-                    return (
-                        model.qsG[w]
-                        >= (self.m_qu_min * model.v[b] + self.qu_min)
-                        * model.psG[w]
-                    )
+            if w not in sGbs_lookup:
+                return pyo.Constraint.Skip
+            b = sGbs_lookup[w]
+            return (
+                model.qsG[w, t]
+                >= (self.m_qu_min * model.v[b, t] + self.qu_min)
+                * model.psG[w, t]
+            )
 
-        @model.Constraint(model.WIND_HC)
-        def QU_max_hc(model, w):
-            """Upper Q(U) bound for candidate `w`.
+        @model.Constraint(model.WIND_HC, model.T)
+        def QU_max_hc(model, w, t):
+            """Upper Q(U) bound for candidate `w` at step `t`.
 
             Args:
                 model: The Pyomo model being extended.
-                w: Wind-generator index.
+                w: Candidate index from `model.WIND_HC`.
+                t: Time step from `model.T`.
 
             Returns:
-                A Pyomo expression.
+                A Pyomo inequality expression, or `Constraint.Skip` when the
+                candidate has no bus entry in `model.sGbs`.
             """
-            for g, b in model.sGbs:
-                if g == w:
-                    return (
-                        model.qsG[w]
-                        <= (self.m_qu_max * model.v[b] + self.qu_max)
-                        * model.psG[w]
-                    )
+            if w not in sGbs_lookup:
+                return pyo.Constraint.Skip
+            b = sGbs_lookup[w]
+            return (
+                model.qsG[w, t]
+                <= (self.m_qu_max * model.v[b, t] + self.qu_max)
+                * model.psG[w, t]
+            )
 
         if "windpot_p_mw" in net.bus:
 
-            @model.Constraint(model.WIND_HC)
-            def PW_max(model, w):
-                """Cap candidate `w` at the bus's wind potential.
+            @model.Constraint(model.WIND_HC, model.T)
+            def PW_max(model, w, t):
+                """Cap candidate `w` at the bus's wind potential at step `t`.
+
+                `windpot_p_mw` records how much wind the site could host, so
+                it bounds the output at every step rather than the energy
+                over the horizon.
 
                 Args:
                     model: The Pyomo model being extended.
-                    w: Wind-generator index.
+                    w: Candidate index from `model.WIND_HC`.
+                    t: Time step from `model.T`.
 
                 Returns:
-                    A Pyomo expression.
+                    A Pyomo inequality expression.
                 """
-                return model.psG[w] <= model.pWmax[w]
+                return model.psG[w, t] <= model.pWmax[w]
 
     def unfix_variables(self, model):
-        """Unfix real and reactive power for all HC wind generators."""
+        """Free the dispatch of every HC candidate, at every time step.
+
+        The candidates carry a zero profile so the multi-period base class
+        can resolve one for them; unfixing is what turns them from that
+        placeholder infeed into decision variables.
+
+        Args:
+            model: The Pyomo model being extended.
+
+        Returns:
+            None. `psG` and `qsG` are unfixed in place.
+        """
         for w in model.WIND_HC:
-            model.psG[w].unfix()
-            model.qsG[w].unfix()
+            for t in model.T:
+                model.psG[w, t].unfix()
+                model.qsG[w, t].unfix()
 
     def get_all_acopf(self, model):
         """Nothing extra for wind at the AC OPF stage.

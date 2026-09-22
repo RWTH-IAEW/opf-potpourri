@@ -230,7 +230,14 @@ class Basemodel_multi_period:
         self.flexibilities.append(Sgens_multi_period(self.net))
         self.flexibilities.append(Generator_multi_period(self.net))
 
-        if "windpot_p_mw" in self.net.bus:
+        # A wind_hc column means hosting-capacity candidates exist and the
+        # wind device owns them; windpot_p_mw only adds a per-site cap. Keying
+        # solely on the latter left HC_ACOPF_multi_period with no wind device
+        # whenever that optional column was absent.
+        wind_hc = self.net.sgen.get("wind_hc")
+        if "windpot_p_mw" in self.net.bus or (
+            wind_hc is not None and bool(wind_hc.fillna(False).any())
+        ):
             self.flexibilities.append(Windpower_multi_period(self.net))
 
     def calc_reactive_sgen_power(self, pf=1):

@@ -24,12 +24,17 @@ def pyo_sol_to_net_res(net, model, t):
         t: time step index to extract from multi-period variables.
     """
     if "HC" in model.name:
+        # Dispatch is per (candidate, step) and the selection is per
+        # candidate, so this writes the requested step's dispatch of the
+        # units the model chose to build. The installed rating itself is
+        # sqrt(SW2[w]) and has no time index -- a plant is built once.
         for w in model.WIND_HC:
+            selected = model.y[w].value
             net.sgen.p_mw[w] = (
-                model.psG[w].value * model.baseMVA.value * model.y[w].value
+                model.psG[w, t].value * model.baseMVA.value * selected
             )
             net.sgen.q_mvar[w] = (
-                model.qsG[w].value * model.baseMVA.value * model.y[w].value
+                model.qsG[w, t].value * model.baseMVA.value * selected
             )
 
     clear_result_tables(net)
