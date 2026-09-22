@@ -5,7 +5,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- **A release tag that disagrees with the tree no longer publishes nothing
+  and reports success.** The version guard in `publish.yml` ended in
+  `exit 0`, and every later step was gated on the variable it set, so a
+  mismatched tag finished the workflow green having published nothing — the
+  only trace a line in a step log nobody reads when the tick is green.
+  Pushing a tag is deliberate; a mismatch is a mistake, so the guard now
+  fails. It also checks `CITATION.cff`, which the Zenodo job builds its
+  metadata from and which nothing compared with the tag before: cutting
+  0.6.0 nearly archived the release under the previous version because that
+  file was still reading `0.5.3`. It additionally requires a `CHANGELOG.md`
+  section for the version, since that is where the release notes now come
+  from. `tests/unit_tests/test_release_scripts.py` covers it, including the
+  exact 0.6.0 shape — `pyproject.toml` bumped, `CITATION.cff` left behind.
+
+### Added
+
+- **The tag creates the GitHub release.** `publish.yml` published to PyPI
+  and archived to Zenodo but created no release, so pushing a tag left the
+  releases page showing the previous version as Latest until somebody
+  noticed — missed for 0.5.0 and again for 0.6.0. A `github-release` job
+  now takes the notes from the matching `CHANGELOG.md` section, so the
+  release page and the changelog cannot drift apart, and titles the release
+  plainly `vX.Y.Z`. It depends on the PyPI job rather than on Zenodo, so a
+  Zenodo hiccup is not what leaves the releases page stale all over again,
+  and it updates an existing release instead of failing, so re-running the
+  job is safe.
 
 ## [0.6.0] — 2026-09-21
 

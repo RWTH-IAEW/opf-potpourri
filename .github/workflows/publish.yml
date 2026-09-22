@@ -1,4 +1,4 @@
-name: Publish to PyPI
+name: Publish release
 
 on:
   push:
@@ -6,7 +6,32 @@ on:
       - "v*"
 
 jobs:
+  # Pushing a tag is a deliberate act, so a tag that disagrees with the tree
+  # is a mistake and the release stops here. This used to live inside the
+  # publish job as `exit 0`, which made a mismatch *skip* while the workflow
+  # still went green — a stale CITATION.cff nearly archived 0.6.0 on Zenodo
+  # under the previous version with nothing failing.
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install pyyaml
+
+      # Checks the tag against pyproject.toml (what PyPI publishes),
+      # CITATION.cff (what the Zenodo metadata is built from) and the
+      # presence of a CHANGELOG section (where the release notes come from).
+      - name: Check the tag agrees with the tree
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python .github/scripts/check_release_version.py
+
   build-and-publish:
+    needs: verify
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -19,22 +44,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Check tag matches package version
-        run: |
-          PKG_VERSION=$(python -c "import tomllib; d=tomllib.load(open('pyproject.toml','rb')); print(d['project']['version'])")
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
-          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
-            echo "Tag $GITHUB_REF_NAME does not match package version $PKG_VERSION — skipping publish."
-            exit 0
-          fi
-          echo "SHOULD_PUBLISH=true" >> "$GITHUB_ENV"
-
       - name: Install uv
-        if: env.SHOULD_PUBLISH == 'true'
         run: pip install uv
 
       - name: Build package
-        if: env.SHOULD_PUBLISH == 'true'
         run: uv build
 
       # Authenticates through PyPI trusted publishing (OIDC) using the
@@ -43,7 +56,6 @@ jobs:
       # `automatic` so a missing or misconfigured OIDC setup fails loudly
       # instead of silently falling back to another credential source.
       - name: Publish to PyPI
-        if: env.SHOULD_PUBLISH == 'true'
         run: uv publish --trusted-publishing always
 
   # Archives the tagged source as a new version of the existing Zenodo concept
@@ -69,3 +81,50 @@ jobs:
           ZENODO_TOKEN: ${{ secrets.ZENODO_TOKEN }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: python .github/scripts/zenodo_release.py
+
+  # Without this, pushing a tag left the releases page showing the previous
+  # version as Latest while PyPI already served the new one, until somebody
+  # noticed and ran `gh release create` by hand. That was missed for 0.5.0
+  # and again for 0.6.0, both caught by the maintainer rather than by CI.
+  #
+  # Depends on the PyPI job only, not on Zenodo: the release announces the
+  # package PyPI now serves, and a Zenodo hiccup should not be what leaves
+  # the releases page stale all over again.
+  github-release:
+    needs: build-and-publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # required to create the release
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # The notes are already written by the time a release is tagged, in
+      # CHANGELOG.md. Taking them from there keeps the release page and the
+      # changelog from drifting apart.
+      - name: Take the notes from the changelog
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python .github/scripts/changelog_section.py > release-notes.md
+
+      # Titled plainly `vX.Y.Z`: v0.4.1 and v0.4.2 carry descriptive
+      # suffixes, which is not the style that was kept.
+      #
+      # `gh release create` fails when the release already exists, which
+      # would turn a re-run of this job red for no reason, so an existing
+      # release is updated instead.
+      - name: Create or update the GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release $TAG already exists — updating its notes"
+            gh release edit "$TAG" --title "$TAG" --notes-file release-notes.md
+          else
+            gh release create "$TAG" --title "$TAG" \
+              --notes-file release-notes.md --verify-tag --latest
+          fi
