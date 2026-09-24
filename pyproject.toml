@@ -59,8 +59,10 @@ dependencies = [
     "pandapower>=2.13,<3.6",
     # Same reasoning: pandas 3.0 makes copy-on-write the default, which turns
     # chained assignment into a silent no-op rather than an error. The result
-    # mappers were audited for that and use plain assignment, but the bound
-    # keeps the next major release from changing results before it is tested.
+    # mappers write through .loc/.at/.iloc only (tests/unit_tests/
+    # test_pyo_to_net_copy_on_write.py runs them with copy-on-write on), but
+    # the bound keeps the next major release from changing results before
+    # the whole suite has been tested on it.
     "pandas>=2.0,<3",
     "pyomo>=6.10",
     "simbench>=1.4",

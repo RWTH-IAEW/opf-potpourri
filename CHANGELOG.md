@@ -5,7 +5,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- The result mappers (`pyo_to_net`, `pyo_to_net_multi_period`) no longer use
+  chained assignment for DC bus voltages and hosting-capacity candidate
+  dispatch. Under pandas 3's copy-on-write those writes would have been
+  silently dropped, leaving 1.0 p.u. at generator and slack buses of a DC
+  model and stale candidate powers in `net.sgen`. pandas stays capped at
+  `<3`; a new test runs the mappers with copy-on-write on.
 
 ## [0.7.0] — 2026-09-22
 

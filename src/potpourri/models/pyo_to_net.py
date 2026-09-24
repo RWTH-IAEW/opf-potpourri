@@ -36,10 +36,10 @@ def pyo_sol_to_net_res(net, model):
     """
     if _is_hc(model):
         for w in model.WIND_HC:
-            net.sgen.p_mw[w] = (
+            net.sgen.at[w, "p_mw"] = (
                 model.psG[w].value * model.baseMVA.value * model.y[w].value
             )
-            net.sgen.q_mvar[w] = (
+            net.sgen.at[w, "q_mvar"] = (
                 model.qsG[w].value * model.baseMVA.value * model.y[w].value
             )
 
@@ -79,8 +79,10 @@ def _bus_voltage_results_to_net(net, model):
         net.res_bus.vm_pu = pd.Series(
             [1.0] * len(net.bus.index), net.bus.index
         )
-        net.res_bus.vm_pu[net.gen.bus] = net.gen.vm_pu
-        net.res_bus.vm_pu[net.ext_grid.bus] = net.ext_grid.vm_pu
+        # .values: a Series would be aligned on the gen/ext_grid index,
+        # not on the bus labels it is written to
+        net.res_bus.loc[net.gen.bus, "vm_pu"] = net.gen.vm_pu.values
+        net.res_bus.loc[net.ext_grid.bus, "vm_pu"] = net.ext_grid.vm_pu.values
     else:
         v = model.v.get_values()
         v_res = [v[b] for b in bus_idx]

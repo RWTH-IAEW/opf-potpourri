@@ -30,10 +30,10 @@ def pyo_sol_to_net_res(net, model, t):
         # sqrt(SW2[w]) and has no time index -- a plant is built once.
         for w in model.WIND_HC:
             selected = model.y[w].value
-            net.sgen.p_mw[w] = (
+            net.sgen.at[w, "p_mw"] = (
                 model.psG[w, t].value * model.baseMVA.value * selected
             )
-            net.sgen.q_mvar[w] = (
+            net.sgen.at[w, "q_mvar"] = (
                 model.qsG[w, t].value * model.baseMVA.value * selected
             )
 
@@ -76,9 +76,11 @@ def _bus_voltage_results_to_net(net, model, t):
             [1.0] * len(net.bus.index), net.bus.index
         )
         # use values from net definition as voltage not calculated in DCLF
-        # calculation, to get same result tables as pandapower
-        net.res_bus.vm_pu[net.gen.bus] = net.gen.vm_pu
-        net.res_bus.vm_pu[net.ext_grid.bus] = net.ext_grid.vm_pu
+        # calculation, to get same result tables as pandapower. .values: a
+        # Series would be aligned on the gen/ext_grid index, not on the bus
+        # labels it is written to
+        net.res_bus.loc[net.gen.bus, "vm_pu"] = net.gen.vm_pu.values
+        net.res_bus.loc[net.ext_grid.bus, "vm_pu"] = net.ext_grid.vm_pu.values
 
     else:
         v = model.v.get_values()
