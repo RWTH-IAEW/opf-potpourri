@@ -83,16 +83,17 @@ def test_acopf_solves_with_ipopt(four_bus):
 
 @pytest.mark.integration
 @pytest.mark.slow
-def test_acopf_solves_with_neos():
-    """ACOPF finds an optimal solution using the NEOS IPOPT solver."""
-    import os
+def test_acopf_solves_with_neos(neos):
+    """ACOPF finds an optimal solution using the NEOS IPOPT solver.
 
-    os.environ.setdefault("NEOS_EMAIL", "test@example.com")
+    The `neos` fixture skips the test when the server is unreachable or
+    returns no solution.
+    """
     net = pp.networks.simple_four_bus_system()
     acopf = ACOPF(net)
     acopf.add_OPF()
     acopf.add_voltage_deviation_objective()
-    acopf.solve(solver="neos", neos_opt="ipopt", print_solver_output=False)
+    neos(acopf, neos_opt="ipopt", print_solver_output=False)
 
     assert pyo.check_optimal_termination(acopf.results)
     assert acopf.net.res_bus is not None

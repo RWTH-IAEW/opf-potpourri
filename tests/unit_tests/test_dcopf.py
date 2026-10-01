@@ -72,11 +72,13 @@ def test_dcopf_solves_with_glpk(four_bus):
 
 @pytest.mark.integration
 @pytest.mark.slow
-def test_dcopf_solves_with_neos():
-    """DCOPF finds an optimal solution using the NEOS CPLEX solver."""
-    import os
+def test_dcopf_solves_with_neos(neos):
+    """DCOPF finds an optimal solution using the NEOS CBC solver.
 
-    os.environ.setdefault("NEOS_EMAIL", "test@example.com")
+    CBC rather than CPLEX: NEOS's CPLEX queue started rejecting every
+    submission on 2026-10-01 while CBC kept solving. The `neos` fixture
+    skips the test when the server is unreachable or returns no solution.
+    """
     net = pp.networks.simple_four_bus_system()
     dcopf = DCOPF(net)
     dcopf.add_OPF()
@@ -84,7 +86,7 @@ def test_dcopf_solves_with_neos():
         expr=sum(dcopf.model.pG[g] for g in dcopf.model.G),
         sense=pyo.minimize,
     )
-    dcopf.solve(solver="neos", neos_opt="cplex", to_net=False)
+    neos(dcopf, neos_opt="cbc", to_net=False)
     assert pyo.check_optimal_termination(dcopf.results)
 
 

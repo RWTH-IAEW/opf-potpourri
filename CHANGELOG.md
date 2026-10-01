@@ -54,6 +54,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- The two NEOS integration tests (`test_acopf_solves_with_neos`,
+  `test_dcopf_solves_with_neos`) now **skip with the reason** when the public
+  NEOS server is unreachable or accepts the job and returns no solution,
+  instead of failing the suite; they check the transport to NEOS, and every
+  model they submit is solved locally elsewhere. The DC test submits to
+  NEOS's CBC queue: the CPLEX queue started rejecting every submission on
+  2026-10-01 and turned `test_unit` red on unrelated merge requests.
 - The Dockerfile moves from the deprecated `continuumio/miniconda3` base
   image to its successor `anaconda/miniconda` (26.7.1, Debian 13) and now
   delivers a working SHOT: the MINLP solver is built from a pinned master
