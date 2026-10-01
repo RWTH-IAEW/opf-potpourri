@@ -30,8 +30,8 @@ classDiagram
         +PD  PG  PsG  GB
         ── Variables ──
         +delta[b]  pG[g]  psG[sg]  pD[d]
-        +pLfrom[l]  pLto[l]  pThv[tr]  pTlv[tr]  Tap[tr]
-        +solve(solver)
+        +pLfrom[l]  pLto[l]  pThv[tr]  pTlv[tr]  Tap[tr]  Tap_lv[tr]
+        +solve(solver, relax_integrality)
         +add_storage()
         +change_vals()  fix_vars()  unfix_vars()
     }
@@ -79,8 +79,14 @@ classDiagram
         +PG_Constraint[g]
         +PD_Constraint[d]
         +add_OPF()
-        +add_tap_changer_linear()
-        +add_tap_changer_discrete()
+        ── opt-in controls (OLTCControlMixin, ShuntControlMixin) ──
+        +enable_oltc()  penalize_tap_movement()
+        +tap_schedule()  tap_operations()  apply_tap_positions()
+        +solve_oltc_round_and_fix()
+        +enable_shunt_control()  penalize_shunt_switching()
+        +shunt_schedule()  apply_shunt_steps()
+        +add_tap_changer_linear()  (deprecated)
+        +add_tap_changer_discrete()  (deprecated)
     }
 
     class ACOPF {
@@ -158,7 +164,9 @@ everything listed above them.
 
 | Layer | Sets | Parameters | Variables | Constraints | Objectives |
 |---|---|---|---|---|---|
-| **Basemodel** | `B` `b0` `bPV` `G` `sG` `eG` `gG` `D` `L` `TRANSF` `SHUNT` `STOR` | `A` `AT` `baseMVA` `shift` `delta_b0` `PD` `PG` `PsG` `GB` | `delta[b]` `pG[g]` `psG[sg]` `pD[d]` `pLfrom[l]` `pLto[l]` `pThv[tr]` `pTlv[tr]` `Tap[tr]` | — | — |
+| **Basemodel** | `B` `b0` `bPV` `G` `sG` `eG` `gG` `D` `L` `TRANSF` `SHUNT` `STOR` | `A` `AT` `baseMVA` `shift` `delta_b0` `PD` `PG` `PsG` `GB` | `delta[b]` `pG[g]` `psG[sg]` `pD[d]` `pLfrom[l]` `pLto[l]` `pThv[tr]` `pTlv[tr]` `Tap[tr]` `Tap_lv[tr]` (both fixed) | — | — |
+| **+OPF, `enable_oltc()`** (opt-in) | `TRANSF_OLTC` `TRANSF_OLTC_HV` `TRANSF_OLTC_LV` | `trafo_tap_pos_min/max/neutral/init` `trafo_tap_step` `trafo_tap_ratio_nominal` `trafo_tap_factor_base` `trafo_tap_switching_cost` | `trafo_tap_position[tr]` (integer or real) `trafo_tap_factor[tr]` `trafo_tap_up/down[tr]`; `Tap` or `Tap_lv` unfixed | `trafo_tap_factor_def` `trafo_tap_ratio_hv_def` `trafo_tap_ratio_lv_def` `trafo_tap_movement_def` `trafo_tap_change_limit` `trafo_tap_operations_limit` | expression `trafo_tap_movement_cost` |
+| **+OPF, `enable_shunt_control()`** (opt-in) | `SHUNT_CTRL` | `shunt_step_max/init` `shunt_p_step` `shunt_q_step` `shunt_switching_cost_coeff` | `shunt_step[s]` `shunt_step_up/down[s]` | `shunt_step_movement_def` `shunt_step_change_limit` `shunt_step_operations_limit`; `KCL_*` rebuilt | expression `shunt_switching_cost` |
 | **+AC** | — | `Gii` `Bii` `Gik` `Bik` `GiiT` `BiiT` `GikT` `BikT` `BB` `QD` `QsG` `v_b0` `v_bPV` | `v[b]` `qG[g]` `qsG[sg]` `qD[d]` `qLfrom[l]` `qLto[l]` `qThv[tr]` `qTlv[tr]` | `KCL_real[b]` `KCL_reactive[b]` `KVL_real_from/to[l]` `KVL_reactive_from/to[l]` `KVL_*Transf[tr]` `v_bPV_setpoint[b]` | — |
 | **+DC** | — | `BL[l]` `BLT[tr]` | `deltaL[l]` `deltaLT[tr]` | `KCL_const[b]` `KVL_real_from/to[l]` `KVL_trans_from/to[tr]` `phase_diff1[l]` `phase_diff2[tr]` | — |
 | **+OPF** | `sGc` `Dc` | `sPGmax` `sPGmin` `PGmax` `PGmin` `PDmax` `PDmin` `SLmax[l]` `SLmaxT[tr]` | — | `PsG_Constraint[sg]` `PG_Constraint[g]` `PD_Constraint[d]` | — |
@@ -206,8 +214,8 @@ classDiagram
         ── Variables ──
         +delta[b,t]
         +pLfrom[l,t]  pLto[l,t]
-        +pThv[tr,t]   pTlv[tr,t]  Tap[tr,t]
-        +solve(solver)
+        +pThv[tr,t]   pTlv[tr,t]  Tap[tr,t]  Tap_lv[tr,t]
+        +solve(solver, relax_integrality)
         +make_to_dict()  make_to_tuple()
         +change_vals()  fix_vars()  unfix_vars()
     }
@@ -234,8 +242,13 @@ classDiagram
         ── Parameters ──
         +SLmax[l]  SLmaxT[tr]  (mutable, time-independent)
         +add_OPF()
-        +add_tap_changer_linear()
-        +add_tap_changer_discrete()
+        ── opt-in controls, time-indexed (OLTCControlMixin, ShuntControlMixin) ──
+        +enable_oltc(max_change_per_step, max_operations)
+        +penalize_tap_movement()  tap_schedule()  tap_operations()
+        +solve_oltc_round_and_fix()
+        +enable_shunt_control()  shunt_schedule()
+        +add_tap_changer_linear()  (deprecated)
+        +add_tap_changer_discrete()  (deprecated)
     }
 
     class ACOPF_multi_period {

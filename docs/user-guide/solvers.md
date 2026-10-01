@@ -155,6 +155,26 @@ Measured on SimBench `1-LV-rural1--0-sw` (15 buses), 120 s limit:
 
 Rules of thumb: use **IPOPT** for continuous AC OPF — Gurobi finds the same optimum but burns the rest of the budget closing the global gap. Use **`gurobi_direct_minlp`** once integer variables are present. Always pass `time_limit`, and check `termination_condition`: `maxTimeLimit` means the incumbent is feasible but not proven globally optimal.
 
+### Integer variables and continuous solvers
+
+`solve()` counts the free integer and binary variables of the model before
+calling the solver. If there are any and the solver is continuous-only
+(IPOPT, CONOPT, SNOPT, MINOS — also through NEOS), it raises a `ValueError`
+naming them, because such a solver silently ignores integrality and would
+return the continuous relaxation as if it were a solution. Pass
+`relax_integrality=True` to request that relaxation knowingly.
+
+For the discrete tap positions and shunt steps of
+[Controllable Network Equipment](controllable-equipment.md) there is a third
+route that needs IPOPT only: `solve_oltc_round_and_fix()` /
+`solve_shunt_round_and_fix()` solve the relaxation, round the controls (in
+time order and within their change limits), fix them and re-solve. It is a
+heuristic; the relaxed objective it reports is a bound. On SimBench-sized
+multi-period models the global MINLP finds incumbents quickly but needs many
+minutes to prove optimality even for a single step of a 15-bus feeder, so
+the heuristic is the practical default for horizons and the global solver
+for single-period cases.
+
 ## NEOS — remote solver
 
 [NEOS](https://neos-server.org/) is a free public optimisation server. It accepts Pyomo models over the network and returns results without requiring a local solver installation.

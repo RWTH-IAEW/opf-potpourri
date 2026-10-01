@@ -85,6 +85,7 @@ nav:
       - Multi-Period OPF: user-guide/multi-period.md
       - Flexible Devices: user-guide/devices.md
       - Reactive-Power Control: user-guide/reactive-power-control.md
+      - Controllable Network Equipment: user-guide/controllable-equipment.md
       - Solvers: user-guide/solvers.md
       - OPF Diagnostics: user-guide/diagnostics.md
       - Logging: user-guide/logging.md

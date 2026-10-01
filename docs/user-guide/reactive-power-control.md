@@ -647,30 +647,29 @@ In the multi-period model no flag is needed — `sn_mva` plus `cos_phi_min` in
 
 ## OLTC tap optimisation (multi-period)
 
-The multi-period model supports continuous OLTC optimisation via
-`add_tap_changer_linear()`, which unfixes the time-indexed `Tap[tr, t]`
-variable and adds per-step bounds:
+The tap changers of selected transformers become time-indexed decision
+variables with `enable_oltc`; movement between steps can be limited,
+counted and priced:
 
 ```python
+net.trafo["tap_changer_type"] = "Ratio"   # SimBench leaves this None
 mpopf = ACOPF_multi_period(net, toT=96)
 mpopf.add_OPF()
-
-# Continuous OLTC — free within [tap_min, tap_max] each step
-mpopf.add_tap_changer_linear()
-
-# With optional inter-step rate limit (Δtap ≤ 0.01 per 15 min)
-mpopf.add_tap_changer_linear(max_tap_change_per_step=0.01)
-
+mpopf.enable_oltc(
+    mode="discrete",            # or "continuous" for the relaxation
+    max_change_per_step=1,      # positions per 15 min
+    max_operations=8,           # over the horizon
+)
 mpopf.add_voltage_deviation_objective()
-mpopf.solve(solver="ipopt")
+mpopf.penalize_tap_movement(cost=1e-4)
+mpopf.solve_oltc_round_and_fix(solver="ipopt")   # or a MINLP solver
+mpopf.tap_schedule()
 ```
 
-For discrete tap positions (MIP solver required):
-
-```python
-mpopf.add_tap_changer_discrete()
-mpopf.solve(solver="mindtpy", mip_solver="gurobi")
-```
+The full description, including switched capacitor banks, is in
+[Controllable Network Equipment](controllable-equipment.md). The older
+`add_tap_changer_linear()` / `add_tap_changer_discrete()` remain available
+but are deprecated.
 
 ---
 

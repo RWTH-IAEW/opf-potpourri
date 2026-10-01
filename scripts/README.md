@@ -47,6 +47,7 @@ python scripts/minimal_ac_power_flow.py
 | `hosting_capacity_opf.py` | Hosting capacity analysis with binary wind placement, VDE-AR-N 4105 grid-code Q constraints, and eps/SWmin parameter sweeps |
 | `q_control_opf.py` | **VDE-AR-N 4105 Q-control**: annotate PV/wind sgens with `var_q` and solve (1) a single-period AC OPF comparing the Q(P)/Q(U) modes, (2) the PV inverter controller modes (P(U) curtailment, fixed cos(φ), cos(φ)(P)), and (3) a 24-step multi-period AC OPF with automatic Q-control detection |
 | `grid_code_q_strategies.py` | **Grid-code selection and per-sgen strategies**: solves one snapshot under each registered grid code (`add_OPF(grid_code=…)`), surfacing the provisional-values warning for VDE-AR-N 4110; then assigns Q(P)/Q(U), fixed cos(φ), cos(φ)(P) and P(U) curtailment to different PV units in one multi-period model and reports which constraint blocks were built |
+| `oltc_voltage_control_demo.py` | **On-load tap changer as an OPF decision**: a sunny-day window on the SimBench LV rural1 network with its regulated 20/0.4 kV distribution transformer (±2 × 2.5 %) under `enable_oltc` — fixed tap vs. continuous relaxation vs. discrete schedule (rounded, optionally Gurobi MINLP), plus pandapower's local `DiscreteTapControl` for comparison; plots min/max voltage, tap position, transformer loading and PV curtailment over time |
 
 ### Documentation
 
@@ -74,6 +75,7 @@ python scripts/minimal_ac_power_flow.py
 | `opf_diagnostics_demo.py` | IPOPT (only for the final solved case; the five broken ones need none) |
 | `dc_opf.py` | GLPK |
 | `acopf_loadcase_analysis.py` | IPOPT |
+| `oltc_voltage_control_demo.py` | IPOPT (Gurobi 12+ optional for the global MINLP variant) |
 | `objective_tradeoff_demo.py` | IPOPT |
 | `constraint_activation_demo.py` | IPOPT |
 | `time_series_snapshot_opf.py` | IPOPT |

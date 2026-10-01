@@ -90,6 +90,19 @@ Hosting capacity analysis with binary wind placement.  Sweeps the minimum
 turbine size (`SWmin`) and the wind-vs-loss trade-off parameter (`eps`).
 Enforces grid-code Q constraints from the selected VDE-AR-N rule.
 
+### `oltc_voltage_control_demo.py`
+The on-load tap changer as an OPF decision.  Takes a sunny-day window of the
+SimBench LV rural1 network (a 160 kVA 20/0.4 kV regulated distribution
+transformer with a ±2 × 2.5 % tap changer), doubles the PV so the 1.03 p.u.
+limit binds, makes the PV curtailable and solves the horizon four ways: tap
+fixed, tap as a continuous relaxation, tap as a discrete schedule rounded
+from the relaxation (optionally Gurobi's global MINLP), and — for
+comparison, not as an OPF — a pandapower `DiscreteTapControl` holding the
+0.4 kV busbar in a band step by step.  Plots the min/max voltage, the tap
+position, the transformer loading and the PV curtailment over time, and
+prints objective, curtailed energy and tap operations per case.  Needs
+IPOPT; see [Controllable Network Equipment](../user-guide/controllable-equipment.md).
+
 ---
 
 ## Validation

@@ -10,6 +10,7 @@
 - **Multi-period OPF** — time-indexed optimisation over load/generation profiles from [SimBench](https://simbench.de/en/)
 - **Modular flexible devices** — batteries, heat pumps, PV, wind
 - **Hosting capacity analysis** — binary wind generator placement with grid-code Q-curve constraints
+- **Controllable network equipment (opt-in)** — on-load tap changers and switched capacitor banks as OPF decisions, continuous or discrete, with multi-period movement limits and switching costs; validated against pandapower's power flow
 - **Multiple solvers** — IPOPT (NLP), Gurobi/CBC via MindtPy (MINLP), NEOS remote
 
 ## Quick example
@@ -37,4 +38,5 @@ print(net.res_bus[["vm_pu", "va_degree"]])
 - [**Multi-Period OPF**](user-guide/multi-period.md) — time-series OPF tutorial
 - [**Flexible Devices**](user-guide/devices.md) — batteries, heat pumps, PV, wind
 - [**Reactive-Power Control**](user-guide/reactive-power-control.md) — VDE-AR-N 4105 Q(P)/Q(U) constraints, inverter S² circle, cos(φ) cone
+- [**Controllable Network Equipment**](user-guide/controllable-equipment.md) — OLTC tap positions and shunt steps as decision variables, eligibility rules, multi-period scheduling
 - [**API Reference**](api/models.md) — full class and method documentation

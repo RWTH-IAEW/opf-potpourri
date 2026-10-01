@@ -5,6 +5,53 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Opt-in on-load tap changer control** (`enable_oltc` on `ACOPF`,
+  `HC_ACOPF` and `ACOPF_multi_period`; module `potpourri.models.oltc`).
+  Selected transformers get an integer (`mode="discrete"`) or real
+  (`mode="continuous"`) tap position `trafo_tap_position` bounded by
+  `tap_min`/`tap_max`, tied to the transformer equations through the tap
+  factor `1 + (k − tap_neutral)·tap_step_percent/100` exactly as pandapower
+  applies it — on the HV-side ratio for `tap_side="hv"`, on a new LV-side
+  ratio for `tap_side="lv"`, where pandapower refers the impedance to the
+  tapped winding. Multi-period models add per-step change limits
+  (`max_change_per_step`), a horizon operation limit (`max_operations`) and
+  a priced movement term (`penalize_tap_movement`). Results land in
+  `res_trafo["tap_pos"]` / `["tap_factor"]`; `tap_schedule()`,
+  `tap_operations()` and `apply_tap_positions()` read them back;
+  `solve_oltc_round_and_fix()` gives an integer schedule with IPOPT alone.
+  `oltc_eligibility(net)` reports which transformers qualify and why not —
+  a transformer whose `tap_changer_type` is None (every SimBench network as
+  delivered) is not eligible because pandapower 3.x ignores its `tap_pos`.
+  Validated against `pp.runpp` at every position for both tap sides,
+  non-unity nominal ratios, a 150° vector-group shift and magnetising
+  losses (`tests/unit_tests/test_oltc.py`).
+- **Opt-in switched-shunt control** (`enable_shunt_control`; module
+  `potpourri.models.shunt_control`): the `step` of selected capacitor banks
+  or reactors becomes an integer or real variable in `[0, max_step]`, with
+  the voltage-squared consumption and the `(V_bus/vn_kv)²` factor pandapower
+  uses, the same movement limits and switching cost as the tap changers,
+  `res_shunt["step"]`, `shunt_schedule()`, `apply_shunt_steps()` and
+  `solve_shunt_round_and_fix()`.
+- `solve()` on every model takes `relax_integrality`. A model with free
+  integer variables handed to a continuous-only solver (IPOPT, or NEOS with
+  one) now raises a `ValueError` naming them instead of silently returning
+  the continuous relaxation; passing `relax_integrality=True` requests the
+  relaxation knowingly.
+- A new transformer ratio variable `Tap_lv` (LV-side ideal transformer) in
+  every model, fixed at 1.0 by default; the single-period AC balance is
+  built by `build_kcl()` / `rebuild_kcl()` like the multi-period one. The
+  default model is numerically identical to before (checked against
+  pre-change solutions of six reference cases).
+- `opf.diagnose()` replays optimised tap positions and shunt steps on the
+  pandapower check network; the diagnostics metadata knows the new
+  components.
+- Documentation: `docs/user-guide/controllable-equipment.md`, Section 8 of
+  the mathematical modelling page, and the survey/design note
+  `docs/research/dso_controllable_equipment.md` with the verified
+  references; demonstration `scripts/oltc_voltage_control_demo.py`.
+
 ### Changed
 
 - The Dockerfile moves from the deprecated `continuumio/miniconda3` base
@@ -23,6 +70,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   that code edits no longer trigger a recompile, the package is installed
   (editable) into the conda environment, and a new `.dockerignore` keeps
   the local virtualenv, git history and result archives out of the image.
+
+### Deprecated
+
+- `add_tap_changer_linear()` and `add_tap_changer_discrete()` (single- and
+  multi-period) emit a `DeprecationWarning` and are otherwise unchanged. They
+  free every transformer whether or not pandapower would apply its tap, and
+  the discrete variant builds the ratio without the rated-to-bus voltage
+  mismatch and without the LV-side impedance referral. Use `enable_oltc`.
 
 ### Fixed
 

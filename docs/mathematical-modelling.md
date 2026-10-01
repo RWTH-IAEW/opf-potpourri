@@ -117,33 +117,33 @@ $$
 
 ### 1.4  Transformer branch flow equations
 
-For each transformer $\tau \in \mathcal{T}$ let $i = A^\tau_{\tau,1}$ (HV bus), $j = A^\tau_{\tau,2}$ (LV bus), $a = \tau_\text{tap}$ (tap ratio), and $\phi = \phi_\tau$ (phase-shift angle, zero if no phase-shifter):
+For each transformer $\tau \in \mathcal{T}$ let $i = A^\tau_{\tau,1}$ (HV bus), $j = A^\tau_{\tau,2}$ (LV bus), $a^{hv} = $ `Tap[τ]` (ratio of the ideal transformer on the HV side), $a^{lv} = $ `Tap_lv[τ]` (ratio of the ideal transformer on the LV side), and $\phi = \phi_\tau$ (phase-shift angle, zero if no phase-shifter). The $\pi$ section sits between the two ideal transformers:
 
 **HV real power (KVL\_real\_fromTransf)**
 
 $$
-P_\tau^\text{hv} = \frac{G_{ii}^{(\tau)}}{a^2} v_i^2 + \frac{v_i v_j}{a} \!\left( G_{ik}^{(\tau)} \cos(\delta_i - \delta_j - \phi) + B_{ik}^{(\tau)} \sin(\delta_i - \delta_j - \phi) \right)
+P_\tau^\text{hv} = \frac{G_{ii}^{(\tau)}}{(a^{hv})^2} v_i^2 + \frac{v_i v_j}{a^{hv} a^{lv}} \!\left( G_{ik}^{(\tau)} \cos(\delta_i - \delta_j - \phi) + B_{ik}^{(\tau)} \sin(\delta_i - \delta_j - \phi) \right)
 $$
 
 **LV real power (KVL\_real\_toTransf)**
 
 $$
-P_\tau^\text{lv} = G_{ii}^{(\tau)} v_j^2 + \frac{v_i v_j}{a} \!\left( B_{ik}^{(\tau)} \sin(\delta_j - \delta_i + \phi) + G_{ik}^{(\tau)} \cos(\delta_j - \delta_i + \phi) \right)
+P_\tau^\text{lv} = \frac{G_{ii}^{(\tau)}}{(a^{lv})^2} v_j^2 + \frac{v_i v_j}{a^{hv} a^{lv}} \!\left( B_{ik}^{(\tau)} \sin(\delta_j - \delta_i + \phi) + G_{ik}^{(\tau)} \cos(\delta_j - \delta_i + \phi) \right)
 $$
 
 **HV reactive power (KVL\_reactive\_fromTransf)**
 
 $$
-Q_\tau^\text{hv} = -\frac{B_{ii}^{(\tau)}}{a^2} v_i^2 + \frac{v_i v_j}{a} \!\left( -B_{ik}^{(\tau)} \cos(\delta_i - \delta_j - \phi) + G_{ik}^{(\tau)} \sin(\delta_i - \delta_j - \phi) \right)
+Q_\tau^\text{hv} = -\frac{B_{ii}^{(\tau)}}{(a^{hv})^2} v_i^2 + \frac{v_i v_j}{a^{hv} a^{lv}} \!\left( -B_{ik}^{(\tau)} \cos(\delta_i - \delta_j - \phi) + G_{ik}^{(\tau)} \sin(\delta_i - \delta_j - \phi) \right)
 $$
 
 **LV reactive power (KVL\_reactive\_toTransf)**
 
 $$
-Q_\tau^\text{lv} = -B_{ii}^{(\tau)} v_j^2 + \frac{v_i v_j}{a} \!\left( -B_{ik}^{(\tau)} \cos(\delta_j - \delta_i + \phi) + G_{ik}^{(\tau)} \sin(\delta_j - \delta_i + \phi) \right)
+Q_\tau^\text{lv} = -\frac{B_{ii}^{(\tau)}}{(a^{lv})^2} v_j^2 + \frac{v_i v_j}{a^{hv} a^{lv}} \!\left( -B_{ik}^{(\tau)} \cos(\delta_j - \delta_i + \phi) + G_{ik}^{(\tau)} \sin(\delta_j - \delta_i + \phi) \right)
 $$
 
-When $\phi = 0$ the phase-shift terms vanish.
+When $\phi = 0$ the phase-shift terms vanish. **By default both ratios are fixed**: $a^{hv}$ at pandapower's off-nominal ratio (ppc `TAP`, which already contains the tap position the network was built with) and $a^{lv} = 1$, so the equations are exactly the MATPOWER/PowerModels branch model with the transformer on the from side. The second ratio only comes into play when an LV-side on-load tap changer is made controllable (Section 8.1); it is how pandapower's convention of referring the short-circuit impedance to the *tapped* LV winding is expressed without changing the admittance parameters.
 
 ### 1.5  PV-bus voltage setpoint
 
@@ -220,25 +220,7 @@ $$
 
 ### 3.3  Transformer tap constraints
 
-The tap position $n_\tau \in \mathbb{Z}$ is an integer variable.  The continuous tap ratio is computed from it:
-
-$$
-n_\tau^\text{min} \le n_\tau \le n_\tau^\text{max}
-$$
-
-For a **HV-side** tap:
-
-$$
-a_\tau = 1 + (n_\tau - n_\tau^\text{neutral})\,s_\tau
-$$
-
-For a **LV-side** tap:
-
-$$
-a_\tau = \frac{1}{1 + (n_\tau - n_\tau^\text{neutral})\,s_\tau}
-$$
-
-where $s_\tau$ is the tap-step size and $n_\tau^\text{neutral}$ is the neutral tap position.
+Controllable tap changers are described in [Section 8](#8-controllable-dso-network-equipment) (`enable_oltc`). The older methods `add_tap_changer_linear()` and `add_tap_changer_discrete()` are **deprecated** but unchanged: the first bounds the HV-side ratio of *every* transformer by the ratios at `tap_min` and `tap_max`, the second adds an integer `Tap_pos` with `Tap = 1 + (Tap_pos − tap_neutral) s` for an HV-side and the reciprocal for an LV-side tap. The latter ignores the mismatch between rated and bus voltages and pandapower's referral of an LV-side tapped impedance, which is why Section 8 replaces it.
 
 ---
 
@@ -484,7 +466,152 @@ $$
 
 ---
 
-## 8  Symbol Reference
+## 8  Controllable DSO Network Equipment
+
+Opt-in decision variables for the equipment a distribution system operator
+operates. Nothing in this section exists on a model until `enable_oltc` or
+`enable_shunt_control` is called; without them the formulations above are
+unchanged. Derivations, the pandapower verification and the literature are in
+`docs/research/dso_controllable_equipment.md`.
+
+### 8.1  On-Load Tap-Changing Transformers
+
+pandapower's longitudinal (`tap_changer_type = "Ratio"`) tap changer scales the
+rated voltage of the tapped winding by the **tap factor**
+
+$$
+n_\tau(k) = 1 + (k - k_\tau^\text{neutral})\, s_\tau, \qquad s_\tau = \frac{\texttt{tap\_step\_percent}}{100},
+$$
+
+and builds the off-nominal ratio $\tau_0 = r_0\, n$ (HV-side tap) or $\tau_0 = r_0 / n$ (LV-side tap), where $r_0 = (v_{n,hv}/v_{n,lv}) / (V^{bus}_{hv}/V^{bus}_{lv})$ is the nominal mismatch. For an LV-side tap it also refers the short-circuit impedance to the tapped LV voltage, so every per-unit admittance of the branch scales with $1/n^2$.
+
+For a controlled transformer $\tau \in \mathcal{T}^\text{OLTC}$ the position becomes a variable and the ratios of Section 1.4 follow from it:
+
+$$
+k_\tau \in [k^\text{min}_\tau, k^\text{max}_\tau], \qquad
+n_\tau = 1 + (k_\tau - k^\text{neutral}_\tau)\, s_\tau \quad \text{(\texttt{trafo\_tap\_factor\_def})}
+$$
+
+$$
+\text{HV-side tap:}\quad a^{hv}_\tau = r_{0,\tau}\, n_\tau,\; a^{lv}_\tau = 1 \quad \text{(\texttt{trafo\_tap\_ratio\_hv\_def})}
+$$
+
+$$
+\text{LV-side tap:}\quad a^{hv}_\tau = \tau_{0,\tau},\; a^{lv}_\tau = \frac{n_\tau}{n_{0,\tau}} \quad \text{(\texttt{trafo\_tap\_ratio\_lv\_def})}
+$$
+
+with $n_{0,\tau}$ the tap factor the network was built with. Substituting pandapower's $\tau(k) = r_0/n$ and $Y(k) = Y^{(1)}/n^2$ into the MATPOWER branch model gives $Y_{ff} = Y^{(1)}/r_0^2$ (tap-invariant), $Y_{ft} = -y_s^{(1)}/(r_0 n)$ and $Y_{tt} = Y^{(1)}/n^2$, which is the two-sided form above written with the stored admittances $Y_0 = Y^{(1)}/n_0^2$. At $k = k_0$ both cases reduce to the fixed model; at every other position they reproduce `pp.runpp` to solver tolerance (`tests/unit_tests/test_oltc.py`).
+
+| Pyomo component | index | meaning |
+|---|---|---|
+| `TRANSF_OLTC`, `TRANSF_OLTC_HV`, `TRANSF_OLTC_LV` | — | controlled transformers, by tapped side |
+| `trafo_tap_pos_min/max/neutral/init`, `trafo_tap_step`, `trafo_tap_ratio_nominal`, `trafo_tap_factor_base` | $\tau$ | $k^\text{min}, k^\text{max}, k^\text{neutral}, k_0, s, r_0, n_0$ |
+| `trafo_tap_position` | $\tau$ (× $t$) | $k$ — integer or real |
+| `trafo_tap_factor` | $\tau$ (× $t$) | $n$ |
+| `Tap`, `Tap_lv` | $\tau$ (× $t$) | $a^{hv}$, $a^{lv}$; unfixed for the controlled side |
+
+Eligibility (all required): in service; `tap_side` in {hv, lv}; `tap_changer_type == "Ratio"`; `tap_step_degree` 0 or NaN; no `tap_dependency_table`; no second changer; integer `tap_neutral`, `tap_min < tap_max`, `tap_step_percent != 0`, `tap_min <= tap_pos <= tap_max`; and the ratio pandapower built equals the one the formula predicts.
+
+### 8.2  Continuous vs. Discrete Tap Control
+
+| mode | domain of `trafo_tap_position` | model class | meaning |
+|---|---|---|---|
+| fixed (default) | no variable | NLP | pandapower's `tap_pos` |
+| `continuous` | $\mathbb{R}$ | NLP | the LP/NLP relaxation of the discrete model: a lower bound and a warm start, **not** an implementable position |
+| `discrete` | $\mathbb{Z}$ | nonconvex MINLP | the physical changer |
+
+The tap factor is affine in the position, so one general integer per
+transformer (and period) is an exact representation; no one-hot selection
+and no big-M product is needed because the polar AC equations carry
+$1/a^2$ natively. `solve_oltc_round_and_fix` solves the continuous model,
+rounds each position to the nearest admissible integer (in time order and
+within the per-step change limit), fixes it and re-solves the NLP — a
+heuristic whose relaxed objective bounds the result.
+
+### 8.3  Multi-Period Tap Scheduling
+
+With $k_{\tau,0}$ the network's `tap_pos` (or a user reference) and $t^-$
+the previous period:
+
+$$
+k_{\tau,t} - k_{\tau,t^-} = u_{\tau,t} - d_{\tau,t}, \quad u, d \ge 0 \quad \text{(\texttt{trafo\_tap\_movement\_def})}
+$$
+
+$$
+u_{\tau,t} + d_{\tau,t} \le \Delta k^\text{max}_\tau \quad \text{(\texttt{trafo\_tap\_change\_limit})}, \qquad
+\sum_t \left(u_{\tau,t} + d_{\tau,t}\right) \le N^\text{max}_\tau \quad \text{(\texttt{trafo\_tap\_operations\_limit})}
+$$
+
+$$
+C^\text{switch} = \sum_\tau c_\tau \sum_t \left(u_{\tau,t} + d_{\tau,t}\right) \quad \text{(\texttt{trafo\_tap\_movement\_cost}, added by \texttt{penalize\_tap\_movement})}
+$$
+
+$u + d \ge |k_t - k_{t^-}|$ always holds and is tight whenever the cost is
+positive or the operation limit binds; the reported operation count is
+computed from the positions themselves. The single-period model carries the
+same variables relative to the initial position.
+
+### 8.4  Switchable Reactive Compensation
+
+A pandapower shunt consumes $(p_s + jq_s)\,\text{step}\,\rho_s\, v^2$ with
+$\rho_s = (V^{bus}_n/\texttt{vn\_kv}_s)^2$. For a controlled shunt
+$s \in \mathcal{S}^\text{ctrl}$ the step becomes a variable:
+
+$$
+m_s \in [0, m^\text{max}_s], \qquad
+p^{sh}_{s} = \frac{p_s \rho_s}{S_N}\, m_s\, v_b^2, \qquad
+q^{sh}_{s} = \frac{q_s \rho_s}{S_N}\, m_s\, v_b^2,
+$$
+
+replacing the constant $G_s v_b^2$ / $-B_s v_b^2$ terms in `KCL_real` /
+`KCL_reactive` for those shunts only (the balance is rebuilt by
+`rebuild_kcl`). Positive $q_s$ is an inductive reactor, negative a capacitor
+(pandapower's load sign). `shunt_step` is integer in `discrete` mode and
+real in `continuous` mode; `shunt_step_up/down`, `shunt_step_change_limit`,
+`shunt_step_operations_limit` and `shunt_switching_cost` mirror Section 8.3.
+
+### 8.5  Solver Requirements
+
+| formulation | class | solvers |
+|---|---|---|
+| fixed taps and steps | NLP | IPOPT, Gurobi 12+, NEOS |
+| continuous tap / continuous step | NLP (one more bilinear term) | same |
+| discrete tap and/or step | nonconvex MINLP | `gurobi_direct_minlp` (global), MindtPy (local), NEOS Bonmin/Couenne; `solve_*_round_and_fix` with IPOPT (heuristic) |
+| DC OPF | LP | no tap or shunt control (no voltage magnitude) |
+
+`solve()` raises a `ValueError` when free integer variables meet a
+continuous-only solver (IPOPT, CONOPT, SNOPT, MINOS, also through NEOS),
+unless `relax_integrality=True`.
+
+### 8.6  Pandapower Mapping
+
+| pandapower field | used as |
+|---|---|
+| `trafo.tap_side` | which ratio is freed (`Tap` for hv, `Tap_lv` for lv) |
+| `trafo.tap_pos` | $k_0$: start value, movement reference, consistency check against ppc `TAP` |
+| `trafo.tap_neutral`, `tap_step_percent` | $k^\text{neutral}$, $s$ |
+| `trafo.tap_min`, `tap_max` | bounds of `trafo_tap_position` |
+| `trafo.tap_changer_type` | must be `"Ratio"` |
+| `trafo.tap_step_degree`, `tap_dependency_table`, `tap2_*` | must be absent/zero |
+| `trafo.vn_hv_kv`, `vn_lv_kv`, `bus.vn_kv` | $r_0$ |
+| `trafo.oltc` | **not used** (short-circuit flag) |
+| `shunt.p_mw`, `q_mvar`, `vn_kv`, `step`, `max_step` | per-step power, $\rho_s$, start value, bound |
+| `shunt.step_dependency_table` | must be False |
+| results | `res_trafo.tap_pos`, `res_trafo.tap_factor`, `res_shunt.step`; `apply_tap_positions` / `apply_shunt_steps` write `trafo.tap_pos` / `shunt.step` on request |
+
+### 8.7  Limitations
+
+Cross regulators (`tap_step_degree != 0`), symmetrical and ideal phase
+shifters, tabular characteristics, second tap changers and three-winding
+transformers are detected and rejected, not approximated. Transformers
+without `tap_changer_type` are rejected because pandapower ignores their
+tap. No OLTC in DC; no network reconfiguration. The discrete modes
+are nonconvex MINLPs: the global solver is practical for single-period
+cases, the rounding heuristic is the default for horizons.
+
+---
+
+## 9  Symbol Reference
 
 | Symbol | Pyomo name | Description |
 |---|---|---|

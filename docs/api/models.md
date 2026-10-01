@@ -40,6 +40,14 @@ The equations behind these classes are derived in the
 
 ---
 
+::: potpourri.models.oltc
+
+---
+
+::: potpourri.models.shunt_control
+
+---
+
 ::: potpourri.models.cost_objective
 
 ---

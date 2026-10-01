@@ -96,19 +96,33 @@ print(opf.net.res_sgen[["p_mw", "q_mvar"]])
 
 ## Tap changer optimisation
 
-To include transformer tap ratios as continuous decision variables:
+Transformer tap positions become decision variables with `enable_oltc`,
+which selects the transformers pandapower would actually apply a tap to and
+follows its tap-side semantics exactly:
 
 ```python
-opf.add_tap_changer_linear()
+net.trafo["tap_changer_type"] = "Ratio"   # SimBench leaves this None
+opf = ACOPF(net)
+opf.add_OPF()
+opf.enable_oltc(mode="continuous")        # relaxation, NLP
+opf.add_voltage_deviation_objective()
 opf.solve(solver="ipopt")
+opf.net.res_trafo[["tap_pos", "tap_factor"]]
 ```
 
-For discrete tap positions (requires a MIP solver):
+For physical, integer positions use `mode="discrete"` with a MINLP solver,
+or round the relaxation with IPOPT alone:
 
 ```python
-opf.add_tap_changer_discrete()
-opf.solve(solver="mindtpy", mip_solver="gurobi", print_solver_output=False)
+opf.enable_oltc(mode="discrete")
+opf.solve(solver="gurobi_direct_minlp", time_limit=120)   # global MINLP
+# opf.solve_oltc_round_and_fix(solver="ipopt")           # heuristic
 ```
+
+See [Controllable Network Equipment](controllable-equipment.md) for
+eligibility, movement costs, switched shunts and the multi-period schedule.
+The older `add_tap_changer_linear()` / `add_tap_changer_discrete()` still
+work but are deprecated.
 
 ## Hosting capacity analysis
 

@@ -66,11 +66,17 @@ opf.add_weighted_generation_objective()   # weighted: generators + sgens
 opf.solve(solver="ipopt", print_solver_output=False, time_limit=3600)
 ```
 
-Multi-period problems are large NLPs. IPOPT with a `time_limit` is recommended. For MINLP problems (discrete tap changers), use MindtPy:
+Multi-period problems are large NLPs. IPOPT with a `time_limit` is recommended. For MINLP problems (discrete tap changers or shunt steps from `enable_oltc` / `enable_shunt_control`), use a MINLP solver or the rounding heuristic:
 
 ```python
+opf.solve(solver="gurobi_direct_minlp", time_limit=3600)   # global
 opf.solve(solver="mindtpy", mip_solver="gurobi", time_limit=3600)
+opf.solve_oltc_round_and_fix(solver="ipopt")               # heuristic
 ```
+
+`solve(solver="ipopt")` refuses a model with free integer variables unless
+`relax_integrality=True` is passed; see
+[Controllable Network Equipment](controllable-equipment.md).
 
 ## Step 7 — Access results
 
