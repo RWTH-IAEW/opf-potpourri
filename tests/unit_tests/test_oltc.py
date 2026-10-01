@@ -39,7 +39,7 @@ import simbench as sb
 
 from potpourri.models.AC import AC
 from potpourri.models.ACOPF_base import ACOPF
-from potpourri.models.basemodel import free_integer_variables
+from potpourri.models.solver_guard import free_integer_variables
 from potpourri.models.DCOPF import DCOPF
 from potpourri.models.oltc import oltc_eligibility
 from potpourri.models_multi_period.ACOPF_multi_period import (

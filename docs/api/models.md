@@ -16,6 +16,10 @@ The equations behind these classes are derived in the
 
 ---
 
+::: potpourri.models.solver_guard
+
+---
+
 ::: potpourri.models.AC
 
 ---

@@ -16,7 +16,7 @@ import pandapower as pp
 import simbench as sb
 import time as ctime
 from loguru import logger
-from potpourri.models.basemodel import check_integrality_support
+from potpourri.models.solver_guard import check_integrality_support
 from potpourri.models_multi_period.init_pyo_from_pp_res_multi_period import (
     init_pyo_from_pp_res_multi_period,
 )
