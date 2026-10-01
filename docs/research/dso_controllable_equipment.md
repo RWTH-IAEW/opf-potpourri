@@ -118,9 +118,10 @@ and are used by two example scripts. The audit found:
 | multi-period | per-step ratio bounds, optional ratio rate limit | no movement/count constraints |
 | tests | none | none |
 
-They are **kept unchanged and deprecated** (a `DeprecationWarning` points to
-the new API) so existing callers keep getting exactly what they got; the new
-`enable_oltc` is the supported path.
+They were first deprecated and then **removed before the 0.8.0 release**
+(no released version ever carried the deprecation); `enable_oltc` is the
+only path. The migration is one line (`mode="continuous"` /
+`mode="discrete"`) plus typing SimBench transformers as `"Ratio"`.
 
 ### 2.4 Shunts today
 
@@ -196,7 +197,7 @@ Items 1–6 are addressed here; 7 is designed and deferred (Section 9).
 * `opf.diagnose()`'s replay copies optimised positions and steps onto the
   check network, so a discrete OLTC solution replays exactly; the
   diagnostics metadata names every new component in pandapower terms.
-* The legacy tap methods are deprecated, not removed (Section 2.3).
+* The legacy tap methods are removed (Section 2.3).
 
 ---
 

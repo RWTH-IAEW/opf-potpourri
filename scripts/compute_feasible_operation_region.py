@@ -915,10 +915,13 @@ if __name__ == "__main__":
     net_for.sgen["controllable"] = True
     net_for.sgen["p_inst_mw"] = net_for.sgen["p_mw"]
     net_for.load["controllable"] = True
+    # SimBench leaves tap_changer_type None, which pandapower 3.x reads as
+    # "no tap changer"; the OPF only controls a tap pandapower would apply.
+    net_for.trafo["tap_changer_type"] = "Ratio"
 
     acopf = ACOPF(net_for)
     acopf.add_OPF()
-    acopf.add_tap_changer_linear()
+    acopf.enable_oltc(mode="continuous")
 
     p, q, u, nets = for_setpoint_based_with_directions(
         acopf, stepsize=STEPSIZE, solver=SOLVER

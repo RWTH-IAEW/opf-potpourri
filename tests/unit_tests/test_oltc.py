@@ -629,15 +629,17 @@ def test_tap_limits_hold_when_the_optimum_wants_more():
     assert pyo.value(opf.model.Tap[0]) >= opf.model.Tap[0].lb - 1e-6
 
 
-def test_result_columns_and_legacy_methods():
+def test_lv_side_control_frees_the_lv_ratio_only():
     opf = _controlled(feeder("lv", 2), mode="continuous")
     assert hasattr(opf.model, "TRANSF_OLTC_LV")
     assert not opf.model.Tap_lv[0].fixed and opf.model.Tap[0].fixed
-    legacy = ACOPF(feeder())
-    legacy.add_OPF()
-    with pytest.warns(DeprecationWarning):
-        legacy.add_tap_changer_linear()
-    assert hasattr(legacy.model, "Tap_linear_constr")
+
+
+def test_legacy_tap_methods_are_gone():
+    """`add_tap_changer_linear/discrete` were removed in 0.8.0."""
+    opf = ACOPF(feeder())
+    assert not hasattr(opf, "add_tap_changer_linear")
+    assert not hasattr(opf, "add_tap_changer_discrete")
 
 
 def test_apply_tap_positions_warns_when_pandapower_would_ignore_them():

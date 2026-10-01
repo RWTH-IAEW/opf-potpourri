@@ -85,8 +85,6 @@ classDiagram
         +solve_oltc_round_and_fix()
         +enable_shunt_control()  penalize_shunt_switching()
         +shunt_schedule()  apply_shunt_steps()
-        +add_tap_changer_linear()  (deprecated)
-        +add_tap_changer_discrete()  (deprecated)
     }
 
     class ACOPF {
@@ -247,8 +245,6 @@ classDiagram
         +penalize_tap_movement()  tap_schedule()  tap_operations()
         +solve_oltc_round_and_fix()
         +enable_shunt_control()  shunt_schedule()
-        +add_tap_changer_linear()  (deprecated)
-        +add_tap_changer_discrete()  (deprecated)
     }
 
     class ACOPF_multi_period {

@@ -99,11 +99,6 @@ def replay_power_flow(ctx: DiagnosticContext) -> DiagnosticReport:
         not ctx.has_reactive or "LPAC" in type(ctx.model_obj).__name__
     )
     caveats = []
-    if ctx.has("Tap") and _tap_is_free(ctx) and not ctx.has("TRANSF_OLTC"):
-        caveats.append(
-            "the OPF optimised a continuous transformer tap, which "
-            "pandapower rounds to a discrete position"
-        )
 
     clone = copy.deepcopy(net)
     _apply_dispatch(clone, net)
@@ -325,14 +320,3 @@ def _largest_difference(left, right):
     if delta.empty:
         return 0.0, None
     return float(delta.max()), int(delta.idxmax())
-
-
-def _tap_is_free(ctx: DiagnosticContext) -> bool:
-    """Whether the model left any transformer tap as a free variable."""
-    tap = getattr(ctx.model, "Tap", None)
-    if tap is None:
-        return False
-    try:
-        return any(not var.fixed for var in tap.values())
-    except (AttributeError, TypeError):
-        return False

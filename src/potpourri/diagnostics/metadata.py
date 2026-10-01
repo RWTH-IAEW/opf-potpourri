@@ -265,16 +265,6 @@ CONSTRAINTS: dict[str, ConstraintMeta] = {
     "phase_diff2": ConstraintMeta(
         DiagnosticCategory.NETWORK, "line", "phase-angle difference limit"
     ),
-    # transformer taps
-    "Tap_linear_constr": ConstraintMeta(
-        DiagnosticCategory.BOUNDS, "trafo", "continuous tap-ratio limits"
-    ),
-    "Tap_pos_constr": ConstraintMeta(
-        DiagnosticCategory.BOUNDS, "trafo", "tap-position limits"
-    ),
-    "Tap_discrete_constr": ConstraintMeta(
-        DiagnosticCategory.BOUNDS, "trafo", "discrete tap positions"
-    ),
     # controllable tap changers (enable_oltc)
     "trafo_tap_factor_def": ConstraintMeta(
         DiagnosticCategory.NETWORK, "trafo", "tap factor of the tap position"

@@ -220,7 +220,7 @@ $$
 
 ### 3.3  Transformer tap constraints
 
-Controllable tap changers are described in [Section 8](#8-controllable-dso-network-equipment) (`enable_oltc`). The older methods `add_tap_changer_linear()` and `add_tap_changer_discrete()` are **deprecated** but unchanged: the first bounds the HV-side ratio of *every* transformer by the ratios at `tap_min` and `tap_max`, the second adds an integer `Tap_pos` with `Tap = 1 + (Tap_pos − tap_neutral) s` for an HV-side and the reciprocal for an LV-side tap. The latter ignores the mismatch between rated and bus voltages and pandapower's referral of an LV-side tapped impedance, which is why Section 8 replaces it.
+Controllable tap changers are described in [Section 8](#8-controllable-dso-network-equipment) (`enable_oltc`). The older methods `add_tap_changer_linear()` and `add_tap_changer_discrete()` were removed in 0.8.0: the first bounded the HV-side ratio of *every* transformer by the ratios at `tap_min` and `tap_max`, the second added an integer `Tap_pos` with `Tap = 1 + (Tap_pos − tap_neutral) s` for an HV-side and the reciprocal for an LV-side tap, ignoring the mismatch between rated and bus voltages and pandapower's referral of an LV-side tapped impedance. `enable_oltc(mode="continuous")` and `enable_oltc(mode="discrete")` are their replacements.
 
 ---
 

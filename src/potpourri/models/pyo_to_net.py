@@ -462,12 +462,6 @@ def _trafo_results_to_net(net, model):
     net.res_trafo.va_hv_degree = net.res_bus.va_degree[net.trafo.hv_bus].values
     net.res_trafo.va_lv_degree = net.res_bus.va_degree[net.trafo.lv_bus].values
 
-    if hasattr(model, "Tap_pos"):
-        net.res_trafo["tap"] = model.Tap.get_values()
-        net.res_trafo["tap_pos"] = model.Tap_pos.get_values()
-    elif hasattr(model, "Tap_linear_constr"):
-        net.res_trafo["tap"] = model.Tap.get_values()
-
     # Controllable tap changers (enable_oltc): the solved position and tap
     # factor for the controlled units, the network's own for the rest.
     if hasattr(model, "TRANSF_OLTC"):

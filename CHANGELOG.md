@@ -71,13 +71,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (editable) into the conda environment, and a new `.dockerignore` keeps
   the local virtualenv, git history and result archives out of the image.
 
-### Deprecated
+### Removed
 
-- `add_tap_changer_linear()` and `add_tap_changer_discrete()` (single- and
-  multi-period) emit a `DeprecationWarning` and are otherwise unchanged. They
-  free every transformer whether or not pandapower would apply its tap, and
-  the discrete variant builds the ratio without the rated-to-bus voltage
-  mismatch and without the LV-side impedance referral. Use `enable_oltc`.
+- **BREAKING:** `add_tap_changer_linear()` and `add_tap_changer_discrete()`
+  (single- and multi-period), together with the Pyomo components they
+  built (`Tap_min`, `Tap_max`, `Tap_linear_constr`, `Tap_pos`,
+  `Tap_pos_constr`, `Tap_discrete_constr`, `tap_rate_up/down`) and the
+  `res_trafo["tap"]` result column. They freed every transformer whether or
+  not pandapower would apply its tap, and the discrete variant built the
+  ratio without the rated-to-bus voltage mismatch and without the LV-side
+  impedance referral. Migration: `enable_oltc(mode="continuous")` replaces
+  `add_tap_changer_linear()`, `enable_oltc(mode="discrete")` replaces
+  `add_tap_changer_discrete()`, `max_tap_change_per_step` (a ratio
+  increment) becomes `max_change_per_step` (tap positions), and the results
+  are in `res_trafo["tap_pos"]` / `["tap_factor"]`. SimBench transformers
+  need `net.trafo["tap_changer_type"] = "Ratio"` first.
 
 ### Fixed
 

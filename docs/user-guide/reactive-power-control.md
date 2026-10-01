@@ -668,8 +668,8 @@ mpopf.tap_schedule()
 
 The full description, including switched capacitor banks, is in
 [Controllable Network Equipment](controllable-equipment.md). The older
-`add_tap_changer_linear()` / `add_tap_changer_discrete()` remain available
-but are deprecated.
+`add_tap_changer_linear()` / `add_tap_changer_discrete()` were removed in
+0.8.0 in favour of `enable_oltc`.
 
 ---
 

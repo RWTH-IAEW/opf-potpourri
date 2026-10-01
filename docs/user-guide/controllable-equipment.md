@@ -216,6 +216,10 @@ LV rural1 network and its regulated distribution transformer.
 | network reconfiguration (`net.switch`) | not an OPF variable; design note only |
 
 The legacy `add_tap_changer_linear()` / `add_tap_changer_discrete()` methods
-still work unchanged but emit a `DeprecationWarning`: they free every
-transformer regardless of its data and build the LV-side ratio differently
-from pandapower.
+were removed in 0.8.0: they freed every transformer regardless of its data
+and built the LV-side ratio differently from pandapower. Migration:
+`add_tap_changer_linear()` becomes `enable_oltc(mode="continuous")`,
+`add_tap_changer_discrete()` becomes `enable_oltc(mode="discrete")`, and
+the result columns `res_trafo["tap"]` / `["tap_pos"]` become
+`res_trafo["tap_factor"]` / `["tap_pos"]`. Transformers whose
+`tap_changer_type` is None must be typed `"Ratio"` first.

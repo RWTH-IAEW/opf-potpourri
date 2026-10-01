@@ -121,8 +121,9 @@ opf.solve(solver="gurobi_direct_minlp", time_limit=120)   # global MINLP
 
 See [Controllable Network Equipment](controllable-equipment.md) for
 eligibility, movement costs, switched shunts and the multi-period schedule.
-The older `add_tap_changer_linear()` / `add_tap_changer_discrete()` still
-work but are deprecated.
+The older `add_tap_changer_linear()` / `add_tap_changer_discrete()` were
+removed in 0.8.0; `enable_oltc(mode="continuous")` and
+`enable_oltc(mode="discrete")` replace them.
 
 ## Hosting capacity analysis
 

@@ -21,7 +21,7 @@ Scenario: 1-LV-rural1--0-sw, light-load / high-PV.
   forcing genuine curtailment decisions.  Voltage bounds are tightened to
   [0.95, 1.06] (tighter than the default 0.9–1.1).
   PV sgens are controllable: P ∈ [0, p_mw], Q ∈ [−cos(φ=0.95)·S, +…].
-  Transformer tap is optimised continuously via add_tap_changer_linear().
+  Transformer tap is optimised continuously via enable_oltc(mode="continuous").
 
 The differences in the result table illustrate a key practical insight:
 which objective you choose determines how the OPF allocates the "PV
@@ -94,10 +94,14 @@ def _build_scenario():
 
 
 def _build_acopf(net):
-    """Construct ACOPF with OPF constraints and linear tap changer."""
-    ac = ACOPF(copy.deepcopy(net))
+    """Construct ACOPF with OPF constraints and a continuous tap changer."""
+    net = copy.deepcopy(net)
+    # SimBench leaves tap_changer_type None, which pandapower 3.x reads as
+    # "no tap changer"; the OPF only controls a tap pandapower would apply.
+    net.trafo["tap_changer_type"] = "Ratio"
+    ac = ACOPF(net)
     ac.add_OPF()
-    ac.add_tap_changer_linear()
+    ac.enable_oltc(mode="continuous")
     return ac
 
 
