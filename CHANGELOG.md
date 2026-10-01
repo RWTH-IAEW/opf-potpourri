@@ -5,6 +5,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.1] — 2026-10-01
+
+Makes the multi-period AC OPF converge on the SimBench MV networks: the
+per-step warm start left pandapower's auxiliary buses (the open ends of open
+line switches) at the flat start, 150° away from their neighbours, and IPOPT
+reported a feasible model as locally infeasible. The multi-period models now
+also start from the base power flow instead of a flat profile, and two
+documentation references to a non-existent `pyo_to_net()` function are
+corrected.
+
+0.8.0 was not published: it was tagged in the development repository only.
+0.8.1 is the first release since 0.7.0 on PyPI and Zenodo and carries both
+sets of changes.
+
 ### Fixed
 
 - `ACOPF_multi_period` converges on the SimBench MV networks. The
@@ -17,6 +31,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   reads pandapower's ppc bus table, which covers every bus the model has,
   as the single-period model always did.
 
+- **The README and `docs/architecture.md` named a `pyo_to_net()` function
+  that does not exist.** `pyo_to_net` is the module; the function `solve()`
+  calls to write results into `net.res_*` is `pyo_sol_to_net_res()`.
+
 ### Changed
 
 - The multi-period models initialise `v` and `delta` from the base power
@@ -25,6 +43,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   its results do not change; `solve(warm_start=False)` on a freshly built
   model now starts from a consistent operating point and converges on the
   SimBench MV networks, where the flat start did not.
+
+## [0.8.0] — 2026-10-01
+
+Makes the equipment a distribution system operator actually operates part of
+the OPF. On-load tap changers (`enable_oltc`) and switched capacitor banks or
+reactors (`enable_shunt_control`) become decision variables of the AC
+formulations — continuous for a relaxation, integer for the physical device —
+with movement limits, operation limits and switching costs over a horizon,
+results written back in pandapower terms, and every tap position validated
+against `pp.runpp` on both tap sides. Nothing changes unless the control is
+enabled; the default model is numerically identical to 0.7.0.
+
+Also in this release: `solve()` refuses to hand integer variables to a
+continuous-only solver instead of silently relaxing them; the two legacy
+`add_tap_changer_*` methods are removed (they mis-modelled LV-side taps and
+rated-voltage mismatches); the NEOS integration tests skip, with the reason,
+when the public server is unavailable; and the Docker image is rebuilt with a
+working SHOT solver.
 
 ### Added
 
@@ -135,9 +171,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   they live under `models/` and `models_multi_period/`, and the
   single-period class list named `ACOPF_base`, which is the module; the
   class is `ACOPF`.
-- **The README and `docs/architecture.md` named a `pyo_to_net()` function
-  that does not exist.** `pyo_to_net` is the module; the function `solve()`
-  calls to write results into `net.res_*` is `pyo_sol_to_net_res()`.
 
 ## [0.7.0] — 2026-09-22
 

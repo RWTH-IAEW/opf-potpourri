@@ -154,6 +154,11 @@ Basemodel     creates ConcreteModel, maps pandapower → Pyomo sets/params, solv
 ACOPF    = AC + OPF   (multiple inheritance)
 DCOPF    = DC + OPF
 HC_ACOPF = ACOPF + binary variables for hosting-capacity analysis
+
+OPF also carries the opt-in network controls: enable_oltc() makes
+transformer tap positions decision variables (continuous or integer, with
+movement limits over a horizon) and enable_shunt_control() does the same
+for switched capacitor banks and reactors. Nothing changes unless enabled.
 ```
 
 ### Multi-period models (`src/potpourri/models_multi_period/`)
