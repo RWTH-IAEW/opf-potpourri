@@ -327,10 +327,19 @@ class Basemodel_multi_period:
         )
 
         # --- variables ---
-        # Done stay multiperiod
+        # Initial bus state from the base power flow run in __init__, repeated
+        # over the horizon, as the single-period Basemodel does.  A flat start
+        # (every angle at zero) is 150 deg off behind a Dyn5 HV/MV transformer
+        # and IPOPT does not always recover from that on the SimBench MV
+        # networks when the per-step warm start is switched off; the base
+        # power flow is a consistent operating point at no extra cost.
+        # Isolated buses carry NaN in the ppc and fall back to the flat value.
         self.delta_data_dict, self.delta_tuple = self.make_to_dict(
-            self.model.B, self.model.T, 0.0, False
-        )  # False or true?
+            self.model.B,
+            self.model.T,
+            self.bus_data.v_a_rad.fillna(0.0),
+            False,
+        )
         self.pLfrom_tuple = self.make_to_tuple(self.model.L, self.model.T)
         self.pLto_tuple = self.make_to_tuple(self.model.L, self.model.T)
         self.pThv_tuple = self.make_to_tuple(self.model.TRANSF, self.model.T)
@@ -632,10 +641,11 @@ class Basemodel_multi_period:
     def warm_start_from_pf(self, curtailment=1.0):
         """Seed every state variable from a power flow at each time step.
 
-        A cold start puts ``v`` at 1.0 and leaves every angle and branch flow
-        at zero, so Kirchhoff's laws are violated at every bus by the full
-        nodal injection. IPOPT does not always recover from that on a nonconvex
-        AC OPF: on a 12-step midday window of ``1-LV-rural1--0-sw`` it reported
+        Without the seed the bus state starts at the base power flow of the
+        network as constructed and every branch flow at zero, so Kirchhoff's
+        laws are violated at every bus by the full nodal injection. IPOPT does
+        not always recover from that on a nonconvex AC OPF: starting flat, on
+        a 12-step midday window of ``1-LV-rural1--0-sw`` it reported
         a locally infeasible point even though curtailing the PV to zero is
         both available and feasible. Seeding a *consistent* operating point
         fixes it. The seed need not be near the optimum — an uncurtailed,
@@ -644,6 +654,14 @@ class Basemodel_multi_period:
         converges from the cold start (the static-generation lower bound is a
         constraint rather than a variable domain, which changes IPOPT's path);
         the seed remains the safer start and stays the default.
+
+        The seed covers every ppc bus of the model, including the auxiliary
+        buses pandapower adds for open line switches, which have no
+        ``net.bus`` row. Reading them through ``net.res_bus`` left them at
+        the flat start, and on the SimBench MV networks (six such buses,
+        −148.7° behind the Dyn5 transformers) that alone sent IPOPT to a
+        locally infeasible point; see
+        [`init_pyo_from_pp_res_multi_period`][potpourri.models_multi_period.init_pyo_from_pp_res_multi_period].
 
         Args:
             curtailment: Factor applied to the static-generation profile in the

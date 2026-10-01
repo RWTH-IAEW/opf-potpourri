@@ -17,16 +17,25 @@ step before handing the model to the solver, controlled by `warm_start` (default
 `True`).
 
 This is a correctness matter, not a speed optimisation. A cold-started
-multi-period AC OPF begins with `v = 1`, every angle at zero and no branch-flow
-values at all, so Kirchhoff's laws are violated at every bus by the full nodal
-injection — and IPOPT does not always recover. On a 12-step midday window of
-`1-LV-rural1--0-sw` it reported a locally infeasible point even though curtailing
-the PV to zero is available and feasible. With the seed it converges. (It is also
-markedly faster: the unit suite went from ~8 to ~3 minutes.)
+multi-period AC OPF begins with the bus voltages of the base power flow repeated
+over the horizon and no branch-flow values at all, so Kirchhoff's laws are
+violated at every bus by the full nodal injection — and IPOPT does not always
+recover. Starting flat (`v = 1`, every angle at zero, the cold start in 0.8.0
+and earlier) on a 12-step midday window of `1-LV-rural1--0-sw` it reported a
+locally infeasible point even though curtailing the PV to zero is available and
+feasible, and on every SimBench MV network a flat start fails outright, because
+the angles behind the 110/20 kV Dyn5 transformers sit at about −150°. With the
+seed it converges. (It is also markedly faster: the unit suite went from ~8 to
+~3 minutes.)
 
 The seed does not need to be near the optimum — an uncurtailed and a fully
 curtailed seed converge to the same solution — it only has to satisfy the power
-flow.
+flow. It has to satisfy it at *every* bus of the model, though: the seed reads
+pandapower's internal ppc bus table rather than `net.res_bus`, because the ppc
+can hold auxiliary buses that `net.bus` does not (pandapower reconnects the open
+end of a line with an open switch to one so the line charging stays in the
+power flow). Seeding only the `net.res_bus` buses left those at the flat start
+and made every SimBench MV network end at a locally infeasible point.
 
 ```python
 mpopf.solve(solver="ipopt")                    # seeded (default)

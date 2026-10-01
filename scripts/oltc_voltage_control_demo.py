@@ -35,12 +35,13 @@ SimBench delivers the tap data but leaves ``tap_changer_type`` None, which
 pandapower 3.x reads as "no tap changer"; the script sets it to ``"Ratio"``
 first -- the one piece of data preparation the feature needs.
 
-Why an LV network: the multi-period AC model does not converge on the
-SimBench MV networks (``1-MV-rural--0-sw`` and its ``no_sw`` variant report
-a locally infeasible point with or without any tap control, also with the
-code before this feature), a pre-existing limitation of the multi-period
-layer recorded in ``docs/research/dso_controllable_equipment.md``. The
-single-period OLTC tests cover 110/20 kV units with ±9 positions.
+Why an LV network: it is the smaller example, and the regulated 20/0.4 kV
+distribution transformer with ±2 positions shows the effect of each tap
+step clearly. (The MV rural network was the first choice; when this script
+was written the multi-period AC model did not converge on the SimBench MV
+networks, which came down to an incomplete warm start that has since been
+fixed -- see ``docs/research/dso_controllable_equipment.md``, Section 11.)
+The single-period OLTC tests cover 110/20 kV units with ±9 positions.
 """
 
 import copy

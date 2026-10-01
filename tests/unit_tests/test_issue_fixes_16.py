@@ -137,9 +137,13 @@ def test_issue16_warm_start_makes_the_state_consistent(lv_net):
     """The point of the seed: the state stops being inconsistent.
 
     A cold model carries **no** value for the branch flows at all — they are
-    uninitialized, so the NL writer hands IPOPT a default of zero while ``v``
-    is 1.0. The nodal balance is then violated at every bus by the full
-    injection, which is the starting point IPOPT could not recover from.
+    uninitialized, so the NL writer hands IPOPT a default of zero while the
+    bus state holds the base power flow of the network as constructed. The
+    nodal balance is then violated at every bus by the full injection, which
+    is the starting point IPOPT could not recover from. (Through 0.8.0 the bus
+    state started flat, ``v = 1`` and ``delta = 0``, which is worse still: on
+    the SimBench MV networks the angles behind the Dyn5 transformers sit at
+    about −150°, and from the flat start IPOPT failed outright.)
     """
     opf = _reported_case(lv_net)
     m = opf.model
@@ -148,19 +152,22 @@ def test_issue16_warm_start_makes_the_state_consistent(lv_net):
     # `.value` rather than pyo.value(): the latter raises on an uninitialized
     # variable, which is precisely the state being asserted here.
     #
-    # The cold state is v = 1, delta = 0 (both explicitly initialised) and no
-    # branch-flow values at all. A flat voltage profile carries no flow, so
-    # zero flows would be consistent with it — but the injections are not zero,
-    # and that is where the balance breaks.
+    # The cold state is the base power flow for v and delta, repeated over
+    # the horizon, and no branch-flow values at all. That voltage profile
+    # carries the base-case flows, not zero — and the injections at the
+    # step are not the base case either — so the balance breaks.
     assert all(m.pLfrom[line, t].value is None for line in m.L), (
         "expected a cold model to have no branch-flow values at all"
     )
-    assert all(m.delta[b, t].value == 0.0 for b in m.B), (
-        "expected a cold model to start from a flat angle profile"
-    )
-    # Every bus but the slack, whose magnitude carries its base-case value.
-    assert all(m.v[b, t].value == 1.0 for b in m.B if b not in set(m.b0)), (
-        "expected a cold model to start from a flat voltage profile"
+    assert all(
+        m.delta[b, t].value == pytest.approx(opf.bus_data.v_a_rad[b])
+        for b in m.B
+    ), "expected a cold model to start from the base power flow angles"
+    assert all(
+        m.v[b, t].value == pytest.approx(opf.bus_data.v_m[b]) for b in m.B
+    ), "expected a cold model to start from the base power flow magnitudes"
+    assert any(m.delta[b, t].value != 0.0 for b in m.B), (
+        "the base power flow is not a flat angle profile"
     )
 
     opf.warm_start_from_pf()

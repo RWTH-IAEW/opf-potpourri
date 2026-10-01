@@ -5,6 +5,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `ACOPF_multi_period` converges on the SimBench MV networks. The
+  per-step warm start (`warm_start_from_pf`) seeded bus voltages through
+  `net.res_bus`, which has no row for the auxiliary ppc buses pandapower
+  adds at the open end of a line with an open switch. Those buses stayed at
+  the flat start, about 150° away from their neighbours behind the HV/MV
+  Dyn5 transformers, and IPOPT reported a locally infeasible point on a
+  feasible model (`1-MV-rural--0-sw`, `1-MV-rural--0-no_sw`). The seed now
+  reads pandapower's ppc bus table, which covers every bus the model has,
+  as the single-period model always did.
+
+### Changed
+
+- The multi-period models initialise `v` and `delta` from the base power
+  flow run at construction instead of a flat start, as the single-period
+  models do. The default solve overwrites both with the per-step seed, so
+  its results do not change; `solve(warm_start=False)` on a freshly built
+  model now starts from a consistent operating point and converges on the
+  SimBench MV networks, where the flat start did not.
+
 ### Added
 
 - **Opt-in on-load tap changer control** (`enable_oltc` on `ACOPF`,

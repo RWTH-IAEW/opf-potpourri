@@ -7,23 +7,90 @@
 Initialises the Pyomo variables from a pandapower power flow
 solved at each time step.
 
-A cold-started multi-period AC OPF begins with ``v = 1``, every angle at zero
-and every branch flow at zero, which violates Kirchhoff's laws at every bus by
-the full nodal injection. On a nonconvex problem IPOPT can fail to recover from
-that: it reports a locally infeasible point on models that are demonstrably
-feasible. Seeding the whole state from a power flow — voltages, angles, branch
-flows and generation together, so the starting point is *consistent* — is what
-avoids it. The seeded operating point does not have to be near the optimum; it
-has to satisfy the power flow.
+A cold-started multi-period AC OPF begins with the bus state of the base
+power flow and every branch flow at zero, which violates Kirchhoff's laws at
+every bus by the full nodal injection (and a flat start, ``v = 1`` with every
+angle at zero, is worse still). On a nonconvex problem IPOPT can fail to
+recover from that: it reports a locally infeasible point on models that are
+demonstrably feasible. Seeding the whole state from a power flow — voltages,
+angles, branch flows and generation together, so the starting point is
+*consistent* — is what avoids it. The seeded operating point does not have to
+be near the optimum; it has to satisfy the power flow.
+
+The bus state is read from pandapower's internal ppc bus table rather than
+from ``net.res_bus``, because the model is indexed over ppc buses and the ppc
+can hold buses that ``net.bus`` does not: pandapower reconnects the open end
+of a line with an open switch to an auxiliary bus so the line charging stays
+in the power flow. Those buses are in service and solved, but ``res_bus`` has
+no row for them. Seeding through ``res_bus`` left them at the flat start,
+about 150° away from their neighbours behind an HV/MV Dyn5 transformer, which
+put a residual of the order of $10^3$ p.u. into the branch-flow equations of
+short lines and sent IPOPT to a locally infeasible point on every SimBench MV
+network.
 """
 
 import copy
 from math import pi
 
+import numpy as np
 import pandapower as pp
 from loguru import logger
+from pandapower.pypower.idx_bus import VA, VM
 
 DEG_TO_RAD = pi / 180.0
+
+
+def _seed_bus_state(model, scratch, bus_lookup, t, set_value):
+    """Seed ``v`` and ``delta`` at step ``t`` for every ppc bus of the model.
+
+    Reads the solved ``VM`` / ``VA`` columns of ``scratch._ppc["bus"]``, which
+    pandapower fills for every in-service bus including the auxiliary ones
+    that have no ``net.bus`` row (see the module docstring). Isolated buses
+    carry NaN there and keep their default initial value.
+
+    The ppc numbering of ``scratch`` is checked against the model's
+    ``bus_lookup`` first. The two agree whenever ``scratch`` is a copy of the
+    model's own network, which is the only way this module is called; should
+    they ever differ, the seed falls back to ``net.res_bus`` through
+    ``bus_lookup`` and leaves the auxiliary buses alone.
+
+    Args:
+        model: Multi-period Pyomo ConcreteModel.
+        scratch: Network on which the power flow for step ``t`` just ran.
+        bus_lookup: The model's pandapower-bus to ppc-bus map.
+        t: Time step whose variables are seeded.
+        set_value: Callback ``(component, index, value)`` that assigns an
+            initial value when the variable exists.
+    """
+    ppc_bus = scratch._ppc["bus"]
+    pd_buses = scratch.bus.index.values
+    scratch_lookup = scratch._pd2ppc_lookups["bus"]
+    same_numbering = len(scratch_lookup) > pd_buses.max() and np.array_equal(
+        scratch_lookup[pd_buses], bus_lookup[pd_buses]
+    )
+    if same_numbering:
+        for ppc_index in model.B:
+            if ppc_index >= ppc_bus.shape[0]:
+                continue
+            v_m, v_a = ppc_bus[ppc_index, VM], ppc_bus[ppc_index, VA]
+            if np.isfinite(v_m) and np.isfinite(v_a):
+                set_value("v", (ppc_index, t), v_m)
+                set_value("delta", (ppc_index, t), v_a * DEG_TO_RAD)
+        return
+
+    logger.warning(
+        "Warm start at t={}: the power flow's ppc bus numbering differs from "
+        "the model's; seeding only the buses net.res_bus can reach.",
+        t,
+    )
+    for bus in pd_buses:
+        ppc_index = int(bus_lookup[bus])
+        set_value("v", (ppc_index, t), scratch.res_bus.vm_pu[bus])
+        set_value(
+            "delta",
+            (ppc_index, t),
+            scratch.res_bus.va_degree[bus] * DEG_TO_RAD,
+        )
 
 
 def init_pyo_from_pp_res_multi_period(net, model, bus_lookup, curtailment=1.0):
@@ -87,14 +154,7 @@ def init_pyo_from_pp_res_multi_period(net, model, bus_lookup, curtailment=1.0):
             )
             continue
 
-        for bus in scratch.bus.index:
-            ppc_bus = int(bus_lookup[bus])
-            _set("v", (ppc_bus, t), scratch.res_bus.vm_pu[bus])
-            _set(
-                "delta",
-                (ppc_bus, t),
-                scratch.res_bus.va_degree[bus] * DEG_TO_RAD,
-            )
+        _seed_bus_state(model, scratch, bus_lookup, t, _set)
 
         for line in scratch.line.index:
             _set("pLfrom", (line, t), scratch.res_line.p_from_mw[line] / base)

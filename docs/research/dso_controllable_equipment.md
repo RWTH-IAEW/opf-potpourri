@@ -870,8 +870,10 @@ Gurobi 13.0.2 on 2026-10-01.
    vs. discrete (rounded) taps against a curtailment-plus-voltage objective,
    and pandapower's `DiscreteTapControl` for comparison. Results in
    Section 10.1. The MV rural network was the first choice (two 25 MVA
-   110/20 kV units, ±9 × 1.5 %) but the multi-period AC model does not
-   converge on it — see Section 11; the single-period tests cover
+   110/20 kV units, ±9 × 1.5 %) but at the time the multi-period AC model
+   did not converge on it; the cause (an incomplete warm start, see
+   Section 11) has since been fixed and the demonstration stays on the LV
+   network, which is the smaller example. The single-period tests cover
    110/20 kV units with ±9 positions.
 
 ### 10.1 Demonstration results
@@ -940,16 +942,36 @@ and `mkdocs build --strict` pass.
   global solver wired in; MindtPy is local; the rounding heuristic is a
   heuristic.
 * No network reconfiguration, no phase-shifter control, no OLTC in DC.
-* **Pre-existing, found while preparing the demonstration:** the
-  multi-period AC model reports a locally infeasible point on the SimBench
-  MV networks `1-MV-rural--0-sw` and `1-MV-rural--0-no_sw` (two steps,
-  ±5 % band, PV curtailable, no tap control, pre-change source tree) even
-  where `pp.runpp` at the same steps gives 1.02–1.06 p.u.; the diagnostics
-  show the solver stopping with violated branch-flow equations. The
-  single-period `ACOPF` on the same networks solves. The multi-period base
-  model does not run `preprocess_grid` and was never exercised on an MV
-  SimBench network by the test suite; this is a follow-up item independent
-  of the controls.
+* **Pre-existing, found while preparing the demonstration, fixed after
+  0.8.0:** the multi-period AC model reported a locally infeasible point on
+  the SimBench MV networks `1-MV-rural--0-sw` and `1-MV-rural--0-no_sw`
+  (two steps, ±5 % band, PV curtailable, no tap control) even where
+  `pp.runpp` at the same steps gives 1.02–1.06 p.u., while the
+  single-period `ACOPF` on the same networks solved. The model was
+  feasible: the single-period optimum transplanted into the multi-period
+  model satisfies every constraint and IPOPT converges from it in 23
+  iterations. The cause was the warm start. pandapower reconnects the open
+  end of a line with an open switch to an auxiliary ppc bus so the line
+  charging stays in the power flow; the MV rural network has six such
+  buses, in service and solved, but without a `net.bus` row. The
+  multi-period seed read bus voltages through `net.res_bus`, so those six
+  buses stayed at the flat start (1.0 p.u., 0°) while their neighbours sat
+  at −148.7° behind the 110/20 kV Dyn5 transformers — a residual of the
+  order of 10³ p.u. in the branch-flow equations of short cables, from
+  which IPOPT walked into local infeasibility. The single-period model
+  never had the problem because it initialises from the ppc bus table.
+  The seed now reads the ppc bus table too, so every bus the model has is
+  seeded (`init_pyo_from_pp_res_multi_period`), the multi-period model
+  initialises `v`/`delta` from the base power flow instead of a flat start
+  (as the single-period model does), and the multi-period model is
+  exercised on an MV SimBench network by the test suite. Verified on all
+  five SimBench MV networks (`1-MV-rural--0-sw`, `1-MV-rural--0-no_sw`,
+  `1-MV-semiurb--0-sw`, `1-MV-urban--0-sw`, `1-MV-comm--0-sw`) at two
+  4-step windows (day 206 noon, day 10 evening), ±5 % band, PV
+  curtailable, voltage-deviation objective: the seeded solve is optimal in
+  all ten cases (37–861 IPOPT iterations, 7–65 s), and the cold start from
+  the base power flow is optimal in all ten as well (36–1016 iterations),
+  where the flat cold start of 0.8.0 solved one.
 * The multi-period base model indexes its transformer data positionally
   (`trafo_data` has a RangeIndex while `net.trafo` may not), as the
   multi-period result mapper always has; the controls inherit that

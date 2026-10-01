@@ -198,12 +198,17 @@ class AC_multi_period(Basemodel_multi_period):
         self.model.qTlv = pyo.Var(
             self.model.TRANSF, self.model.T, domain=pyo.Reals
         )  # reactive power injected at b' onto transformer
+        # Initial magnitudes from the base power flow (see the ``delta``
+        # initialisation in Basemodel_multi_period for why), NaN -> 1.0.
+        v_init, _ = self.make_to_dict(
+            self.model.B, self.model.T, self.bus_data.v_m.fillna(1.0), False
+        )
         self.model.v = pyo.Var(
             self.model.B,
             self.model.T,
             domain=pyo.NonNegativeReals,
-            initialize=1.0,
-        )  # voltage magnitude at bus b, rad
+            initialize=v_init,
+        )  # voltage magnitude at bus b (p.u.)
 
         # correct?
         self.model.qG = pyo.Var(self.model.G, self.model.T, domain=pyo.Reals)
