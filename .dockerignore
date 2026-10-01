@@ -1,0 +1,13 @@
+# Keep the Docker build context small: `COPY . /app` in the Dockerfile
+# otherwise ships the local virtualenv, git history and result archives.
+.git
+.venv
+results
+literature
+site
+dist
+**/__pycache__
+**/*.egg-info
+.pytest_cache
+.ruff_cache
+.mypy_cache

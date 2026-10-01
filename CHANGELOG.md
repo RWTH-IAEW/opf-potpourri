@@ -5,6 +5,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- The Dockerfile moves from the deprecated `continuumio/miniconda3` base
+  image to its successor `anaconda/miniconda` (26.7.1, Debian 13) and now
+  delivers a working SHOT: the MINLP solver is built from a pinned master
+  commit against IPOPT 3.14.20 (compiled with MUMPS and ASL), Debian's
+  CBC 2.10.12 and its bundled HiGHS, and is reachable from Pyomo as
+  `solve(solver="shot")` (SHOT assumes convexity; the Docker section of
+  Getting Started records what that means for the nonconvex AC OPF). The
+  previous recipe pointed SHOT's CMake at
+  `/opt/cbc` and `/opt/Ipopt`, neither of which existed in the image, left
+  SHOT's `HAS_GAMS` default on (CMake then fails without a GAMS
+  installation), and configured IPOPT without a linear solver. Solver
+  versions are build
+  arguments, the solver layers are built before the sources are copied so
+  that code edits no longer trigger a recompile, the package is installed
+  (editable) into the conda environment, and a new `.dockerignore` keeps
+  the local virtualenv, git history and result archives out of the image.
+
 ### Fixed
 
 - The result mappers (`pyo_to_net`, `pyo_to_net_multi_period`) no longer use

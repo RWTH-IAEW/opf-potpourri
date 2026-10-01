@@ -60,7 +60,8 @@ conda env update -f environment.yaml --prune
 ```
 
 A Dockerfile is provided for a fully containerised setup with IPOPT 3.14.20
-compiled from source, CBC, and SHOT solvers.
+compiled from source (with MUMPS and ASL), CBC, and the SHOT MINLP solver;
+see [Getting Started](docs/getting-started.md) for build and usage notes.
 
 ---
 

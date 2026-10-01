@@ -108,9 +108,11 @@ conda env update -f environment.yaml --prune
 
 #### Option B — Docker (recommended for Windows)
 
-The Dockerfile provides a fully self-contained Linux environment with IPOPT
-3.14.20 compiled from source, CBC, and SHOT. This is the recommended path on
-**Windows** because Windows conda channels do not distribute IPOPT.
+The Dockerfile provides a fully self-contained Linux environment (Debian 13,
+built on the `anaconda/miniconda` image) with the conda environment from
+`environment.yaml` plus IPOPT, CBC and SHOT installed system-wide. This is
+the recommended path on **Windows** because Windows conda channels do not
+distribute IPOPT.
 
 **Prerequisites**
 
@@ -120,12 +122,21 @@ configuration is required.
 
 **1. Build the image**
 
-From the repository root (takes 10–20 minutes on first build; IPOPT is
-compiled from source):
+From the repository root. IPOPT (with MUMPS and ASL) and SHOT are compiled
+from source; the first build takes on the order of 10 minutes with the
+default 8 parallel jobs (SHOT and its bundled HiGHS dominate), and more jobs
+shorten it on a larger machine:
 
 ```bash
 docker build -t potpourri:latest .
+docker build --build-arg BUILD_JOBS=16 -t potpourri:latest .   # faster
 ```
+
+The solver versions are build arguments at the top of the Dockerfile
+(`IPOPT_VERSION`, `SHOT_COMMIT`, ...) and can be overridden the same way.
+The build accepts the Anaconda Terms of Service for the two
+`repo.anaconda.com` channels listed in `environment.yaml`, because conda
+refuses to use those channels non-interactively otherwise.
 
 **2. Run an interactive session**
 
@@ -157,12 +168,38 @@ docker run --rm -v $(pwd):/app potpourri:latest \
 
 **Solvers available inside the container**
 
-| Solver | Type | Source |
-|---|---|---|
-| IPOPT 3.14.20 | NLP | compiled from source |
-| GLPK | LP / MIP | conda-forge (via environment.yaml) |
-| CBC | MIP | `coinor-cbc` apt package |
-| SHOT | MINLP | compiled from source |
+| Solver | Type | Source | `solve(solver=...)` |
+|---|---|---|---|
+| IPOPT 3.14.20 | NLP | conda-forge via `environment.yaml`; a second copy built from source with MUMPS and ASL under `/opt/ipopt` serves SHOT | `"ipopt"` |
+| GLPK 5.0 | LP / MIP | conda-forge via `environment.yaml` | `"glpk"` |
+| CBC 2.10.12 | LP / MIP | Debian `coinor-cbc` package | `"cbc"` |
+| HiGHS | LP / MIP | bundled with SHOT as one of its MIP back-ends | — |
+| SHOT | MINLP | compiled from source (master, pinned commit) with IPOPT, CBC and HiGHS | `"shot"` |
+
+**Using SHOT**
+
+SHOT is a MINLP solver. Pyomo writes the model as an AMPL `.nl` file and
+calls the `shot` executable like any other AMPL solver:
+
+```python
+opf.solve(solver="shot")
+```
+
+SHOT ignores the options Pyomo appends to its command line, so the
+`max_iter` and `time_limit` arguments of `solve()` have no effect and SHOT
+runs with its default settings; `SHOT --docs` inside the container writes
+the full option reference to `options.md`. Each run also leaves a
+`SHOT.log` in the working directory.
+
+SHOT's supporting-hyperplane method assumes a convex problem, and the AC
+power flow is not convex, so treat its answers on AC models with care. In
+the image's smoke test the continuous AC OPF of `simple_four_bus_system`
+terminated without a solution (Pyomo reports `maxIterations`), and the
+discrete-tap AC OPF of SimBench `1-LV-rural1--0-sw` returned tap position
+−2 (objective 6.8e-3) reported as globally optimal, whereas IPOPT with the
+tap fixed to +1 reaches 7.7e-5. For integer variables on AC models prefer
+`gurobi_direct_minlp` or `mindtpy`, or pass `relax_integrality=True` for
+the continuous relaxation; SHOT remains available for convex MINLP.
 
 ---
 
