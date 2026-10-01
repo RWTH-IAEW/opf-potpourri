@@ -14,7 +14,7 @@ conda activate potpourri_env
 pip install -e .
 ```
 
-Solvers (IPOPT, GLPK, CBC, Gurobi) must be installed separately. The Dockerfile shows how to compile IPOPT 3.14.20.
+The conda environment installs IPOPT 3.14.20, GLPK 5.0 and the `gurobipy` bindings. CBC and a Gurobi licence are separate installs. The Dockerfile shows how to compile IPOPT 3.14.20 from source.
 
 ## Development Commands
 
@@ -22,7 +22,7 @@ Solvers (IPOPT, GLPK, CBC, Gurobi) must be installed separately. The Dockerfile 
 ruff check .              # lint
 ruff format .             # format
 pytest                    # run all tests
-pytest -m "not integration"   # skip solver-dependent tests
+pytest -m "not integration"   # skip tests needing a remote solver or network access; local IPOPT/GLPK tests still run
 ```
 
 ## Architecture
@@ -35,7 +35,7 @@ pandapower Network
   → [AC|DC] power flow mixin   # adds power flow equations
   → OPF mixin                  # adds operational constraints + objectives
   → .solve(solver='ipopt')     # calls Pyomo SolverFactory
-  → pyo_to_net()               # writes Pyomo vars back to net.res_* DataFrames
+  → pyo_sol_to_net_res()       # called by solve(); writes Pyomo vars back to net.res_* DataFrames
 ```
 
 ### Class hierarchy (single-period, `src/potpourri/models/`)
@@ -43,7 +43,7 @@ pandapower Network
 - `Basemodel` — creates the `ConcreteModel`, maps pandapower DataFrames to Pyomo sets/parameters, provides `solve()`.
 - `AC` / `DC` — extend Basemodel with power-flow equations (complex vs. linearised).
 - `OPF` — adds generator/load limits, line loading limits, and objective functions.
-- `ACOPF_base` — multiple-inherits `AC + OPF` for a full AC OPF.
+- `ACOPF` (module `ACOPF_base.py`) — multiple-inherits `AC + OPF` for a full AC OPF.
 - `HC_ACOPF` — hosting-capacity variant.
 
 ### Multi-period models (`src/potpourri/models_multi_period/`)
@@ -68,8 +68,8 @@ Device modules (all suffixed `_multi_period`, in `src/potpourri/technologies/`):
 
 - `net_augmentation/prepare_net.py` — adds missing pandapower columns, scales profiles before model construction.
 - `plotting/plot_functions.py` — visualises network state and results.
-- `pyo_to_net[_multi_period].py` — post-processing: reads Pyomo solution and writes to `net.res_*`.
-- `init_pyo_from_pp_res[_multi_period].py` — warm-starts Pyomo variables from a prior pandapower power-flow result.
+- `models/pyo_to_net.py` and `models_multi_period/pyo_to_net_multi_period.py` — post-processing: `pyo_sol_to_net_res()` reads the Pyomo solution and writes to `net.res_*`.
+- `models/init_pyo_from_pp_res.py` and `models_multi_period/init_pyo_from_pp_res_multi_period.py` — warm-start Pyomo variables from a prior pandapower power-flow result.
 
 ## Key conventions
 

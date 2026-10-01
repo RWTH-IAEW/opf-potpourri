@@ -32,6 +32,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   silently dropped, leaving 1.0 p.u. at generator and slack buses of a DC
   model and stale candidate powers in `net.sgen`. pandas stays capped at
   `<3`; a new test runs the mappers with copy-on-write on.
+- **`CLAUDE.md` stated five things the tree contradicts.** The conda
+  environment has installed IPOPT and GLPK (plus the `gurobipy` bindings)
+  since the 3.14.20 pin, yet the file still said every solver must be
+  installed separately. `pytest -m "not integration"` was described as
+  skipping solver-dependent tests; the marker covers tests that need a
+  remote solver or network access, and local IPOPT tests still run. The
+  data-flow diagram and the module list named a `pyo_to_net()` function
+  that does not exist (`solve()` calls `pyo_sol_to_net_res()`), the result
+  mappers and warm-start helpers were listed as package-root files although
+  they live under `models/` and `models_multi_period/`, and the
+  single-period class list named `ACOPF_base`, which is the module; the
+  class is `ACOPF`.
 
 ## [0.7.0] — 2026-09-22
 
