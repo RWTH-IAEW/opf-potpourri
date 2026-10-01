@@ -185,7 +185,7 @@ pandapower net
   → create_model()          Pyomo ConcreteModel + sets/params/vars
   → add_OPF()               unfix controllable vars, add limits/objectives
   → .solve(solver)          SolverFactory → NLP/MIP
-  → pyo_to_net()            write solution back to net.res_*
+  → pyo_sol_to_net_res()    write solution back to net.res_*
 ```
 
 ---

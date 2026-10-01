@@ -135,6 +135,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   they live under `models/` and `models_multi_period/`, and the
   single-period class list named `ACOPF_base`, which is the module; the
   class is `ACOPF`.
+- **The README and `docs/architecture.md` named a `pyo_to_net()` function
+  that does not exist.** `pyo_to_net` is the module; the function `solve()`
+  calls to write results into `net.res_*` is `pyo_sol_to_net_res()`.
 
 ## [0.7.0] — 2026-09-22
 

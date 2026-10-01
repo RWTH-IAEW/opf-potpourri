@@ -473,11 +473,11 @@ net ──► __init__()       builds model.B, model.L, power-flow eqs
         solve(solver)    calls Pyomo SolverFactory; writes self.results
          │
          ▼
-        pyo_to_net()     reads Pyomo solution back into net.res_bus,
-                         net.res_line, net.res_sgen, …
+        pyo_sol_to_net_res() reads Pyomo solution back into net.res_bus,
+                             net.res_line, net.res_sgen, …
 ```
 
-`solve()` calls `pyo_to_net` automatically when `to_net=True` (the default),
+`solve()` calls `pyo_sol_to_net_res()` automatically when `to_net=True` (the default),
 so `net.res_bus.vm_pu` is always populated after a successful solve. On
 multi-period models the same call writes one time step — the last of the
 horizon by default — because `net.res_*` carries no time dimension; see
