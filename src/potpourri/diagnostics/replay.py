@@ -99,7 +99,7 @@ def replay_power_flow(ctx: DiagnosticContext) -> DiagnosticReport:
         not ctx.has_reactive or "LPAC" in type(ctx.model_obj).__name__
     )
     caveats = []
-    if ctx.has("Tap") and _tap_is_free(ctx):
+    if ctx.has("Tap") and _tap_is_free(ctx) and not ctx.has("TRANSF_OLTC"):
         caveats.append(
             "the OPF optimised a continuous transformer tap, which "
             "pandapower rounds to a discrete position"
@@ -107,6 +107,7 @@ def replay_power_flow(ctx: DiagnosticContext) -> DiagnosticReport:
 
     clone = copy.deepcopy(net)
     _apply_dispatch(clone, net)
+    _apply_discrete_controls(clone, net, ctx, caveats)
 
     # Warm-started from the OPF result first, since that is the point we
     # want to confirm; a flat start is the fallback, because a warm start
@@ -256,6 +257,52 @@ def _apply_dispatch(clone, source) -> None:
                 bus = row.get("bus")
                 if bus in res_bus.index:
                     frame.at[index, "vm_pu"] = float(res_bus.at[bus, "vm_pu"])
+
+
+def _apply_discrete_controls(clone, source, ctx, caveats) -> None:
+    """Carry optimised tap positions and shunt steps onto the replay network.
+
+    `enable_oltc` / `enable_shunt_control` report their decisions in
+    `res_trafo["tap_pos"]` and `res_shunt["step"]` without touching the
+    input tables, so the replay has to copy them over itself. A fractional
+    value (continuous mode) is rounded and noted as a caveat, because
+    pandapower can only apply an integer position.
+
+    Args:
+        clone: The network the power flow will run on, modified in place.
+        source: The network carrying the OPF results.
+        ctx: The diagnostic context (for the model's control sets).
+        caveats: List of caveat strings to extend.
+
+    Returns:
+        None.
+    """
+    controls = (
+        ("TRANSF_OLTC", "res_trafo", "trafo", "tap_pos", "tap position"),
+        ("SHUNT_CTRL", "res_shunt", "shunt", "step", "shunt step"),
+    )
+    for component, res_name, table, column, label in controls:
+        if not ctx.has(component):
+            continue
+        res = source.get(res_name)
+        frame = clone.get(table)
+        if res is None or frame is None or column not in res.columns:
+            continue
+        fractional = False
+        for element in getattr(ctx.model, component):
+            if element not in frame.index or element not in res.index:
+                continue
+            value = float(res.at[element, column])
+            rounded = int(round(value))
+            fractional = fractional or abs(value - rounded) > 1e-6
+            frame.at[element, column] = (
+                float(rounded) if column == "tap_pos" else rounded
+            )
+        if fractional:
+            caveats.append(
+                f"the OPF optimised a continuous {label}, which was rounded "
+                "to the nearest integer for the replay"
+            )
 
 
 def _largest_difference(left, right):

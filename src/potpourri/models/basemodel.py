@@ -72,6 +72,93 @@ from pandapower.toolbox import create_continuous_bus_index
 
 from potpourri.models.pyo_to_net import pyo_sol_to_net_res
 
+#: Solver names (prefixes, lower case) that solve continuous problems only.
+#: Pyomo's NL writer flags integer variables as integer, and these solvers
+#: ignore the flag, so a model with free integer variables would be solved
+#: as its continuous relaxation without anyone noticing. `solve` refuses
+#: that combination unless asked for the relaxation explicitly.
+CONTINUOUS_ONLY_SOLVERS = ("ipopt", "conopt", "snopt", "minos")
+
+
+def free_integer_variables(model):
+    """Names of the integer and binary variables of `model` that are free.
+
+    A fixed variable is a constant to every writer and solver, so only the
+    unfixed ones count. Walks every active block of the model.
+
+    Args:
+        model: A Pyomo `ConcreteModel`.
+
+    Returns:
+        A sorted list of fully qualified variable names, e.g.
+        `["trafo_tap_position[0]", "y[3]"]`. Empty when the model is
+        continuous.
+    """
+    names = []
+    for var in model.component_data_objects(
+        pyo.Var, active=True, descend_into=True
+    ):
+        if var.fixed:
+            continue
+        if var.is_integer() or var.is_binary():
+            names.append(var.name)
+    return sorted(names)
+
+
+def check_integrality_support(
+    model, solver, relax_integrality=False, neos_opt=None
+):
+    """Refuse to hand free integer variables to a continuous-only solver.
+
+    IPOPT and the other NLP codes in `CONTINUOUS_ONLY_SOLVERS` ignore the
+    integrality of a variable, so a discrete tap position or a binary
+    placement variable would come back fractional and be reported as if it
+    were a solution of the discrete model. That used to happen silently.
+
+    Args:
+        model: The Pyomo model about to be solved.
+        solver: Solver name as passed to `solve`.
+        relax_integrality: Pass `True` to solve the continuous relaxation
+            knowingly; the names of the relaxed variables are then logged
+            and returned instead of raising.
+        neos_opt: The remote solver name when `solver == "neos"`.
+
+    Returns:
+        The names of the integer variables that are being relaxed (empty
+        when the solver can handle them or the model has none).
+
+    Raises:
+        ValueError: If the solver is continuous-only, the model has free
+            integer variables and `relax_integrality` is `False`.
+    """
+    name = (neos_opt if solver == "neos" else solver) or ""
+    if not str(name).lower().startswith(CONTINUOUS_ONLY_SOLVERS):
+        return []
+    free = free_integer_variables(model)
+    if not free:
+        return []
+    families = sorted({n.split("[", 1)[0] for n in free})
+    if relax_integrality:
+        logger.warning(
+            "Solving the continuous relaxation: {} integer variable(s) "
+            "({}) are treated as continuous by solver '{}'.",
+            len(free),
+            ", ".join(families),
+            name,
+        )
+        return free
+    raise ValueError(
+        f"The model has {len(free)} free integer variable(s) "
+        f"({', '.join(families)}) but solver {str(name)!r} solves "
+        "continuous problems only and would silently ignore their "
+        "integrality. Use a MINLP solver ('gurobi_direct_minlp', "
+        "'mindtpy', or NEOS with 'bonmin'/'couenne'), pass "
+        "relax_integrality=True to solve the continuous relaxation "
+        "knowingly, or, for tap changers, call "
+        "solve_oltc_round_and_fix()."
+    )
+
+
 #: Key under which `preprocess_grid` stores `{caller bus index: model bus
 #: index}` on the preprocessed network. Read it through
 #: `potpourri.diagnostics.mappings`, which also handles the models that do
@@ -92,6 +179,12 @@ class Basemodel:
         model: Pyomo ConcreteModel populated by create_model().
         results: Solver result object populated by solve().
     """
+
+    #: Whether the formulation can carry a variable transformer tap. Only the
+    #: polar AC layers set this to `True`; `enable_oltc` refuses otherwise.
+    OLTC_SUPPORTED = False
+    #: Whether the formulation can carry a variable shunt step (AC only).
+    SHUNT_CONTROL_SUPPORTED = False
 
     def __init__(self, net):
         if not isinstance(net, pp.pandapowerNet):
@@ -367,9 +460,16 @@ class Basemodel:
         Adds the sets (`B`, `Bpd`, `b0`, `bPV`, `L`, `TRANSF`, `D`,
         `G`, `sG`, `SHUNT`, `STOR`, ...), their parameters, the
         active-power variables (`pG`, `psG`, `pD`, `pLfrom`/`pLto`,
-        `pThv`/`pTlv`, `delta`, `Tap`) and the base-case fixings that
-        make the system square: `psG`, `pG`, `pD` at their set points,
-        `Tap` at its position, and `delta` at the reference bus.
+        `pThv`/`pTlv`, `delta`, `Tap`, `Tap_lv`) and the base-case
+        fixings that make the system square: `psG`, `pG`, `pD` at their
+        set points, `Tap` at its position, `Tap_lv` at 1, and `delta` at
+        the reference bus.
+
+        `Tap` and `Tap_lv` are the HV-side and LV-side ratios of the
+        two-sided transformer model (see `potpourri.models.oltc`). Both
+        stay fixed unless `enable_oltc` frees one of them, so by default
+        the transformer equations reduce to the MATPOWER form with the
+        pandapower ratio on the HV side.
 
         Returns:
             None. The model is reachable as `self.model`.
@@ -539,11 +639,16 @@ class Basemodel:
             self.model.TRANSF,
             domain=pyo.Reals,
             initialize=self.trafo_data.tap[self.model.TRANSF],
-        )  # transformer tap ratio
+        )  # transformer tap ratio on the HV (from) side, pandapower's TAP
+        self.model.Tap_lv = pyo.Var(
+            self.model.TRANSF, domain=pyo.Reals, initialize=1.0
+        )  # transformer ratio on the LV (to) side; 1 unless an LV-side
+        # on-load tap changer is made controllable (models/oltc.py)
 
-        # transformer tap ratio
+        # transformer tap ratios: fixed, i.e. constants to the solver
         for t in self.model.TRANSF:
             self.model.Tap[t].fix()
+            self.model.Tap_lv[t].fix()
 
         # --- generator power ---
         for g in self.model.sG:
@@ -617,12 +722,20 @@ class Basemodel:
         init_strategy="rNLP",
         neos_opt="ipopt",
         nlp_solver_args=None,
+        relax_integrality: bool = False,
     ):
         """Solves the optimization model using the specified solver.
 
         Args:
             to_net (bool): Whether to map results back to the pandapower
                 network.
+            relax_integrality (bool): A model with free integer variables
+                (discrete tap positions, shunt steps, hosting-capacity
+                binaries) handed to a continuous-only solver such as IPOPT
+                raises `ValueError`, because the solver would silently
+                return the continuous relaxation. Pass `True` to request
+                that relaxation knowingly; the relaxed variables are
+                logged.
             print_solver_output (bool): Whether to print solver output.
             solver (str): The solver to use ('ipopt', 'mindtpy', 'neos',
                 'gurobi_direct_minlp', etc.). Use 'gurobi_direct_minlp' to
@@ -653,6 +766,9 @@ class Basemodel:
         """
         logger.info(
             "Solving model '{}' with solver '{}'", self.model.name, solver
+        )
+        check_integrality_support(
+            self.model, solver, relax_integrality, neos_opt=neos_opt
         )
 
         if solver == "mindtpy":

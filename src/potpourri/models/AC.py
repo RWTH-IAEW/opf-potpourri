@@ -61,7 +61,8 @@ Symbols map to Pyomo components as follows.
 | $\theta_b$         | `model.delta[b]`   | voltage angle (rad)       |
 | $G_{ii}$, $B_{ii}$ | `Gii` / `Bii`      | branch self terms         |
 | $G_{ik}$, $B_{ik}$ | `Gik` / `Bik`      | branch mutual terms       |
-| $\tau_t$           | `model.Tap[t]`     | transformer tap ratio     |
+| $a^{hv}_t$         | `model.Tap[t]`     | HV-side tap ratio         |
+| $a^{lv}_t$         | `model.Tap_lv[t]`  | LV-side ratio, 1 by default |
 | $\varphi_t$        | `model.shift[t]`   | phase shift (rad)         |
 | $q^{sgen}_g$       | `model.qsG[g]`     | static-generator reactive |
 
@@ -144,6 +145,7 @@ from potpourri.models.basemodel import (
     Basemodel,
     branch_charging_admittance,
 )
+from potpourri.models.shunt_control import shunt_control_terms
 
 
 class AC(Basemodel):
@@ -190,6 +192,11 @@ class AC(Basemodel):
         ValueError: If `net` is not a `pandapowerNet` (from
             `Basemodel`).
     """
+
+    #: The polar AC equations carry a variable tap and a variable shunt step,
+    #: so `enable_oltc` / `enable_shunt_control` work on this layer.
+    OLTC_SUPPORTED = True
+    SHUNT_CONTROL_SUPPORTED = True
 
     def __init__(self, net):
         # Basemodel deep copies the network, fuses bus-bus switches and
@@ -438,99 +445,9 @@ class AC(Basemodel):
         self.model.qG = pyo.Var(self.model.G, domain=pyo.Reals)
 
         # --- nodal power balance at each bus b ---
-        @self.model.Constraint(self.model.B)
-        def KCL_real(model, b):
-            """Active-power balance at bus `b`.
-
-            `generation - storage = demand + branch outflows + shunt`,
-            where the storage and shunt terms follow pandapower's load
-            convention (positive = consumption), hence the signs.
-
-            The shunt term `GB * v**2` is the active loss in a shunt's
-            conductance and belongs on the consumption side.
-
-            Args:
-                model: The Pyomo model being built.
-                b: Bus index (an element of `model.B`, i.e. a **ppc**
-                    bus number, which may exceed `len(net.bus)` when
-                    pandapower inserted auxiliary buses).
-
-            Returns:
-                A Pyomo equality expression, or `Constraint.Skip` for a
-                bus where every term is constant. That happens on an
-                isolated bus with no branches and only fixed injections:
-                both sides then evaluate to plain numbers and Python
-                collapses `==` to a `bool`, which Pyomo cannot accept
-                as a constraint.
-            """
-            kcl = sum(
-                model.psG[g] for g in model.sG if (g, b) in model.sGbs
-            ) + sum(model.pG[g] for g in model.G if (g, b) in model.Gbs) - sum(
-                model.pSTOR[s] for s in model.STOR if model.STOR_bus[s] == b
-            ) == sum(
-                model.pD[d] for d in model.D if (b, d) in model.Dbs
-            ) + sum(
-                model.pLfrom[l] for l in model.L if model.A[l, 1] == b
-            ) + sum(
-                model.pLto[l] for l in model.L if model.A[l, 2] == b
-            ) + sum(
-                model.pThv[l] for l in model.TRANSF if model.AT[l, 1] == b
-            ) + sum(
-                model.pTlv[l] for l in model.TRANSF if model.AT[l, 2] == b
-            ) + sum(
-                model.GB[s] * model.v[b] ** 2
-                for s in model.SHUNT
-                if (b, s) in model.SHUNTbs and model.GB[s] != 0
-            )
-            if isinstance(kcl, (bool, np.bool_)):
-                return pyo.Constraint.Skip
-            return kcl
-
-        @self.model.Constraint(self.model.B)
-        def KCL_reactive(model, b):
-            """Reactive-power balance at bus `b`.
-
-            Mirrors `KCL_real` with `q` in place of `p`. The
-            shunt term is `- BB * v**2`: `BB` was negated when it was
-            built from `net.shunt.q_mvar`, so a reactive-consuming
-            (inductive) shunt has `BB < 0` and the term lands on the
-            consumption side with a positive value.
-
-            Args:
-                model: The Pyomo model being built.
-                b: Bus index from `model.B` (a ppc bus number).
-
-            Returns:
-                A Pyomo equality expression, or `Constraint.Skip` when
-                the balance degenerates to a constant -- see
-                `KCL_real`.
-            """
-            kcl = sum(
-                model.qsG[g] for g in model.sG if (g, b) in model.sGbs
-            ) + sum(model.qG[g] for g in model.G if (g, b) in model.Gbs) - sum(
-                # storage reactive power follows pandapower's load convention
-                # (positive = consumption), like pSTOR in KCL_real
-                model.qSTOR[s]
-                for s in model.STOR
-                if model.STOR_bus[s] == b
-            ) == sum(
-                model.qD[d] for d in model.D if (b, d) in model.Dbs
-            ) + sum(
-                model.qLfrom[l] for l in model.L if model.A[l, 1] == b
-            ) + sum(
-                model.qLto[l] for l in model.L if model.A[l, 2] == b
-            ) + sum(
-                model.qThv[l] for l in model.TRANSF if model.AT[l, 1] == b
-            ) + sum(
-                model.qTlv[l] for l in model.TRANSF if model.AT[l, 2] == b
-            ) - sum(
-                model.BB[s] * model.v[b] ** 2
-                for s in model.SHUNT
-                if (b, s) in model.SHUNTbs and model.BB[s] != 0
-            )
-            if isinstance(kcl, (bool, np.bool_)):
-                return pyo.Constraint.Skip
-            return kcl
+        # Built by build_kcl so that the balance can be rebuilt after a
+        # controllable shunt (models/shunt_control.py) has been attached.
+        self.build_kcl()
 
         # --- branch power flow on each line (both ends) ---
         # Despite the historical `KVL_*` names -- kept because they are
@@ -655,13 +572,18 @@ class AC(Basemodel):
             )
 
         # --- branch power flow on each transformer (both ends) ---
-        # The transformer is the line pi model behind an ideal
-        # transformer of complex ratio tau = Tap * exp(j * shift), placed
-        # on the *from* (HV) side, as MATPOWER does it. That placement is
-        # what makes the two ends asymmetric: the from-end self term
-        # picks up 1/Tap**2 and the from-end angle gets - shift, while
-        # the to-end self term keeps its bare GiiT/BiiT. Both ends share
-        # the mutual factor v_hv * v_lv / Tap.
+        # The transformer is the line pi model between two ideal
+        # transformers: one of complex ratio Tap * exp(j * shift) on the
+        # *from* (HV) side, as MATPOWER places it, and one of real ratio
+        # Tap_lv on the *to* (LV) side. The HV self term picks up
+        # 1/Tap**2 and the HV angle gets - shift, the LV self term
+        # 1/Tap_lv**2, and both ends share the mutual factor
+        # v_hv * v_lv / (Tap * Tap_lv). Tap_lv is fixed at 1 unless an
+        # LV-side on-load tap changer is controlled (models/oltc.py),
+        # which is how pandapower's LV-side tap -- impedance referred to
+        # the tapped winding -- is expressed without touching the
+        # admittance parameters; with Tap_lv == 1 this is exactly the
+        # MATPOWER/PowerModels branch model.
         #
         # Each rule branches on `if model.shift[l]:`, which is a plain
         # truth test on the Param's value. The two branches are the same
@@ -689,9 +611,9 @@ class AC(Basemodel):
             if model.shift[l]:
                 return model.pThv[l] == model.GiiT[l] / model.Tap[l] ** 2 * (
                     model.v[model.AT[l, 1]] ** 2
-                ) + model.v[model.AT[l, 1]] * model.v[
-                    model.AT[l, 2]
-                ] / model.Tap[l] * (
+                ) + model.v[model.AT[l, 1]] * model.v[model.AT[l, 2]] / (
+                    model.Tap[l] * model.Tap_lv[l]
+                ) * (
                     model.GikT[l]
                     * pyo.cos(
                         model.delta[model.AT[l, 1]]
@@ -708,9 +630,9 @@ class AC(Basemodel):
 
             return model.pThv[l] == model.GiiT[l] / model.Tap[l] ** 2 * (
                 model.v[model.AT[l, 1]] ** 2
-            ) + model.v[model.AT[l, 1]] * model.v[model.AT[l, 2]] / model.Tap[
-                l
-            ] * (
+            ) + model.v[model.AT[l, 1]] * model.v[model.AT[l, 2]] / (
+                model.Tap[l] * model.Tap_lv[l]
+            ) * (
                 model.GikT[l]
                 * pyo.cos(
                     model.delta[model.AT[l, 1]] - model.delta[model.AT[l, 2]]
@@ -742,11 +664,13 @@ class AC(Basemodel):
                 A Pyomo equality expression defining `pTlv[l]`.
             """
             if model.shift[l]:
-                return model.pTlv[l] == model.GiiT[l] * (
-                    model.v[model.AT[l, 2]] ** 2
-                ) + model.v[model.AT[l, 1]] * model.v[
-                    model.AT[l, 2]
-                ] / model.Tap[l] * (
+                return model.pTlv[l] == model.GiiT[l] / model.Tap_lv[
+                    l
+                ] ** 2 * (model.v[model.AT[l, 2]] ** 2) + model.v[
+                    model.AT[l, 1]
+                ] * model.v[model.AT[l, 2]] / (
+                    model.Tap[l] * model.Tap_lv[l]
+                ) * (
                     model.BikT[l]
                     * pyo.sin(
                         model.delta[model.AT[l, 2]]
@@ -761,11 +685,11 @@ class AC(Basemodel):
                     )
                 )
 
-            return model.pTlv[l] == model.GiiT[l] * (
+            return model.pTlv[l] == model.GiiT[l] / model.Tap_lv[l] ** 2 * (
                 model.v[model.AT[l, 2]] ** 2
-            ) + model.v[model.AT[l, 1]] * model.v[model.AT[l, 2]] / model.Tap[
-                l
-            ] * (
+            ) + model.v[model.AT[l, 1]] * model.v[model.AT[l, 2]] / (
+                model.Tap[l] * model.Tap_lv[l]
+            ) * (
                 model.BikT[l]
                 * pyo.sin(
                     model.delta[model.AT[l, 2]] - model.delta[model.AT[l, 1]]
@@ -796,9 +720,9 @@ class AC(Basemodel):
             if model.shift[l]:
                 return model.qThv[l] == -model.BiiT[l] / model.Tap[l] ** 2 * (
                     model.v[model.AT[l, 1]] ** 2
-                ) + model.v[model.AT[l, 1]] * model.v[
-                    model.AT[l, 2]
-                ] / model.Tap[l] * (
+                ) + model.v[model.AT[l, 1]] * model.v[model.AT[l, 2]] / (
+                    model.Tap[l] * model.Tap_lv[l]
+                ) * (
                     -model.BikT[l]
                     * pyo.cos(
                         model.delta[model.AT[l, 1]]
@@ -815,9 +739,9 @@ class AC(Basemodel):
 
             return model.qThv[l] == -model.BiiT[l] / model.Tap[l] ** 2 * (
                 model.v[model.AT[l, 1]] ** 2
-            ) + model.v[model.AT[l, 1]] * model.v[model.AT[l, 2]] / model.Tap[
-                l
-            ] * (
+            ) + model.v[model.AT[l, 1]] * model.v[model.AT[l, 2]] / (
+                model.Tap[l] * model.Tap_lv[l]
+            ) * (
                 -model.BikT[l]
                 * pyo.cos(
                     model.delta[model.AT[l, 1]] - model.delta[model.AT[l, 2]]
@@ -844,11 +768,13 @@ class AC(Basemodel):
                 A Pyomo equality expression defining `qTlv[l]`.
             """
             if model.shift[l]:
-                return model.qTlv[l] == -model.BiiT[l] * (
-                    model.v[model.AT[l, 2]] ** 2
-                ) + model.v[model.AT[l, 1]] * model.v[
-                    model.AT[l, 2]
-                ] / model.Tap[l] * (
+                return model.qTlv[l] == -model.BiiT[l] / model.Tap_lv[
+                    l
+                ] ** 2 * (model.v[model.AT[l, 2]] ** 2) + model.v[
+                    model.AT[l, 1]
+                ] * model.v[model.AT[l, 2]] / (
+                    model.Tap[l] * model.Tap_lv[l]
+                ) * (
                     -model.BikT[l]
                     * pyo.cos(
                         model.delta[model.AT[l, 2]]
@@ -863,11 +789,11 @@ class AC(Basemodel):
                     )
                 )
 
-            return model.qTlv[l] == -model.BiiT[l] * (
+            return model.qTlv[l] == -model.BiiT[l] / model.Tap_lv[l] ** 2 * (
                 model.v[model.AT[l, 2]] ** 2
-            ) + model.v[model.AT[l, 1]] * model.v[model.AT[l, 2]] / model.Tap[
-                l
-            ] * (
+            ) + model.v[model.AT[l, 1]] * model.v[model.AT[l, 2]] / (
+                model.Tap[l] * model.Tap_lv[l]
+            ) * (
                 -model.BikT[l]
                 * pyo.cos(
                     model.delta[model.AT[l, 2]] - model.delta[model.AT[l, 1]]
@@ -902,3 +828,136 @@ class AC(Basemodel):
         # --- reference bus voltage pyo.Constraint ---
         for b0 in self.model.b0:
             self.model.v[b0].fix(self.model.v_b0[b0])
+
+    def _kcl_real_rule(self, model, b):
+        """Active-power balance at bus `b`.
+
+        `generation - storage = demand + branch outflows + shunt`,
+        where the storage and shunt terms follow pandapower's load
+        convention (positive = consumption), hence the signs.
+
+        The shunt term `GB * v**2` is the active loss in a shunt's
+        conductance and belongs on the consumption side. A shunt made
+        controllable by `enable_shunt_control` is left out of that
+        constant sum and enters through `shunt_control_terms` with its
+        step variable instead.
+
+        Args:
+            model: The Pyomo model being built.
+            b: Bus index (an element of `model.B`, i.e. a **ppc**
+                bus number, which may exceed `len(net.bus)` when
+                pandapower inserted auxiliary buses).
+
+        Returns:
+            A Pyomo equality expression, or `Constraint.Skip` for a
+            bus where every term is constant. That happens on an
+            isolated bus with no branches and only fixed injections:
+            both sides then evaluate to plain numbers and Python
+            collapses `==` to a `bool`, which Pyomo cannot accept
+            as a constraint.
+        """
+        shunt_ctrl = getattr(model, "SHUNT_CTRL", ())
+        kcl = sum(
+            model.psG[g] for g in model.sG if (g, b) in model.sGbs
+        ) + sum(model.pG[g] for g in model.G if (g, b) in model.Gbs) - sum(
+            model.pSTOR[s] for s in model.STOR if model.STOR_bus[s] == b
+        ) == sum(model.pD[d] for d in model.D if (b, d) in model.Dbs) + sum(
+            model.pLfrom[l] for l in model.L if model.A[l, 1] == b
+        ) + sum(model.pLto[l] for l in model.L if model.A[l, 2] == b) + sum(
+            model.pThv[l] for l in model.TRANSF if model.AT[l, 1] == b
+        ) + sum(
+            model.pTlv[l] for l in model.TRANSF if model.AT[l, 2] == b
+        ) + sum(
+            model.GB[s] * model.v[b] ** 2
+            for s in model.SHUNT
+            if (b, s) in model.SHUNTbs
+            and model.GB[s] != 0
+            and s not in shunt_ctrl
+        ) + shunt_control_terms(model, b)
+        if isinstance(kcl, (bool, np.bool_)):
+            return pyo.Constraint.Skip
+        return kcl
+
+    def _kcl_reactive_rule(self, model, b):
+        """Reactive-power balance at bus `b`.
+
+        Mirrors `KCL_real` with `q` in place of `p`. The
+        shunt term is `- BB * v**2`: `BB` was negated when it was
+        built from `net.shunt.q_mvar`, so a reactive-consuming
+        (inductive) shunt has `BB < 0` and the term lands on the
+        consumption side with a positive value. Controllable shunts
+        enter through `shunt_control_terms` instead (same sign
+        convention, step variable in place of the constant).
+
+        Args:
+            model: The Pyomo model being built.
+            b: Bus index from `model.B` (a ppc bus number).
+
+        Returns:
+            A Pyomo equality expression, or `Constraint.Skip` when
+            the balance degenerates to a constant -- see
+            `KCL_real`.
+        """
+        shunt_ctrl = getattr(model, "SHUNT_CTRL", ())
+        kcl = sum(
+            model.qsG[g] for g in model.sG if (g, b) in model.sGbs
+        ) + sum(model.qG[g] for g in model.G if (g, b) in model.Gbs) - sum(
+            # storage reactive power follows pandapower's load convention
+            # (positive = consumption), like pSTOR in KCL_real
+            model.qSTOR[s]
+            for s in model.STOR
+            if model.STOR_bus[s] == b
+        ) == sum(model.qD[d] for d in model.D if (b, d) in model.Dbs) + sum(
+            model.qLfrom[l] for l in model.L if model.A[l, 1] == b
+        ) + sum(model.qLto[l] for l in model.L if model.A[l, 2] == b) + sum(
+            model.qThv[l] for l in model.TRANSF if model.AT[l, 1] == b
+        ) + sum(
+            model.qTlv[l] for l in model.TRANSF if model.AT[l, 2] == b
+        ) - sum(
+            model.BB[s] * model.v[b] ** 2
+            for s in model.SHUNT
+            if (b, s) in model.SHUNTbs
+            and model.BB[s] != 0
+            and s not in shunt_ctrl
+        ) + shunt_control_terms(model, b, reactive=True)
+        if isinstance(kcl, (bool, np.bool_)):
+            return pyo.Constraint.Skip
+        return kcl
+
+    #: Balance constraints this formulation builds, in construction order.
+    KCL_CONSTRAINTS = ("KCL_real", "KCL_reactive")
+
+    def build_kcl(self):
+        """Construct the nodal balance constraints, replacing any existing.
+
+        Called once from `create_model`, at the place the balance has
+        always been built so the component order the solver sees is
+        unchanged, and again through `rebuild_kcl` after a controllable
+        shunt has been attached, because its step variable has to reach
+        the balance. Mirrors `Basemodel_multi_period.build_kcl`.
+
+        Returns:
+            None. `KCL_real` and `KCL_reactive` are (re)created on
+            `self.model`.
+        """
+        for name in self.KCL_CONSTRAINTS:
+            rule = getattr(self, f"_{name.lower()}_rule")
+            if hasattr(self.model, name):
+                self.model.del_component(getattr(self.model, name))
+            # `rule=` rather than a decorator, deliberately: both the
+            # component name and the rule come from the loop, so there is
+            # no function to decorate. See docs/contributing-pyomo.md.
+            setattr(self.model, name, pyo.Constraint(self.model.B, rule=rule))
+
+    def rebuild_kcl(self):
+        """Rebuild the balance so late-attached controls are included.
+
+        Idempotent: with nothing attached, rebuilding reproduces the same
+        constraints (at the end of the component order rather than at
+        their original place, which changes nothing but the row order the
+        solver sees).
+
+        Returns:
+            None.
+        """
+        self.build_kcl()

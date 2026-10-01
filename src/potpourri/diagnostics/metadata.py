@@ -275,6 +275,37 @@ CONSTRAINTS: dict[str, ConstraintMeta] = {
     "Tap_discrete_constr": ConstraintMeta(
         DiagnosticCategory.BOUNDS, "trafo", "discrete tap positions"
     ),
+    # controllable tap changers (enable_oltc)
+    "trafo_tap_factor_def": ConstraintMeta(
+        DiagnosticCategory.NETWORK, "trafo", "tap factor of the tap position"
+    ),
+    "trafo_tap_ratio_hv_def": ConstraintMeta(
+        DiagnosticCategory.NETWORK, "trafo", "HV-side ratio of the tap factor"
+    ),
+    "trafo_tap_ratio_lv_def": ConstraintMeta(
+        DiagnosticCategory.NETWORK, "trafo", "LV-side ratio of the tap factor"
+    ),
+    "trafo_tap_movement_def": ConstraintMeta(
+        DiagnosticCategory.NETWORK, "trafo", "tap movement between steps"
+    ),
+    "trafo_tap_change_limit": ConstraintMeta(
+        DiagnosticCategory.BOUNDS, "trafo", "tap change per step limit"
+    ),
+    "trafo_tap_operations_limit": ConstraintMeta(
+        DiagnosticCategory.BOUNDS, "trafo", "tap operations per horizon limit"
+    ),
+    # controllable shunt steps (enable_shunt_control)
+    "shunt_step_movement_def": ConstraintMeta(
+        DiagnosticCategory.NETWORK, "shunt", "step movement between periods"
+    ),
+    "shunt_step_change_limit": ConstraintMeta(
+        DiagnosticCategory.BOUNDS, "shunt", "step change per period limit"
+    ),
+    "shunt_step_operations_limit": ConstraintMeta(
+        DiagnosticCategory.BOUNDS,
+        "shunt",
+        "switching operations per horizon limit",
+    ),
     # storage
     "stor_soc_update": ConstraintMeta(
         DiagnosticCategory.STORAGE, "storage", "state-of-charge balance"
@@ -350,6 +381,14 @@ VARIABLES: dict[str, VariableMeta] = {
     "pD": VariableMeta("active_power", "p.u.", "load", per_unit=True),
     "qD": VariableMeta("reactive_power", "p.u.", "load", per_unit=True),
     "Tap": VariableMeta("tap_ratio", "-", "trafo"),
+    "Tap_lv": VariableMeta("tap_ratio_lv", "-", "trafo"),
+    "trafo_tap_position": VariableMeta("tap_position", "-", "trafo"),
+    "trafo_tap_factor": VariableMeta("tap_factor", "-", "trafo"),
+    "trafo_tap_up": VariableMeta("tap_move_up", "-", "trafo"),
+    "trafo_tap_down": VariableMeta("tap_move_down", "-", "trafo"),
+    "shunt_step": VariableMeta("step", "-", "shunt"),
+    "shunt_step_up": VariableMeta("step_move_up", "-", "shunt"),
+    "shunt_step_down": VariableMeta("step_move_down", "-", "shunt"),
     "SOC": VariableMeta("state_of_charge", "p.u.", "storage"),
     "pSTOR": VariableMeta("active_power", "p.u.", "storage", per_unit=True),
 }

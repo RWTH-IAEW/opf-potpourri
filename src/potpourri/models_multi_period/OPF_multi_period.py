@@ -9,10 +9,13 @@ indexed over the model's time set.
 """
 
 import copy
+import warnings
 
 import numpy as np
 import pyomo.environ as pyo
 
+from potpourri.models.oltc import OLTCControlMixin
+from potpourri.models.shunt_control import ShuntControlMixin
 from potpourri.models_multi_period.basemodel_multi_period import (
     Basemodel_multi_period,
 )
@@ -117,7 +120,9 @@ def _calc_tap_shift_mp(obj, tap_pos=None):
     return vnh, vnl, trafo_shift
 
 
-class OPF_multi_period(Basemodel_multi_period):
+class OPF_multi_period(
+    OLTCControlMixin, ShuntControlMixin, Basemodel_multi_period
+):
     """OPF mixin for multi-period models.
 
     Provides line/transformer ratings and generator/demand limits.
@@ -382,7 +387,20 @@ class OPF_multi_period(Basemodel_multi_period):
                 between consecutive time steps.  ``None`` (default) means
                 unconstrained.  Adds ``model.tap_rate_up`` /
                 ``model.tap_rate_down`` constraints when set.
+
+        Deprecated: frees the ratio of *every* transformer without checking
+        whether it has a tap changer pandapower would apply. Use
+        `enable_oltc(mode="continuous", max_change_per_step=...)`, which
+        selects eligible transformers, follows pandapower's tap-side
+        semantics and limits movement in tap positions. Kept unchanged for
+        existing callers.
         """
+        warnings.warn(
+            "add_tap_changer_linear() is deprecated; use "
+            "enable_oltc(mode='continuous') instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         ratio_min, ratio_max = _calc_tap_min_max_mp(self)
         self.trafo_data = self.trafo_data.assign(
             **{"tap_min_data": ratio_min, "tap_max_data": ratio_max}
@@ -461,7 +479,18 @@ class OPF_multi_period(Basemodel_multi_period):
         Introduces an integer variable ``Tap_pos[tr, t]`` per transformer and
         time step, and links it to the continuous ``Tap[tr, t]`` via an
         equality constraint.  Requires a MIP/MINLP solver (MindtPy, Gurobi).
+
+        Deprecated: the ratio it builds ignores the mismatch between rated
+        and bus voltages and pandapower's referral of an LV-side tapped
+        impedance, and it applies to every transformer. Use
+        `enable_oltc(mode="discrete")`. Kept unchanged for existing callers.
         """
+        warnings.warn(
+            "add_tap_changer_discrete() is deprecated; use "
+            "enable_oltc(mode='discrete') instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         tap_neutral = self.net.trafo.tap_neutral
         tap_step = self.net.trafo.tap_step_percent / 100.0
         tap_pos_max = self.net.trafo.tap_max

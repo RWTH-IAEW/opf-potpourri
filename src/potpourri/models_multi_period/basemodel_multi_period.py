@@ -16,6 +16,7 @@ import pandapower as pp
 import simbench as sb
 import time as ctime
 from loguru import logger
+from potpourri.models.basemodel import check_integrality_support
 from potpourri.models_multi_period.init_pyo_from_pp_res_multi_period import (
     init_pyo_from_pp_res_multi_period,
 )
@@ -46,6 +47,12 @@ class Basemodel_multi_period:
         T: Number of time steps.
         deltaT: Time-step length in hours (default 0.25 = 15 min).
     """
+
+    #: Whether the formulation can carry a variable transformer tap. Only the
+    #: polar AC layer sets this to `True`; `enable_oltc` refuses otherwise.
+    OLTC_SUPPORTED = False
+    #: Whether the formulation can carry a variable shunt step (AC only).
+    SHUNT_CONTROL_SUPPORTED = False
 
     def __init__(self, net, toT, fromT=None, pf=1):
         """Initialise the multi-period base model.
@@ -355,12 +362,17 @@ class Basemodel_multi_period:
         )  # real power injected at b' onto transformer
         self.model.Tap = pyo.Var(
             self.Tap_tuple, domain=pyo.Reals, initialize=self.Tap_data_dict
-        )  # transformer tap ratio
+        )  # transformer tap ratio on the HV (from) side, pandapower's TAP
+        self.model.Tap_lv = pyo.Var(
+            self.Tap_tuple, domain=pyo.Reals, initialize=1.0
+        )  # transformer ratio on the LV (to) side; 1 unless an LV-side
+        # on-load tap changer is made controllable (models/oltc.py)
 
-        # transformer tap ratio
+        # transformer tap ratios: fixed, i.e. constants to the solver
         for tr in self.model.TRANSF:
             for t in self.model.T:
                 self.model.Tap[tr, t].fix()
+                self.model.Tap_lv[tr, t].fix()
 
         # --- reference bus constraint ---
         for b in self.model.b0:
@@ -424,10 +436,17 @@ class Basemodel_multi_period:
         init_strategy="rNLP",
         neos_opt="bonmin",
         warm_start=True,
+        relax_integrality: bool = False,
     ):
         """Solve the multi-period OPF model with the specified solver.
 
         Args:
+            relax_integrality: A model with free integer variables (discrete
+                tap positions, shunt steps, hosting-capacity binaries) handed
+                to a continuous-only solver such as IPOPT raises
+                `ValueError`, because the solver would silently return the
+                continuous relaxation. Pass `True` to request that
+                relaxation knowingly; the relaxed variables are logged.
             to_net: Which time step to write into ``net.res_*``. The result
                 tables have no time dimension, so exactly one step can be
                 mapped. ``True`` maps the **last** step of the horizon; pass
@@ -463,6 +482,9 @@ class Basemodel_multi_period:
             self.warm_start_from_pf()
 
         logger.info("Solving model with solver '{}'", solver)
+        check_integrality_support(
+            self.model, solver, relax_integrality, neos_opt=neos_opt
+        )
         optimizer = pyo.SolverFactory(solver)
 
         if solver == "mindtpy":

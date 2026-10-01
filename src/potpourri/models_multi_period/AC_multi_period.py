@@ -10,6 +10,7 @@ Adds full AC equations with voltage magnitudes over time.
 import numpy as np
 
 from potpourri.models.basemodel import branch_charging_admittance
+from potpourri.models.shunt_control import shunt_control_terms
 import pyomo.environ as pyo
 from potpourri.models_multi_period.basemodel_multi_period import (
     Basemodel_multi_period,
@@ -18,7 +19,17 @@ from potpourri.technologies.demand import Demand_multi_period
 
 
 class AC_multi_period(Basemodel_multi_period):
-    """Multi-period AC power flow, indexed over time steps."""
+    """Multi-period AC power flow, indexed over time steps.
+
+    The transformer equations use the two-sided ratio model of
+    `potpourri.models.oltc` (`Tap` on the HV side, `Tap_lv` on the LV side,
+    both fixed unless `enable_oltc` frees one), so on-load tap changers and
+    switched shunts can be made controllable on this layer.
+    """
+
+    #: The polar AC equations carry a variable tap and a variable shunt step.
+    OLTC_SUPPORTED = True
+    SHUNT_CONTROL_SUPPORTED = True
 
     def __init__(self, net, toT, fromT=None, pf=1):
         super().__init__(net, toT, fromT, pf)
@@ -351,7 +362,9 @@ class AC_multi_period(Basemodel_multi_period):
                     l, t
                 ] ** 2 * (model.v[model.AT[l, 1], t] ** 2) + model.v[
                     model.AT[l, 1], t
-                ] * model.v[model.AT[l, 2], t] / model.Tap[l, t] * (
+                ] * model.v[model.AT[l, 2], t] / (
+                    model.Tap[l, t] * model.Tap_lv[l, t]
+                ) * (
                     model.GikT[l]
                     * pyo.cos(
                         model.delta[model.AT[l, 1], t]
@@ -368,9 +381,9 @@ class AC_multi_period(Basemodel_multi_period):
 
             return model.pThv[l, t] == model.GiiT[l] / model.Tap[l, t] ** 2 * (
                 model.v[model.AT[l, 1], t] ** 2
-            ) + model.v[model.AT[l, 1], t] * model.v[
-                model.AT[l, 2], t
-            ] / model.Tap[l, t] * (
+            ) + model.v[model.AT[l, 1], t] * model.v[model.AT[l, 2], t] / (
+                model.Tap[l, t] * model.Tap_lv[l, t]
+            ) * (
                 model.GikT[l]
                 * pyo.cos(
                     model.delta[model.AT[l, 1], t]
@@ -401,11 +414,13 @@ class AC_multi_period(Basemodel_multi_period):
                 A Pyomo equality expression defining `pTlv[l, t]`.
             """
             if model.shift[l]:
-                return model.pTlv[l, t] == model.GiiT[l] * (
-                    model.v[model.AT[l, 2], t] ** 2
-                ) + model.v[model.AT[l, 1], t] * model.v[
-                    model.AT[l, 2], t
-                ] / model.Tap[l, t] * (
+                return model.pTlv[l, t] == model.GiiT[l] / model.Tap_lv[
+                    l, t
+                ] ** 2 * (model.v[model.AT[l, 2], t] ** 2) + model.v[
+                    model.AT[l, 1], t
+                ] * model.v[model.AT[l, 2], t] / (
+                    model.Tap[l, t] * model.Tap_lv[l, t]
+                ) * (
                     model.BikT[l]
                     * pyo.sin(
                         model.delta[model.AT[l, 2], t]
@@ -420,11 +435,13 @@ class AC_multi_period(Basemodel_multi_period):
                     )
                 )
 
-            return model.pTlv[l, t] == model.GiiT[l] * (
-                model.v[model.AT[l, 2], t] ** 2
-            ) + model.v[model.AT[l, 1], t] * model.v[
-                model.AT[l, 2], t
-            ] / model.Tap[l, t] * (
+            return model.pTlv[l, t] == model.GiiT[l] / model.Tap_lv[
+                l, t
+            ] ** 2 * (model.v[model.AT[l, 2], t] ** 2) + model.v[
+                model.AT[l, 1], t
+            ] * model.v[model.AT[l, 2], t] / (
+                model.Tap[l, t] * model.Tap_lv[l, t]
+            ) * (
                 model.BikT[l]
                 * pyo.sin(
                     model.delta[model.AT[l, 2], t]
@@ -459,7 +476,9 @@ class AC_multi_period(Basemodel_multi_period):
                     l, t
                 ] ** 2 * (model.v[model.AT[l, 1], t] ** 2) + model.v[
                     model.AT[l, 1], t
-                ] * model.v[model.AT[l, 2], t] / model.Tap[l, t] * (
+                ] * model.v[model.AT[l, 2], t] / (
+                    model.Tap[l, t] * model.Tap_lv[l, t]
+                ) * (
                     -model.BikT[l]
                     * pyo.cos(
                         model.delta[model.AT[l, 1], t]
@@ -478,7 +497,9 @@ class AC_multi_period(Basemodel_multi_period):
                 l, t
             ] ** 2 * (model.v[model.AT[l, 1], t] ** 2) + model.v[
                 model.AT[l, 1], t
-            ] * model.v[model.AT[l, 2], t] / model.Tap[l, t] * (
+            ] * model.v[model.AT[l, 2], t] / (
+                model.Tap[l, t] * model.Tap_lv[l, t]
+            ) * (
                 -model.BikT[l]
                 * pyo.cos(
                     model.delta[model.AT[l, 1], t]
@@ -509,11 +530,13 @@ class AC_multi_period(Basemodel_multi_period):
                 A Pyomo equality expression defining `qTlv[l, t]`.
             """
             if model.shift[l]:
-                return model.qTlv[l, t] == -model.BiiT[l] * (
-                    model.v[model.AT[l, 2], t] ** 2
-                ) + model.v[model.AT[l, 1], t] * model.v[
-                    model.AT[l, 2], t
-                ] / model.Tap[l, t] * (
+                return model.qTlv[l, t] == -model.BiiT[l] / model.Tap_lv[
+                    l, t
+                ] ** 2 * (model.v[model.AT[l, 2], t] ** 2) + model.v[
+                    model.AT[l, 1], t
+                ] * model.v[model.AT[l, 2], t] / (
+                    model.Tap[l, t] * model.Tap_lv[l, t]
+                ) * (
                     -model.BikT[l]
                     * pyo.cos(
                         model.delta[model.AT[l, 2], t]
@@ -528,11 +551,13 @@ class AC_multi_period(Basemodel_multi_period):
                     )
                 )
 
-            return model.qTlv[l, t] == -model.BiiT[l] * (
-                model.v[model.AT[l, 2], t] ** 2
-            ) + model.v[model.AT[l, 1], t] * model.v[
-                model.AT[l, 2], t
-            ] / model.Tap[l, t] * (
+            return model.qTlv[l, t] == -model.BiiT[l] / model.Tap_lv[
+                l, t
+            ] ** 2 * (model.v[model.AT[l, 2], t] ** 2) + model.v[
+                model.AT[l, 1], t
+            ] * model.v[model.AT[l, 2], t] / (
+                model.Tap[l, t] * model.Tap_lv[l, t]
+            ) * (
                 -model.BikT[l]
                 * pyo.cos(
                     model.delta[model.AT[l, 2], t]
@@ -581,6 +606,7 @@ class AC_multi_period(Basemodel_multi_period):
             A Pyomo equality expression, or `Constraint.Skip` where every term
             at that bus is constant.
         """
+        shunt_ctrl = getattr(model, "SHUNT_CTRL", ())
         kcl = sum(
             model.psG[g, t] for g in model.sG if (g, b) in model.sGbs
         ) + sum(model.pG[g, t] for g in model.G if (g, b) in model.Gbs) == sum(
@@ -594,8 +620,12 @@ class AC_multi_period(Basemodel_multi_period):
         ) + sum(
             model.GB[s, t] * model.v[b, t] ** 2
             for s in model.SHUNT
-            if (b, s) in model.SHUNTbs and model.GB[s, t] != 0
-        ) + self.KCL_flexibility(model, b, t)
+            if (b, s) in model.SHUNTbs
+            and model.GB[s, t] != 0
+            and s not in shunt_ctrl
+        ) + shunt_control_terms(model, b, t) + self.KCL_flexibility(
+            model, b, t
+        )
         if isinstance(kcl, bool):
             return pyo.Constraint.Skip
         return kcl
@@ -615,6 +645,7 @@ class AC_multi_period(Basemodel_multi_period):
             A Pyomo equality expression, or `Constraint.Skip` where every term
             at that bus is constant.
         """
+        shunt_ctrl = getattr(model, "SHUNT_CTRL", ())
         kcl = sum(
             model.qsG[g, t] for g in model.sG if (g, b) in model.sGbs
         ) + sum(model.qG[g, t] for g in model.G if (g, b) in model.Gbs) == sum(
@@ -628,7 +659,11 @@ class AC_multi_period(Basemodel_multi_period):
         ) - sum(
             model.BB[s, t] * model.v[b, t] ** 2
             for s in model.SHUNT
-            if (b, s) in model.SHUNTbs and model.BB[s, t] != 0
+            if (b, s) in model.SHUNTbs
+            and model.BB[s, t] != 0
+            and s not in shunt_ctrl
+        ) + shunt_control_terms(
+            model, b, t, reactive=True
         ) + self.KCL_flexibility(model, b, t, reactive=True)
         if isinstance(kcl, bool):
             return pyo.Constraint.Skip

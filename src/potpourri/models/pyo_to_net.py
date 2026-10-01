@@ -16,6 +16,9 @@ import pandas as pd
 # pandapower.toolbox carries it on every version we support.
 from pandapower.toolbox import clear_result_tables
 
+from potpourri.models.oltc import tap_result_columns
+from potpourri.models.shunt_control import shunt_result_columns
+
 
 def _is_ac(model):
     """Return True if model has voltage-magnitude variable v (AC model)."""
@@ -465,6 +468,13 @@ def _trafo_results_to_net(net, model):
     elif hasattr(model, "Tap_linear_constr"):
         net.res_trafo["tap"] = model.Tap.get_values()
 
+    # Controllable tap changers (enable_oltc): the solved position and tap
+    # factor for the controlled units, the network's own for the rest.
+    if hasattr(model, "TRANSF_OLTC"):
+        positions, factors = tap_result_columns(net, model)
+        net.res_trafo["tap_pos"] = positions.values
+        net.res_trafo["tap_factor"] = factors.values
+
     net.res_trafo.set_index(net.trafo.index, inplace=True)
 
 
@@ -481,20 +491,32 @@ def _shunt_results_to_net(net, model):
     Returns:
         None. The result tables are filled in place.
     """
+    # A shunt made controllable by enable_shunt_control consumes its
+    # per-step power times the solved step instead of the constant GB/BB.
+    ctrl = getattr(model, "SHUNT_CTRL", ())
+    steps = (
+        shunt_result_columns(net, model)
+        if hasattr(model, "SHUNT_CTRL")
+        else None
+    )
     for s in model.SHUNT:
-        net.res_shunt.loc[s, "p_mw"] = (
-            model.GB[s]
-            * net.res_bus.vm_pu[net.shunt["bus"][s]] ** 2
-            * model.baseMVA.value
-        )
+        v2 = net.res_bus.vm_pu[net.shunt["bus"][s]] ** 2
+        if s in ctrl:
+            gb = model.shunt_p_step[s] * steps[s]
+        else:
+            gb = model.GB[s]
+        net.res_shunt.loc[s, "p_mw"] = gb * v2 * model.baseMVA.value
 
     if _is_ac(model):
         net.res_shunt.vm_pu = pd.Series(
             net.res_bus.vm_pu[net.shunt.bus].values, net.shunt.index
         )
         for s in model.SHUNT:
-            net.res_shunt.loc[s, "q_mvar"] = (
-                -model.BB[s]
-                * net.res_bus.vm_pu[net.shunt["bus"][s]] ** 2
-                * model.baseMVA.value
-            )
+            v2 = net.res_bus.vm_pu[net.shunt["bus"][s]] ** 2
+            if s in ctrl:
+                bb = -model.shunt_q_step[s] * steps[s]
+            else:
+                bb = model.BB[s]
+            net.res_shunt.loc[s, "q_mvar"] = -bb * v2 * model.baseMVA.value
+    if steps is not None:
+        net.res_shunt["step"] = steps.values
