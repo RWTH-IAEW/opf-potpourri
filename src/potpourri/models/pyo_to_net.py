@@ -363,12 +363,15 @@ def _sgen_results_to_net(net, model):
     net.res_sgen = pd.DataFrame(
         columns=["p_mw", "q_mvar"], index=net.sgen.index, dtype=float
     )
-    for g in model.sG:
-        net.res_sgen.loc[g, "p_mw"] = model.psG[g].value * model.baseMVA.value
-
+    sgens = list(model.sG)
+    if sgens:
+        base = model.baseMVA.value
+        net.res_sgen.loc[sgens, "p_mw"] = np.array(
+            [model.psG[g].value * base for g in sgens], dtype=float
+        )
         if _is_ac(model):
-            net.res_sgen.loc[g, "q_mvar"] = (
-                model.qsG[g].value * model.baseMVA.value
+            net.res_sgen.loc[sgens, "q_mvar"] = np.array(
+                [model.qsG[g].value * base for g in sgens], dtype=float
             )
 
     if _is_hc(model):
@@ -493,8 +496,13 @@ def _shunt_results_to_net(net, model):
         if hasattr(model, "SHUNT_CTRL")
         else None
     )
+    # Bus voltage per shunt from plain dicts instead of two Series look-ups
+    # per element; the rows are still appended one `.loc` write at a time,
+    # which is what creates them in the (initially empty) result table.
+    vm_pu = dict(zip(net.res_bus.index, net.res_bus.vm_pu.to_numpy()))
+    shunt_bus = dict(zip(net.shunt.index, net.shunt["bus"].to_numpy()))
     for s in model.SHUNT:
-        v2 = net.res_bus.vm_pu[net.shunt["bus"][s]] ** 2
+        v2 = vm_pu[shunt_bus[s]] ** 2
         if s in ctrl:
             gb = model.shunt_p_step[s] * steps[s]
         else:
@@ -506,7 +514,7 @@ def _shunt_results_to_net(net, model):
             net.res_bus.vm_pu[net.shunt.bus].values, net.shunt.index
         )
         for s in model.SHUNT:
-            v2 = net.res_bus.vm_pu[net.shunt["bus"][s]] ** 2
+            v2 = vm_pu[shunt_bus[s]] ** 2
             if s in ctrl:
                 bb = -model.shunt_q_step[s] * steps[s]
             else:
