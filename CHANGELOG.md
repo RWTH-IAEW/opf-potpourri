@@ -5,6 +5,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-11-12
+
+Faster model construction and a corrected VDE-AR-N 4110 grid code. Building
+the single-period AC OPF is now linear in network size
+(`ACOPF(net)` on `pglib_opf_case2869_pegase` drops from about 20 s to 1 s),
+and the 4110 capability areas follow pandapower 3.5.6, which changes results
+for `grid_code="4110"`. Models, constraint names and solver files are
+otherwise unchanged.
+
 ### Changed
 
 - **`environment.yaml` pins pandapower 3.5.6** (was 3.5.4). Power-flow,
