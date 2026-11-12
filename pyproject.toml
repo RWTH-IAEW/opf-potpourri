@@ -54,7 +54,7 @@ dependencies = [
     # namespace between minor releases (3.5 dropped create_continuous_bus_index
     # and clear_result_tables from it), which breaks model construction and
     # result mapping rather than degrading them. The unit suite is verified on
-    # 3.4.0 and 3.5.4; raise the bound after testing the next minor, do not
+    # 3.4.0 and 3.5.6; raise the bound after testing the next minor, do not
     # drop it.
     "pandapower>=2.13,<3.6",
     # Same reasoning: pandas 3.0 makes copy-on-write the default, which turns

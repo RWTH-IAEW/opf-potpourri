@@ -1071,11 +1071,12 @@ def test_4110_is_no_longer_a_placeholder():
     """4110 carries its own values, not a copy of another code's.
 
     This replaces the tripwire that guarded the placeholder: the medium
-    voltage rule now has a 0.05 p.u. active-power threshold that neither
-    other code shares.
+    voltage rule has its own Q(P) shelf (0.099 / 0.1 Pn breakpoints) and its
+    own +/-0.33 Pn limit, neither of which another code shares.
     """
     code = qc.VDE_AR_N_4110
-    assert code.qp_p_high == pytest.approx(0.05)
+    assert code.qp_p_high == 0.0
+    assert code.pq_area.q_max[0, -1] == pytest.approx(0.33)
     assert code.n_variants == 1
     assert not np.array_equal(
         code.pq_area.x_points, qc.VDE_AR_N_4120.pq_area.x_points
@@ -1090,6 +1091,8 @@ def test_pieces_reproduce_the_envelope_inside_its_span(code_name):
     """Inside the breakpoints, min/max-of-pieces *is* the envelope."""
     code = qc.GRID_CODES[code_name]
     for area in (code.pq_area, code.qv_area):
+        if area is qc.VDE_AR_N_4110.pq_area:
+            continue  # step at 0.1 Pn is non-concave; see the test below
         lo, hi = area.exact_range()
         for v in range(code.n_variants):
             for x in np.linspace(lo, hi, 51):
@@ -1098,6 +1101,25 @@ def test_pieces_reproduce_the_envelope_inside_its_span(code_name):
                 got_lo = max(m * x + b for m, b in area.lower_pieces(v))
                 assert got_hi == pytest.approx(env_hi, abs=1e-12)
                 assert got_lo == pytest.approx(env_lo, abs=1e-12)
+
+
+def test_4110_pq_area_is_not_exactly_linearisable():
+    """The step at 0.1 Pn makes the pieces a strict relaxation of the rule.
+
+    Pinned so the limitation stays visible: the model permits more Q than
+    VDE-AR-N 4110 below 0.2 Pn, and the other areas stay exact.
+    """
+    area = qc.VDE_AR_N_4110.pq_area
+    assert not area.is_linearisable(0)
+    rng = qc.DEFAULT_P_RANGE_PU
+    hi = min(m * 0.05 + b for m, b in area.upper_pieces(0, rng))
+    assert hi > area.q_flexibility(0.05, 0)[1] + 0.05
+    for area in (
+        qc.VDE_AR_N_4105.pq_area,
+        qc.VDE_AR_N_4120.pq_area,
+        qc.VDE_AR_N_4110.qv_area,
+    ):
+        assert area.is_linearisable(0)
 
 
 @pytest.mark.parametrize("code_name", ["4105", "4110", "4120"])
@@ -1175,11 +1197,11 @@ def test_range_inside_the_envelope_is_quiet():
 def test_deadband_curve_is_zero_through_the_band():
     """Q is held at zero across the dead band and ramps outside it."""
     curve = qc.VDE_AR_N_4110.deadband_curve()
-    assert curve.deadband(0) == (0.95, 1.05)
-    for v in (0.95, 0.98, 1.00, 1.02, 1.05):
+    assert curve.deadband(0) == (0.925, 1.075)
+    for v in (0.925, 0.98, 1.00, 1.02, 1.075):
         assert float(curve.step(v, 0)) == pytest.approx(0.0, abs=1e-12)
-    assert float(curve.step(0.90, 0)) == pytest.approx(0.484322, abs=1e-9)
-    assert float(curve.step(1.10, 0)) == pytest.approx(-0.484322, abs=1e-9)
+    assert float(curve.step(0.90, 0)) == pytest.approx(0.33, abs=1e-9)
+    assert float(curve.step(1.10, 0)) == pytest.approx(-0.33, abs=1e-9)
 
 
 def test_deadband_curve_is_monotonic():
@@ -1229,7 +1251,7 @@ def test_padding_saturates_rather_than_extrapolating():
     [
         (None, None),
         (False, None),
-        (True, (0.95, 1.05)),
+        (True, (0.925, 1.075)),
         ((0.98, 1.02), (0.98, 1.02)),
     ],
 )
@@ -1519,8 +1541,8 @@ def test_deadband_conflicting_with_qp_area_warns():
     """A characteristic the Q(P) area cannot satisfy must be flagged.
 
     Both are imposed on the same reactive power. For VDE-AR-N 4110 with its
-    default dead band the curve assigns +0.484 Pn at 0.90 p.u., which the
-    Q(P) area permits only at rated output — so a bus reaching that voltage
+    default dead band the curve assigns +0.33 Pn at 0.90 p.u., which the
+    Q(P) area permits only from 0.2 Pn upward — so a bus reaching that voltage
     at lower active power makes the model infeasible, and the solver says
     only "infeasible".
     """
@@ -1537,7 +1559,7 @@ def test_deadband_conflict_warning_names_the_operating_point():
         qc.warn_if_curve_leaves_pq_area(code.deadband_curve(), code.pq_area)
     text = str(rec[0].message)
     assert "0.9000" in text
-    assert "+0.4843" in text
+    assert "+0.3300" in text
     assert "dead band" in text.lower()
 
 

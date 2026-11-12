@@ -12,7 +12,7 @@ dependencies:
   - pip:
       # pandapower 3.5 is what a fresh `pip install opf-potpourri` resolves to,
       # so CI pins it rather than the older 3.4 the metadata also allows (see
-      # the `pandapower>=2.13,<3.6` bound in pyproject.toml). 3.5.4 tightens
+      # the `pandapower>=2.13,<3.6` bound in pyproject.toml). 3.5.4 tightened
       # three of its own dependencies — scipy~=1.18 on Python >= 3.12,
       # tqdm~=4.68 and geojson~=3.3 — so those move with it; the pin set below
       # is the one the unit suite was verified against.
@@ -22,7 +22,7 @@ dependencies:
       - matpowercaseframes==2.1.0
       - numpy==2.3.5
       - openpyxl==3.1.5
-      - pandapower==3.5.4
+      - pandapower==3.5.6
       - pandas==2.3.3
       - pyomo==6.10.1
       - scipy==1.18.0

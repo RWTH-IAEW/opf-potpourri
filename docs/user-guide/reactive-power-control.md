@@ -169,6 +169,14 @@ and cos(φ)(P) thresholds.  Every area reproduces the matching class in
 pandapower's `DERController` to machine precision; the test suite asserts
 it against pandapower's own `q_flexibility()`.
 
+!!! warning "VDE-AR-N 4110 Q(P) is relaxed below 0.2 Pn"
+    The 4110 Q(P) area steps from ±0.02/−0.05 Pn to ±0.1 Pn at 0.1 Pn, which
+    the linear-inequality form cannot represent.  The constraints use the
+    hull, so the model permits more reactive power than the rule for
+    P < 0.2 Pn (for example [−0.19, +0.175] Pn at 0.1 Pn against ±0.1 Pn).
+    Results that depend on low-output reactive power under `"4110"` are
+    optimistic.  `Envelope.is_linearisable()` is `False` for this area.
+
 `var_q` selects a column of the capability table, so it must index a
 variant the chosen code actually defines.  A value out of range, or a
 fractional one, raises rather than being silently rounded to a neighbour.
@@ -414,9 +422,10 @@ mpopf.add_OPF(grid_code="4110", qu_deadband=curve)
 
     | bus voltage | the curve assigns | the Q(P) area permits it |
     |---|---|---|
-    | 0.90 p.u. | +0.4843 Pn | only at rated output |
-    | 0.92 p.u. | +0.2906 Pn | at P ≥ 0.584 Pn |
-    | 0.95–1.05 p.u. | 0 | everywhere |
+    | 0.90 p.u. | +0.33 Pn | at P ≥ 0.2 Pn |
+    | 0.91 p.u. | +0.198 Pn | at P ≥ 0.143 Pn |
+    | 0.92 p.u. | +0.066 Pn | at P ≥ 0.0996 Pn |
+    | 0.925–1.075 p.u. | 0 | everywhere |
 
     Building such a model emits a `QuCurveOutsidePqAreaWarning` naming the
     voltage and the active power required, so the infeasibility is

@@ -308,8 +308,10 @@ class Envelope:
 
         True when the upper bound is concave (non-increasing slopes) and the
         lower bound convex (non-decreasing slopes) across the breakpoint
-        span.  Every grid code shipped here satisfies both; a hand-built
-        :class:`Envelope` need not.
+        span.  Every shipped grid code satisfies both except the VDE-AR-N
+        4110 Q(P) area, whose step at 0.1 Pn is non-concave: there the pieces
+        are the hull and permit more Q than the rule below 0.2 Pn.  A
+        hand-built :class:`Envelope` need not satisfy either.
         """
         upper = [m for m, _ in self.upper_pieces(variant)]
         lower = [m for m, _ in self.lower_pieces(variant)]
@@ -674,22 +676,28 @@ VDE_AR_N_4105 = GridCode(
 
 
 # --- VDE-AR-N 4110 (medium voltage) --------------------------------------
-# Single variant at cos phi 0.90, with a 0.05 p.u. active-power threshold
-# below which only a token reactive range is required.  Matches pandapower
-# PQArea4110 / QVArea4110.
-_Q4110 = np.array([_Q_COSPHI_090])
+# Single variant at Q = 0.33 Pn (cos phi 0.95), Figures 5 and 6 of the rule
+# (identical in the 2018 and 2023 revisions).  Matches pandapower 3.5.6
+# PQArea4110 / QVArea4110; 3.5.4 and 3.5.5 carried the cos phi 0.90 values of
+# the 4120 rule instead.
+#
+# The Q(P) area is NOT concave/convex: Q is held at +0.02 / -0.05 up to
+# P = 0.099 Pn, then steps to +/-0.1 at 0.1 Pn.  min/max-of-affines cannot
+# represent a step, so the constraint pieces use the hull and the model
+# permits more Q than the rule at P < 0.2 Pn (see Envelope.is_linearisable).
+_Q4110 = np.array([0.33])  # the rule's rounded tan(phi), not 0.328684
 
 VDE_AR_N_4110 = GridCode(
     name="4110",
     title="VDE-AR-N 4110",
     voltage_level="medium voltage",
     pq_area=Envelope(
-        x_points=np.array([0.05, 1.0]),
-        q_min=np.array([[-0.01961505, -_Q_COSPHI_090]]),
-        q_max=np.array([[0.01961505, _Q_COSPHI_090]]),
+        x_points=np.array([0.0, 0.099, 0.1, 0.2, 1.0]),
+        q_min=np.array([[-0.05, -0.05, -0.1, -0.33, -0.33]]),
+        q_max=np.array([[0.02, 0.02, 0.1, 0.33, 0.33]]),
     ),
     qv_area=_vde_qv_area(
-        [0.90, 0.95, 1.05, 1.10],
+        [0.90, 0.925, 1.075, 1.10],
         q_min=-_Q4110,
         q_max=_Q4110,
         low_v_q_max=np.zeros(1),
@@ -1050,8 +1058,8 @@ def warn_if_curve_leaves_pq_area(
 
     The conflict is real but conditional — it bites only when voltage sits
     far from the dead band while active power is low.  For VDE-AR-N 4110
-    with its default dead band, the curve demands +0.484 Pn at 0.90 p.u.,
-    which the Q(P) area permits only at rated output.
+    with its default dead band, the curve demands +0.33 Pn at 0.90 p.u.,
+    which the Q(P) area permits only from 0.2 Pn upward.
 
     Args:
         curve: The :class:`QVCurve` being imposed.

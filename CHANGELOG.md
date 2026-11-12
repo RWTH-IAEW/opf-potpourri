@@ -7,6 +7,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **`environment.yaml` pins pandapower 3.5.6** (was 3.5.4). Power-flow,
+  DC power-flow and ACOPF results on the SimBench HV/MV/LV test networks are
+  bit-identical to 3.5.4.
+- **VDE-AR-N 4110 capability areas follow pandapower 3.5.6's correction.**
+  Q is now bounded at ±0.33 Pn (was ±0.484 Pn, the 4120 cos φ 0.90 value),
+  the Q(U) breakpoints are 0.90/0.925/1.075/1.10 p.u. (was
+  0.90/0.95/1.05/1.10), and the Q(P) area has the standard's low-power
+  shelf (+0.02/−0.05 Pn below 0.099 Pn, ±0.1 Pn at 0.1 Pn). This changes
+  results for `grid_code="4110"`, and the default dead band becomes
+  0.925–1.075 p.u. `qp_p_high` for 4110 is now 0 (was 0.05), so wind sgens no
+  longer get a forced minimum output under 4110.
+- **Known limitation:** the 4110 Q(P) area is non-concave (a step at 0.1 Pn),
+  so the constraint pieces use its hull and the model permits more reactive
+  power than the rule for P < 0.2 Pn. `Envelope.is_linearisable()` is `False`
+  for it, and results depending on low-output Q under 4110 are optimistic. An
+  exact formulation needs binaries and is not implemented.
+
 - **Model construction is linear in network size.** The nodal balances
   (`KCL_real`, `KCL_reactive`, `KCL_const`, `KCL_def`) used to scan every
   element for every bus; they now sum over bus incidence lists computed once
