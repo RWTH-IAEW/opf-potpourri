@@ -145,6 +145,7 @@ from potpourri.models.basemodel import (
     Basemodel,
     branch_charging_admittance,
 )
+from potpourri.models.incidence import cached_incidence, incidence_scope
 from potpourri.models.shunt_control import shunt_control_terms
 
 
@@ -857,22 +858,19 @@ class AC(Basemodel):
             as a constraint.
         """
         shunt_ctrl = getattr(model, "SHUNT_CTRL", ())
-        kcl = sum(
-            model.psG[g] for g in model.sG if (g, b) in model.sGbs
-        ) + sum(model.pG[g] for g in model.G if (g, b) in model.Gbs) - sum(
-            model.pSTOR[s] for s in model.STOR if model.STOR_bus[s] == b
-        ) == sum(model.pD[d] for d in model.D if (b, d) in model.Dbs) + sum(
-            model.pLfrom[l] for l in model.L if model.A[l, 1] == b
-        ) + sum(model.pLto[l] for l in model.L if model.A[l, 2] == b) + sum(
-            model.pThv[l] for l in model.TRANSF if model.AT[l, 1] == b
-        ) + sum(
-            model.pTlv[l] for l in model.TRANSF if model.AT[l, 2] == b
+        at = cached_incidence(self, model, storage=True)
+        kcl = sum(model.psG[g] for g in at.sG.get(b, ())) + sum(
+            model.pG[g] for g in at.G.get(b, ())
+        ) - sum(model.pSTOR[s] for s in at.STOR.get(b, ())) == sum(
+            model.pD[d] for d in at.D.get(b, ())
+        ) + sum(model.pLfrom[l] for l in at.L_from.get(b, ())) + sum(
+            model.pLto[l] for l in at.L_to.get(b, ())
+        ) + sum(model.pThv[l] for l in at.T_hv.get(b, ())) + sum(
+            model.pTlv[l] for l in at.T_lv.get(b, ())
         ) + sum(
             model.GB[s] * model.v[b] ** 2
-            for s in model.SHUNT
-            if (b, s) in model.SHUNTbs
-            and model.GB[s] != 0
-            and s not in shunt_ctrl
+            for s in at.SHUNT.get(b, ())
+            if model.GB[s] != 0 and s not in shunt_ctrl
         ) + shunt_control_terms(model, b)
         if isinstance(kcl, (bool, np.bool_)):
             return pyo.Constraint.Skip
@@ -899,26 +897,22 @@ class AC(Basemodel):
             `KCL_real`.
         """
         shunt_ctrl = getattr(model, "SHUNT_CTRL", ())
-        kcl = sum(
-            model.qsG[g] for g in model.sG if (g, b) in model.sGbs
-        ) + sum(model.qG[g] for g in model.G if (g, b) in model.Gbs) - sum(
+        at = cached_incidence(self, model, storage=True)
+        kcl = sum(model.qsG[g] for g in at.sG.get(b, ())) + sum(
+            model.qG[g] for g in at.G.get(b, ())
+        ) - sum(
             # storage reactive power follows pandapower's load convention
             # (positive = consumption), like pSTOR in KCL_real
             model.qSTOR[s]
-            for s in model.STOR
-            if model.STOR_bus[s] == b
-        ) == sum(model.qD[d] for d in model.D if (b, d) in model.Dbs) + sum(
-            model.qLfrom[l] for l in model.L if model.A[l, 1] == b
-        ) + sum(model.qLto[l] for l in model.L if model.A[l, 2] == b) + sum(
-            model.qThv[l] for l in model.TRANSF if model.AT[l, 1] == b
-        ) + sum(
-            model.qTlv[l] for l in model.TRANSF if model.AT[l, 2] == b
-        ) - sum(
+            for s in at.STOR.get(b, ())
+        ) == sum(model.qD[d] for d in at.D.get(b, ())) + sum(
+            model.qLfrom[l] for l in at.L_from.get(b, ())
+        ) + sum(model.qLto[l] for l in at.L_to.get(b, ())) + sum(
+            model.qThv[l] for l in at.T_hv.get(b, ())
+        ) + sum(model.qTlv[l] for l in at.T_lv.get(b, ())) - sum(
             model.BB[s] * model.v[b] ** 2
-            for s in model.SHUNT
-            if (b, s) in model.SHUNTbs
-            and model.BB[s] != 0
-            and s not in shunt_ctrl
+            for s in at.SHUNT.get(b, ())
+            if model.BB[s] != 0 and s not in shunt_ctrl
         ) + shunt_control_terms(model, b, reactive=True)
         if isinstance(kcl, (bool, np.bool_)):
             return pyo.Constraint.Skip
@@ -940,14 +934,20 @@ class AC(Basemodel):
             None. `KCL_real` and `KCL_reactive` are (re)created on
             `self.model`.
         """
-        for name in self.KCL_CONSTRAINTS:
-            rule = getattr(self, f"_{name.lower()}_rule")
-            if hasattr(self.model, name):
-                self.model.del_component(getattr(self.model, name))
-            # `rule=` rather than a decorator, deliberately: both the
-            # component name and the rule come from the loop, so there is
-            # no function to decorate. See docs/contributing-pyomo.md.
-            setattr(self.model, name, pyo.Constraint(self.model.B, rule=rule))
+        # The bus -> element lists are computed once for both balances
+        # (see `potpourri.models.incidence`), not once per bus.
+        with incidence_scope(self, self.model, storage=True):
+            for name in self.KCL_CONSTRAINTS:
+                rule = getattr(self, f"_{name.lower()}_rule")
+                if hasattr(self.model, name):
+                    self.model.del_component(getattr(self.model, name))
+                # `rule=` rather than a decorator, deliberately: both the
+                # component name and the rule come from the loop, so there
+                # is no function to decorate. See
+                # docs/contributing-pyomo.md.
+                setattr(
+                    self.model, name, pyo.Constraint(self.model.B, rule=rule)
+                )
 
     def rebuild_kcl(self):
         """Rebuild the balance so late-attached controls are included.

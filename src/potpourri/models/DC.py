@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import pyomo.environ as pyo
 from potpourri.models.basemodel import Basemodel
+from potpourri.models.incidence import bus_incidence
 
 
 class DC(Basemodel):
@@ -171,6 +172,9 @@ class DC(Basemodel):
         )  # angle difference across transformers
 
         # --- Kirchoff's current law at each bus b ---
+        # bus -> element lists, computed once rather than per bus
+        at = bus_incidence(self.model)
+
         @self.model.Constraint(self.model.B)
         def KCL_const(model, b):
             """Active-power balance at bus `b`.
@@ -182,22 +186,14 @@ class DC(Basemodel):
             Returns:
                 A Pyomo expression.
             """
-            kcl = sum(
-                model.psG[g] for g in model.sG if (g, b) in model.sGbs
-            ) + sum(
-                model.pG[g] for g in model.G if (g, b) in model.Gbs
-            ) == sum(
-                model.pD[d] for d in model.D if (b, d) in model.Dbs
-            ) + sum(
-                model.pLfrom[l] for l in model.L if model.A[l, 1] == b
-            ) + sum(
-                model.pLto[l] for l in model.L if model.A[l, 2] == b
-            ) + sum(
-                model.pThv[l] for l in model.TRANSF if model.AT[l, 1] == b
-            ) + sum(
-                model.pTlv[l] for l in model.TRANSF if model.AT[l, 2] == b
-            ) + sum(
-                model.GB[s] for s in model.SHUNT if (b, s) in model.SHUNTbs
+            kcl = sum(model.psG[g] for g in at.sG.get(b, ())) + sum(
+                model.pG[g] for g in at.G.get(b, ())
+            ) == sum(model.pD[d] for d in at.D.get(b, ())) + sum(
+                model.pLfrom[l] for l in at.L_from.get(b, ())
+            ) + sum(model.pLto[l] for l in at.L_to.get(b, ())) + sum(
+                model.pThv[l] for l in at.T_hv.get(b, ())
+            ) + sum(model.pTlv[l] for l in at.T_lv.get(b, ())) + sum(
+                model.GB[s] for s in at.SHUNT.get(b, ())
             )
             if isinstance(kcl, (bool, np.bool_)):
                 return pyo.Constraint.Skip

@@ -10,6 +10,7 @@ Adds linearised DC equations indexed over time steps.
 import numpy as np
 import pandas as pd
 import pyomo.environ as pyo
+from potpourri.models.incidence import cached_incidence
 from potpourri.models_multi_period.basemodel_multi_period import (
     Basemodel_multi_period,
 )
@@ -224,18 +225,15 @@ class DC_multi_period(Basemodel_multi_period):
         Returns:
             A Pyomo expression.
         """
-        kcl = sum(
-            model.psG[g, t] for g in model.sG if (g, b) in model.sGbs
-        ) + sum(model.pG[g, t] for g in model.G if (g, b) in model.Gbs) == sum(
-            model.pD[d, t] for d in model.D if (b, d) in model.Dbs
-        ) + sum(
-            model.pLfrom[l, t] for l in model.L if model.A[l, 1] == b
-        ) + sum(model.pLto[l, t] for l in model.L if model.A[l, 2] == b) + sum(
-            model.pThv[l, t] for l in model.TRANSF if model.AT[l, 1] == b
-        ) + sum(
-            model.pTlv[l, t] for l in model.TRANSF if model.AT[l, 2] == b
-        ) + sum(
-            model.GB[s, t] for s in model.SHUNT if (b, s) in model.SHUNTbs
+        at = cached_incidence(self, model)
+        kcl = sum(model.psG[g, t] for g in at.sG.get(b, ())) + sum(
+            model.pG[g, t] for g in at.G.get(b, ())
+        ) == sum(model.pD[d, t] for d in at.D.get(b, ())) + sum(
+            model.pLfrom[l, t] for l in at.L_from.get(b, ())
+        ) + sum(model.pLto[l, t] for l in at.L_to.get(b, ())) + sum(
+            model.pThv[l, t] for l in at.T_hv.get(b, ())
+        ) + sum(model.pTlv[l, t] for l in at.T_lv.get(b, ())) + sum(
+            model.GB[s, t] for s in at.SHUNT.get(b, ())
         ) + self.KCL_flexibility(model, b, t)
         if isinstance(kcl, bool):
             return pyo.Constraint.Skip

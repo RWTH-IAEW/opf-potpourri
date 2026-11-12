@@ -10,6 +10,7 @@ Adds full AC equations with voltage magnitudes over time.
 import numpy as np
 
 from potpourri.models.basemodel import branch_charging_admittance
+from potpourri.models.incidence import cached_incidence
 from potpourri.models.shunt_control import shunt_control_terms
 import pyomo.environ as pyo
 from potpourri.models_multi_period.basemodel_multi_period import (
@@ -612,22 +613,17 @@ class AC_multi_period(Basemodel_multi_period):
             at that bus is constant.
         """
         shunt_ctrl = getattr(model, "SHUNT_CTRL", ())
-        kcl = sum(
-            model.psG[g, t] for g in model.sG if (g, b) in model.sGbs
-        ) + sum(model.pG[g, t] for g in model.G if (g, b) in model.Gbs) == sum(
-            model.pD[d, t] for d in model.D if (b, d) in model.Dbs
-        ) + sum(
-            model.pLfrom[l, t] for l in model.L if model.A[l, 1] == b
-        ) + sum(model.pLto[l, t] for l in model.L if model.A[l, 2] == b) + sum(
-            model.pThv[l, t] for l in model.TRANSF if model.AT[l, 1] == b
-        ) + sum(
-            model.pTlv[l, t] for l in model.TRANSF if model.AT[l, 2] == b
-        ) + sum(
+        at = cached_incidence(self, model)
+        kcl = sum(model.psG[g, t] for g in at.sG.get(b, ())) + sum(
+            model.pG[g, t] for g in at.G.get(b, ())
+        ) == sum(model.pD[d, t] for d in at.D.get(b, ())) + sum(
+            model.pLfrom[l, t] for l in at.L_from.get(b, ())
+        ) + sum(model.pLto[l, t] for l in at.L_to.get(b, ())) + sum(
+            model.pThv[l, t] for l in at.T_hv.get(b, ())
+        ) + sum(model.pTlv[l, t] for l in at.T_lv.get(b, ())) + sum(
             model.GB[s, t] * model.v[b, t] ** 2
-            for s in model.SHUNT
-            if (b, s) in model.SHUNTbs
-            and model.GB[s, t] != 0
-            and s not in shunt_ctrl
+            for s in at.SHUNT.get(b, ())
+            if model.GB[s, t] != 0 and s not in shunt_ctrl
         ) + shunt_control_terms(model, b, t) + self.KCL_flexibility(
             model, b, t
         )
@@ -651,22 +647,17 @@ class AC_multi_period(Basemodel_multi_period):
             at that bus is constant.
         """
         shunt_ctrl = getattr(model, "SHUNT_CTRL", ())
-        kcl = sum(
-            model.qsG[g, t] for g in model.sG if (g, b) in model.sGbs
-        ) + sum(model.qG[g, t] for g in model.G if (g, b) in model.Gbs) == sum(
-            model.qD[d, t] for d in model.D if (b, d) in model.Dbs
-        ) + sum(
-            model.qLfrom[l, t] for l in model.L if model.A[l, 1] == b
-        ) + sum(model.qLto[l, t] for l in model.L if model.A[l, 2] == b) + sum(
-            model.qThv[l, t] for l in model.TRANSF if model.AT[l, 1] == b
-        ) + sum(
-            model.qTlv[l, t] for l in model.TRANSF if model.AT[l, 2] == b
-        ) - sum(
+        at = cached_incidence(self, model)
+        kcl = sum(model.qsG[g, t] for g in at.sG.get(b, ())) + sum(
+            model.qG[g, t] for g in at.G.get(b, ())
+        ) == sum(model.qD[d, t] for d in at.D.get(b, ())) + sum(
+            model.qLfrom[l, t] for l in at.L_from.get(b, ())
+        ) + sum(model.qLto[l, t] for l in at.L_to.get(b, ())) + sum(
+            model.qThv[l, t] for l in at.T_hv.get(b, ())
+        ) + sum(model.qTlv[l, t] for l in at.T_lv.get(b, ())) - sum(
             model.BB[s, t] * model.v[b, t] ** 2
-            for s in model.SHUNT
-            if (b, s) in model.SHUNTbs
-            and model.BB[s, t] != 0
-            and s not in shunt_ctrl
+            for s in at.SHUNT.get(b, ())
+            if model.BB[s, t] != 0 and s not in shunt_ctrl
         ) + shunt_control_terms(
             model, b, t, reactive=True
         ) + self.KCL_flexibility(model, b, t, reactive=True)

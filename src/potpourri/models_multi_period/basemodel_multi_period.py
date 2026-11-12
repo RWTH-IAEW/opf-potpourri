@@ -16,6 +16,7 @@ import pandapower as pp
 import simbench as sb
 import time as ctime
 from loguru import logger
+from potpourri.models.incidence import incidence_scope
 from potpourri.models.solver_guard import check_integrality_support
 from potpourri.models_multi_period.init_pyo_from_pp_res_multi_period import (
     init_pyo_from_pp_res_multi_period,
@@ -593,25 +594,29 @@ class Basemodel_multi_period:
         model *after* the power-flow equations are first built and their
         injections have to reach the balance.
         """
-        for name in self.KCL_CONSTRAINTS:
-            rule = getattr(self, f"_{name.lower()}_rule", None)
-            if rule is None:
-                continue
-            if hasattr(self.model, name):
-                self.model.del_component(getattr(self.model, name))
-            # Pyomo materialises an implicit index set for a multi-dimensional
-            # constraint; it has to go too, or re-adding clashes on the name.
-            index_name = f"{name}_index"
-            if hasattr(self.model, index_name):
-                self.model.del_component(getattr(self.model, index_name))
-            # `rule=` rather than a decorator, deliberately: both the
-            # component name and the rule come from the loop, so there is
-            # no function to decorate. See docs/contributing-pyomo.md.
-            setattr(
-                self.model,
-                name,
-                pyo.Constraint(self.model.B, self.model.T, rule=rule),
-            )
+        # The bus -> element lists are computed once for every balance and
+        # time step (see `potpourri.models.incidence`), not per rule call.
+        with incidence_scope(self, self.model):
+            for name in self.KCL_CONSTRAINTS:
+                rule = getattr(self, f"_{name.lower()}_rule", None)
+                if rule is None:
+                    continue
+                if hasattr(self.model, name):
+                    self.model.del_component(getattr(self.model, name))
+                # Pyomo materialises an implicit index set for a
+                # multi-dimensional constraint; it has to go too, or
+                # re-adding clashes on the name.
+                index_name = f"{name}_index"
+                if hasattr(self.model, index_name):
+                    self.model.del_component(getattr(self.model, index_name))
+                # `rule=` rather than a decorator, deliberately: both the
+                # component name and the rule come from the loop, so there is
+                # no function to decorate. See docs/contributing-pyomo.md.
+                setattr(
+                    self.model,
+                    name,
+                    pyo.Constraint(self.model.B, self.model.T, rule=rule),
+                )
 
     def rebuild_kcl(self):
         """Rebuild the balance so late-attached devices are included.
