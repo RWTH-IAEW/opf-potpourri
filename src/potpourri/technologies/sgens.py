@@ -156,12 +156,11 @@ class Sgens_multi_period(Flexibility_multi_period):
             self.static_generation_data["controllable"]
         )[0].tolist()
 
+        in_service = set(self.sgens_in_service_list)  # O(1) membership
         model.sGc = pyo.Set(
             within=model.sG,
             initialize=[
-                g
-                for g in self.sgens_controllable_list
-                if g in self.sgens_in_service_list
+                g for g in self.sgens_controllable_list if g in in_service
             ],
         )  # static generators that are controllable and in service
 
@@ -723,6 +722,7 @@ class Sgens_multi_period(Flexibility_multi_period):
             0
         ].tolist()
         in_service = getattr(self, "sgens_in_service_list", None)
+        in_service = None if in_service is None else set(in_service)
         bounded = {
             g for g in controllable if in_service is None or g in in_service
         }
