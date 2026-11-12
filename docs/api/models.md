@@ -20,6 +20,10 @@ The equations behind these classes are derived in the
 
 ---
 
+::: potpourri.models.incidence
+
+---
+
 ::: potpourri.models.AC
 
 ---

@@ -5,6 +5,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Model construction is linear in network size.** The nodal balances
+  (`KCL_real`, `KCL_reactive`, `KCL_const`, `KCL_def`) used to scan every
+  element for every bus; they now sum over bus incidence lists computed once
+  per build (`potpourri.models.incidence`). The branch admittance parameters
+  are initialised with Python floats instead of numpy scalars, and the
+  single-period result writer no longer does per-element pandas look-ups for
+  static generators and shunt voltages. The generated constraints, variables
+  and `.nl`/`.row`/`.col` files are byte-identical to the previous release;
+  `ACOPF(net)` on `pglib_opf_case2869_pegase` drops from about 20 s to 1 s.
+
 ## [0.8.1] — 2026-10-01
 
 Makes the multi-period AC OPF converge on the SimBench MV networks: the
