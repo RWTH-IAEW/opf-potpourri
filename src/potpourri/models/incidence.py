@@ -194,3 +194,22 @@ def incidence_scope(owner, model, storage=False):
         yield inc
     finally:
         setattr(owner, _CACHE_ATTR, None)
+
+
+def python_floats(series):
+    """Turn a float Series into a `{label: float}` dict of Python floats.
+
+    A Pyomo `Param` initialised from a pandas Series keeps numpy scalars,
+    and every `np.float64 * <Pyomo expression>` then goes through numpy's
+    `__array_ufunc__` dispatch before Pyomo sees it, which dominates the
+    time spent writing the branch equations of a large grid. Python floats
+    skip that detour and hold the same IEEE value, so the expressions and
+    everything computed from them are unchanged.
+
+    Args:
+        series: A numeric Series indexed by the Param's index set.
+
+    Returns:
+        A dict mapping each label to `float(value)`, in the Series' order.
+    """
+    return dict(zip(series.index, series.astype(float).tolist()))

@@ -145,7 +145,11 @@ from potpourri.models.basemodel import (
     Basemodel,
     branch_charging_admittance,
 )
-from potpourri.models.incidence import cached_incidence, incidence_scope
+from potpourri.models.incidence import (
+    cached_incidence,
+    incidence_scope,
+    python_floats,
+)
 from potpourri.models.shunt_control import shunt_control_terms
 
 
@@ -349,44 +353,52 @@ class AC(Basemodel):
         self.model.Bii = pyo.Param(
             self.model.L,
             within=pyo.Reals,
-            initialize=self.line_data.Bii_data[self.model.L],
+            initialize=python_floats(self.line_data.Bii_data[self.model.L]),
         )
         self.model.Bik = pyo.Param(
             self.model.L,
             within=pyo.Reals,
-            initialize=self.line_data.Bik_data[self.model.L],
+            initialize=python_floats(self.line_data.Bik_data[self.model.L]),
         )
         self.model.Gii = pyo.Param(
             self.model.L,
             within=pyo.Reals,
-            initialize=self.line_data.Gii_data[self.model.L],
+            initialize=python_floats(self.line_data.Gii_data[self.model.L]),
         )
         self.model.Gik = pyo.Param(
             self.model.L,
             within=pyo.Reals,
-            initialize=self.line_data.Gik_data[self.model.L],
+            initialize=python_floats(self.line_data.Gik_data[self.model.L]),
         )
 
         ## derived transformer pyo.Parameters
         self.model.BiiT = pyo.Param(
             self.model.TRANSF,
             within=pyo.Reals,
-            initialize=self.trafo_data.BiiT_data[self.model.TRANSF],
+            initialize=python_floats(
+                self.trafo_data.BiiT_data[self.model.TRANSF]
+            ),
         )
         self.model.BikT = pyo.Param(
             self.model.TRANSF,
             within=pyo.Reals,
-            initialize=self.trafo_data.BikT_data[self.model.TRANSF],
+            initialize=python_floats(
+                self.trafo_data.BikT_data[self.model.TRANSF]
+            ),
         )
         self.model.GiiT = pyo.Param(
             self.model.TRANSF,
             within=pyo.Reals,
-            initialize=self.trafo_data.GiiT_data[self.model.TRANSF],
+            initialize=python_floats(
+                self.trafo_data.GiiT_data[self.model.TRANSF]
+            ),
         )
         self.model.GikT = pyo.Param(
             self.model.TRANSF,
             within=pyo.Reals,
-            initialize=self.trafo_data.GikT_data[self.model.TRANSF],
+            initialize=python_floats(
+                self.trafo_data.GikT_data[self.model.TRANSF]
+            ),
         )
 
         # reactive generation
