@@ -91,7 +91,7 @@ def test_issue8_preprocess_grid_does_not_use_top_level_symbol():
 def test_issue8_pandapower_pin_has_an_upper_bound():
     """An unbounded pin is what let a breaking minor release through."""
     pyproject = (REPO_ROOT / "pyproject.toml").read_text()
-    assert '"pandapower>=2.13,<3.6"' in pyproject
+    assert '"pandapower>=3.5.6,<3.6"' in pyproject
 
 
 def test_issue8_constructor_builds_a_model(lv_net):

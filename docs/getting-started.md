@@ -78,7 +78,7 @@ mamba env create -f environment.yaml   # Mamba (faster)
 ```
 
 This creates the `potpourri_env` environment with all pinned dependencies
-including IPOPT 3.14.20 and GLPK 5.0.
+including Python 3.12.16, IPOPT 3.14.20 and GLPK 5.0.
 
 **4. Activate the environment**
 
@@ -103,6 +103,33 @@ When `environment.yaml` changes (e.g. after pulling new commits):
 ```bash
 conda env update -f environment.yaml --prune
 ```
+
+For a checkout managed with uv, activate the solver environment first and
+then install the locked Python dependencies:
+
+```bash
+conda activate potpourri_env
+uv sync --all-extras --locked
+uv run pytest -m "not integration"
+```
+
+`uv.lock` resolves the latest compatible releases for Python 3.10–3.12;
+`.python-version` selects Python 3.12.16 for development. The current
+pandapower release requires pandas 2.3 and NumPy below 2.5, so those bounds
+also apply when updating with `uv lock --upgrade`.
+
+#### AC power-flow backend
+
+`lightsim2grid` is installed by default. Initial power flows, multi-period
+warm starts and diagnostics request
+`lightsim2grid="auto"` with constant-power loads, matching the OPF model.
+Supported networks use its C++ Newton solver. For unsupported configurations
+(for example, multiple slack buses without distributed slack), pandapower
+automatically uses its own Newton solver. See the
+[pandapower backend documentation](https://pandapower.readthedocs.io/en/latest/powerflow/ac.html#lightsim2grid-compatibility).
+
+Activate the solver environment before running an OPF and check `ipopt -v`:
+the executable found on `PATH` determines the IPOPT version actually used.
 
 ---
 

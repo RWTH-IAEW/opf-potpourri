@@ -65,7 +65,7 @@ class Basemodel_multi_period:
             pf: Power factor for reactive power calculation (default 1).
         """
         self.net = copy.deepcopy(net)
-        pp.runpp(self.net, voltage_depend_loads=False)
+        pp.runpp(self.net, voltage_depend_loads=False, lightsim2grid="auto")
 
         # --- initialize flexibility list ---
         self.flexibilities = []
@@ -386,7 +386,8 @@ class Basemodel_multi_period:
 
         # --- reference bus constraint ---
         for b in self.model.b0:
-            self.model.delta[b, t].fix(self.model.delta_b0[b])
+            for t in self.model.T:
+                self.model.delta[b, t].fix(self.model.delta_b0[b])
 
     def diagnose(self, level: str = "standard", **options):
         """Work out why this OPF failed, or why its answer looks odd.

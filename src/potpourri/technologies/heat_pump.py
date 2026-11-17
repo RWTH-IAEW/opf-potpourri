@@ -45,6 +45,9 @@ class Heatpump_multi_period(Flexibility_multi_period):
             so it can be updated after model construction.
         temp_max_c: Upper indoor temperature bound in °C (or K offset).
         temp_min_c: Lower indoor temperature bound in °C (or K offset).
+        initial_temp_c: Temperature before the first interval, in °C.
+            Defaults to the midpoint of the temperature bounds. ``temp[h,t]``
+            is the temperature at the end of interval ``t``.
         avg_house_size_m3: Average house volume in m³ for the thermal capacity
             calculation.
         wall_thickness_m: Wall thickness in m used for heat-loss scaling.
@@ -97,6 +100,7 @@ class Heatpump_multi_period(Flexibility_multi_period):
         cop: float = 4.0,
         temp_max_c: float = 20.0,
         temp_min_c: float = 15.0,
+        initial_temp_c: float | None = None,
         avg_house_size_m3: float = 500.0,
         wall_thickness_m: float = 0.2,
         qloss_max: float = 0.01,
@@ -121,6 +125,19 @@ class Heatpump_multi_period(Flexibility_multi_period):
 
         self.temp_max = temp_max_c
         self.temp_min = temp_min_c
+        self.initial_temp = (
+            0.5 * (temp_min_c + temp_max_c)
+            if initial_temp_c is None
+            else float(initial_temp_c)
+        )
+        if not (
+            np.isfinite(self.initial_temp)
+            and temp_min_c <= self.initial_temp <= temp_max_c
+        ):
+            raise ValueError(
+                "initial_temp_c must be finite and within "
+                f"[{temp_min_c}, {temp_max_c}]; got {self.initial_temp}."
+            )
         self.hp_power_max = power_max_pu
         self.hp_cop = cop
 
@@ -134,11 +151,11 @@ class Heatpump_multi_period(Flexibility_multi_period):
             * wall_thickness_m
             * self._CONCRETE_DENSITY_KG_M3
         )
-        # Thermal capacity in MWh/K (convert from J/K via / 3_600_000)
+        # Thermal capacity in MWh/K: 1 MWh = 3.6e9 J.
         self.heat_cap = (
             air_mass_kg * self._AIR_SPECIFIC_HEAT_J_KGK
             + concrete_mass_kg * self._CONCRETE_SPECIFIC_HEAT_KJ_KGK * 1000.0
-        ) / 3_600_000.0
+        ) / 3_600_000_000.0
 
         # --- Heat-loss profile proportional to load ---
         # Both the reference peak and the profile it scales are per-unit, so
@@ -197,6 +214,9 @@ class Heatpump_multi_period(Flexibility_multi_period):
         model.TempMin = pyo.Param(
             model.HP, within=pyo.Reals, initialize=self.temp_min
         )
+        model.HP_TempInit = pyo.Param(
+            model.HP, within=pyo.Reals, initialize=self.initial_temp
+        )
         # CoP as a mutable per-unit Pyomo parameter so it can be updated
         # after model construction (e.g. for seasonal COP sensitivity).
         model.HP_CoP = pyo.Param(
@@ -209,7 +229,7 @@ class Heatpump_multi_period(Flexibility_multi_period):
         # it can be adjusted per heat-pump instance if needed.
         model.HP_ThermCap = pyo.Param(
             model.HP,
-            within=pyo.NonNegativeReals,
+            within=pyo.PositiveReals,
             initialize=self.heat_cap,
             mutable=True,
         )
@@ -228,9 +248,8 @@ class Heatpump_multi_period(Flexibility_multi_period):
         Create hp_p (electrical power) and temp (indoor temperature)
         variables.
 
-        ``temp`` starts mid-band rather than at Pyomo's default of 0, which
-        sits outside ``[temp_min_c, temp_max_c]`` and so begins the solve on
-        an infeasible point. ``hp_p`` starts at 0, inside its own bounds.
+        ``temp`` is initialised at the supplied initial temperature, inside
+        the temperature bounds. ``hp_p`` starts at 0.
         """
         model.hp_p = pyo.Var(
             model.HP, model.T, domain=pyo.Reals, initialize=0.0
@@ -239,7 +258,7 @@ class Heatpump_multi_period(Flexibility_multi_period):
             model.HP,
             model.T,
             domain=pyo.Reals,
-            initialize=0.5 * (self.temp_min + self.temp_max),
+            initialize=self.initial_temp,
         )
         return True
 
@@ -290,12 +309,16 @@ class Heatpump_multi_period(Flexibility_multi_period):
             Returns:
                 A Pyomo expression.
             """
-            if t == model.T.at(1):
-                return pyo.Constraint.Skip
+            previous_temp = (
+                model.HP_TempInit[h]
+                if t == model.T.first()
+                else model.temp[h, model.T.prev(t)]
+            )
             return (
                 model.temp[h, t]
-                == model.temp[h, t - 1]
+                == previous_temp
                 + model.deltaT
+                * model.baseMVA
                 * (model.hp_p[h, t] * model.HP_CoP[h] - model.Qloss[h, t])
                 / model.HP_ThermCap[h]
             )

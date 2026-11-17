@@ -4,6 +4,7 @@
 
 """Demand mix-in: load profiles and demand bounds over time."""
 
+import pandas as pd
 import pyomo.environ as pyo
 from potpourri.technologies.flexibility import Flexibility_multi_period
 
@@ -289,28 +290,16 @@ class Demand_multi_period(Flexibility_multi_period):
             )
         else:
             self.demand_controllable_set = self.net.load.index[
-                self.net.load.controllable.astype(bool)
+                self.net.load.controllable.fillna(False).astype(bool)
+                & self.net.load.in_service
             ]
 
-        # Aus dem Netzwerk die maximalen und minimalen Lasten holen
-        if max_p_mw is not None:
-            self.PDmax_data_dict, self.PDmax_tuple = self.make_to_dict(
-                model.D, model.T, max_p_mw
-            )
-        elif max_p_mw is None:
-            self.PDmax_data_dict, self.PDmax_tuple = self.make_to_dict(
-                model.D, model.T, self.PD_data
-            )
-
-        # add rows with active demand limits if not existing
-        if min_p_mw is not None:
-            self.PDmin_data_dict, self.PDmin_tuple = self.make_to_dict(
-                model.D, model.T, min_p_mw, False
-            )
-        elif min_p_mw is None:
-            self.PDmin_data_dict, self.PDmin_tuple = self.make_to_dict(
-                model.D, model.T, 0, False
-            )
+        self.PDmax_data_dict, self.PDmax_tuple = self._bound_data(
+            model, "max_p_mw", max_p_mw, self.PD_data
+        )
+        self.PDmin_data_dict, self.PDmin_tuple = self._bound_data(
+            model, "min_p_mw", min_p_mw, 0
+        )
 
     def get_demand_reactive_data(
         self, model, max_q_mvar=None, min_q_mvar=None
@@ -329,22 +318,29 @@ class Demand_multi_period(Flexibility_multi_period):
         Returns:
             None. Stores its results on `self`.
         """
-        # reactive power demand
-        if max_q_mvar is not None:
-            self.QDmax_data_dict, self.QDmax_tuple = self.make_to_dict(
-                model.D, model.T, max_q_mvar
-            )
-        elif max_q_mvar is None:
-            self.QDmax_data_dict, self.QDmax_tuple = self.make_to_dict(
-                model.D, model.T, self.QD_data.abs()
-            )
+        self.QDmax_data_dict, self.QDmax_tuple = self._bound_data(
+            model, "max_q_mvar", max_q_mvar, self.QD_data.abs()
+        )
+        self.QDmin_data_dict, self.QDmin_tuple = self._bound_data(
+            model, "min_q_mvar", min_q_mvar, -self.QD_data.abs()
+        )
 
-        if min_q_mvar is not None:
-            self.QDmin_data_dict, self.QDmin_tuple = self.make_to_dict(
-                model.D, model.T, min_q_mvar
-            )
-        elif min_q_mvar is None:
-            self.QDmin_data_dict, self.QDmin_tuple = self.make_to_dict(
-                model.D, model.T, -(self.QD_data.abs())
-            )
-        # demand limits for loads
+    def _bound_data(self, model, column, override, default):
+        """Read physical load limits, convert to p.u., and fill missing values.
+
+        Explicit scalar or per-load overrides take precedence over the
+        network column. Missing column entries keep the per-unit default
+        (which can vary by time step).
+        """
+        values, indices = self.make_to_dict(model.D, model.T, default)
+        if override is not None:
+            limits, _ = self.make_to_dict(model.D, model.T, override, False)
+            return {
+                key: value / self.baseMVA for key, value in limits.items()
+            }, indices
+        if column in self.net.load:
+            for d, t in indices:
+                limit = self.net.load.at[d, column]
+                if pd.notna(limit):
+                    values[d, t] = float(limit) / self.baseMVA
+        return values, indices

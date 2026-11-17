@@ -234,9 +234,10 @@ opf-potpourri` is unaffected — the submodule is not part of the PyPI package.
 
 | Package | Role |
 |---|---|
-| `pandapower >= 2.13` | Network data model, initial power flow |
-| `pyomo >= 6.7` | Optimisation modelling |
-| `simbench >= 1.4` | Benchmark networks and time-series profiles |
+| `pandapower >= 3.5.6, < 3.6` | Network data model, initial power flow |
+| `lightsim2grid >= 1.3.1` | Default AC power-flow backend where supported |
+| `pyomo >= 6.10.1` | Optimisation modelling |
+| `simbench >= 1.6.2` | Benchmark networks and time-series profiles |
 | `numpy`, `pandas` | Numerical / data processing |
 | `matplotlib` | Plotting |
 
