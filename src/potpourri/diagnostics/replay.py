@@ -112,10 +112,22 @@ def replay_power_flow(ctx: DiagnosticContext) -> DiagnosticReport:
     try:
         try:
             with redirect_stdout(buf), redirect_stderr(buf):
-                pp.runpp(clone, init="results", calculate_voltage_angles=True)
+                pp.runpp(
+                    clone,
+                    init="results",
+                    calculate_voltage_angles=True,
+                    voltage_depend_loads=False,
+                    lightsim2grid="auto",
+                )
         except Exception:
             with redirect_stdout(buf), redirect_stderr(buf):
-                pp.runpp(clone, init="flat", calculate_voltage_angles=True)
+                pp.runpp(
+                    clone,
+                    init="flat",
+                    calculate_voltage_angles=True,
+                    voltage_depend_loads=False,
+                    lightsim2grid="auto",
+                )
     except Exception as exc:
         report.add(
             DiagnosticIssue(

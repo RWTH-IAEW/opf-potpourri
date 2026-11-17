@@ -5,6 +5,44 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-11-17
+
+Correct multi-period reference angles, thermal dynamics and dispatch handling,
+and use lightsim2grid as the default AC power-flow backend where supported.
+The dependency set is refreshed to current compatible releases.
+
+### Fixed
+
+- Fix the slack-bus voltage angle in every time step of the multi-period
+  models. Previously, a leaked transformer-loop index fixed only the last
+  step, leaving the other steps without an angle reference; networks without
+  transformers raised `UnboundLocalError` during model construction.
+- Correct heat-pump thermal capacity from kWh/K to MWh/K and convert p.u.
+  power to MW in the temperature balance. Every interval, including the first,
+  now contributes to the temperature. The new `initial_temp_c` argument sets
+  the temperature before the first interval (default: midpoint of the bounds).
+  Previous heat-pump studies used incorrect thermal dynamics and should be
+  rerun.
+- Map multi-period transformer results by model position while preserving
+  pandapower table indices, including nonzero/non-contiguous indices.
+- Preserve fixed dispatch and state variables during multi-period warm starts;
+  changing the seed's curtailment must not change fixed injections.
+- Exclude out-of-service sgens from the bus mapping and out-of-service loads
+  from the controllable subset. Inactive loads report zero power.
+- Honour `net.load` active/reactive power bounds in multi-period OPF and
+  convert explicit MW/MVAr overrides to p.u. Missing bounds retain the
+  profile-based defaults.
+
+### Changed
+
+- Refresh the dependency floors, Python 3.12 environment pins, development
+  tools and `uv.lock` to the latest compatible stable releases. Development
+  uses Python 3.12.16; pandapower 3.5.6 still requires pandas 2.3 and NumPy
+  below 2.5. IPOPT 3.14.20 and GLPK 5.0 remain the latest stable releases.
+- Install lightsim2grid 1.3.1 by default and select its automatic backend
+  for initial AC power flows, per-step warm starts and diagnostics.
+  Unsupported networks fall back to pandapower's Newton solver.
+
 ## [0.9.0] — 2026-11-12
 
 Faster model construction and a corrected VDE-AR-N 4110 grid code. Building

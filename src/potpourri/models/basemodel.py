@@ -320,7 +320,9 @@ class Basemodel:
            without a power flow and the start is flat.
         """
         try:
-            pp.runpp(self.net, voltage_depend_loads=False)
+            pp.runpp(
+                self.net, voltage_depend_loads=False, lightsim2grid="auto"
+            )
             return
         except pp.LoadflowNotConverged:
             logger.warning(

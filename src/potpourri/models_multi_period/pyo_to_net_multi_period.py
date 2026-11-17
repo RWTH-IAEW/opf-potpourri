@@ -312,13 +312,20 @@ def _load_results_to_net(net, model, t):
     )
     # --- load ---
     net.res_load.p_mw = pd.Series(
-        [model.pD[d, t].value for d in net.load.index], index=net.load.index
+        [
+            model.pD[d, t].value if d in model.D else 0.0
+            for d in net.load.index
+        ],
+        index=net.load.index,
     )
     net.res_load.p_mw *= model.baseMVA.value
     if "AC" in model.name:
         # load
         net.res_load.q_mvar = pd.Series(
-            [model.qD[d, t].value for d in net.load.index],
+            [
+                model.qD[d, t].value if d in model.D else 0.0
+                for d in net.load.index
+            ],
             index=net.load.index,
         )
         net.res_load.q_mvar *= model.baseMVA.value
@@ -432,12 +439,12 @@ def _trafo_results_to_net(net, model, t):
         None. The result tables are filled in place.
     """
     net.res_trafo.p_hv_mw = pd.Series(
-        [model.pThv[i, t].value for i in net.trafo.index],
+        [model.pThv[i, t].value for i in range(len(net.trafo))],
         index=net.trafo.index,
     )
     net.res_trafo.p_hv_mw *= model.baseMVA.value
     net.res_trafo.p_lv_mw = pd.Series(
-        [model.pTlv[i, t].value for i in net.trafo.index],
+        [model.pTlv[i, t].value for i in range(len(net.trafo))],
         index=net.trafo.index,
     )
     net.res_trafo.p_lv_mw *= model.baseMVA.value
@@ -450,12 +457,12 @@ def _trafo_results_to_net(net, model, t):
     if "AC" in model.name:
         # transformer
         net.res_trafo.q_hv_mvar = pd.Series(
-            [model.qThv[i, t].value for i in net.trafo.index],
+            [model.qThv[i, t].value for i in range(len(net.trafo))],
             index=net.trafo.index,
         )
         net.res_trafo.q_hv_mvar *= model.baseMVA.value
         net.res_trafo.q_lv_mvar = pd.Series(
-            [model.qTlv[i, t].value for i in net.trafo.index],
+            [model.qTlv[i, t].value for i in range(len(net.trafo))],
             index=net.trafo.index,
         )
         net.res_trafo.q_lv_mvar *= model.baseMVA.value

@@ -138,7 +138,11 @@ class Sgens_multi_period(Flexibility_multi_period):
         )  # static generators
         model.sGbs = pyo.Set(
             within=model.sG * model.B,
-            initialize=self.static_generation_data["gen_bus"],
+            initialize=[
+                pair
+                for pair in self.static_generation_data["gen_bus"]
+                if pair[0] in model.sG
+            ],
         )  # set of static generator-bus mapping
         return True
 

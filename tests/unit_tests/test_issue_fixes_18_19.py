@@ -173,7 +173,7 @@ def test_issue19_mappers_have_no_chained_inplace_calls():
 
 def test_issue19_pandas_pin_has_an_upper_bound():
     """An unbounded pin is how pandapower 3.5 broke things in #8."""
-    assert '"pandas>=2.0,<3"' in (REPO_ROOT / "pyproject.toml").read_text()
+    assert '"pandas>=2.3.3,<3"' in (REPO_ROOT / "pyproject.toml").read_text()
 
 
 @pytest.mark.integration

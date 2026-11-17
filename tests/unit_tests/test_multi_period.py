@@ -4,7 +4,11 @@
 
 """Unit tests for multi-period model construction (no solver required)."""
 
+import copy
+from math import radians
+
 import pandapower as pp
+import pyomo.environ as pyo
 import pytest
 import simbench as sb
 
@@ -38,6 +42,49 @@ def test_time_set_range(lv_net):
 
 
 # ── model structure ───────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "model_class", [ACOPF_multi_period, DCOPF_multi_period]
+)
+@pytest.mark.parametrize("fromT, toT", [(0, 96), (4, 8)])
+def test_reference_angle_fixed_at_every_time(lv_net, model_class, fromT, toT):
+    net = copy.deepcopy(lv_net)
+    net.ext_grid["va_degree"] = 7.0
+    opf = model_class(net, fromT=fromT, toT=toT)
+    m = opf.model
+    assert len(m.b0) > 0
+    for b in m.B:
+        for t in m.T:
+            assert m.delta[b, t].fixed == (b in m.b0)
+            if b in m.b0:
+                assert pyo.value(m.delta[b, t]) == pytest.approx(
+                    pyo.value(m.delta_b0[b])
+                )
+                assert pyo.value(m.delta[b, t]) == pytest.approx(radians(7.0))
+
+
+@pytest.mark.parametrize(
+    "model_class", [ACOPF_multi_period, DCOPF_multi_period]
+)
+def test_reference_angle_without_transformer(lv_net, model_class):
+    net = copy.deepcopy(lv_net)
+    assert len(net.trafo) == 1
+    hv_bus, lv_bus = net.trafo.iloc[0][["hv_bus", "lv_bus"]]
+    net.ext_grid["bus"] = int(lv_bus)
+    net.switch.drop(net.switch.index[net.switch.et == "t"], inplace=True)
+    net.trafo.drop(net.trafo.index, inplace=True)
+    net.bus.drop(int(hv_bus), inplace=True)
+    opf = model_class(net, fromT=4, toT=8)
+    m = opf.model
+    assert len(m.TRANSF) == 0
+    assert len(m.b0) > 0
+    for b in m.b0:
+        for t in m.T:
+            assert m.delta[b, t].fixed
+            assert pyo.value(m.delta[b, t]) == pytest.approx(
+                pyo.value(m.delta_b0[b])
+            )
 
 
 def test_multi_period_has_bus_set(lv_net):

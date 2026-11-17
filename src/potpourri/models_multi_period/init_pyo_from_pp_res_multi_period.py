@@ -116,7 +116,9 @@ def init_pyo_from_pp_res_multi_period(net, model, bus_lookup, curtailment=1.0):
         Number of time steps successfully seeded.
 
     Variables that do not exist on the given model kind are skipped, so this
-    works for the AC, LPAC and DC formulations alike.
+    works for the AC, LPAC and DC formulations alike. Fixed variables keep
+    their prescribed values: a warm start only changes the initial guess,
+    even when ``curtailment`` changes the seeding power flow.
     """
     base = model.baseMVA.value
     scratch = copy.deepcopy(net)
@@ -127,6 +129,8 @@ def init_pyo_from_pp_res_multi_period(net, model, bus_lookup, curtailment=1.0):
         """Assign an initial value when the variable exists on this model."""
         var = getattr(model, component, None)
         if var is None or index not in var:
+            return
+        if var[index].fixed:
             return
         var[index].set_value(float(value))
 
@@ -144,7 +148,7 @@ def init_pyo_from_pp_res_multi_period(net, model, bus_lookup, curtailment=1.0):
                     )
 
         try:
-            pp.runpp(scratch, voltage_depend_loads=False)
+            pp.runpp(scratch, voltage_depend_loads=False, lightsim2grid="auto")
         except (pp.LoadflowNotConverged, KeyError) as err:
             logger.warning(
                 "Warm-start power flow did not converge at t={}: {}. "

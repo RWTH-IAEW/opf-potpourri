@@ -260,6 +260,7 @@ Heatpump_multi_period(
 | `cop` | `4.0` | Coefficient of performance (heat out / electrical in) |
 | `temp_max_c` | `20.0` | Upper indoor temperature bound (°C) |
 | `temp_min_c` | `15.0` | Lower indoor temperature bound (°C) |
+| `initial_temp_c` | `None` | Temperature before the first interval (°C); defaults to the midpoint of the bounds |
 | `avg_house_size_m3` | `500.0` | Average house volume (m³) for thermal capacity calculation |
 | `wall_thickness_m` | `0.2` | Wall thickness (m) for thermal mass |
 | `qloss_max` | `0.01` | Peak heat-loss value (p.u. power) mapped to peak load |
@@ -276,6 +277,7 @@ Heatpump_multi_period(
 ### Pyomo components added
 
 **Parameters:** `HP_Pmax[h]`, `HP_Pmin[h]`, `TempMax[h]`, `TempMin[h]`,
+`HP_TempInit[h]`,
 `HP_CoP[h]` *(mutable)*, `HP_ThermCap[h]` *(mutable)*, `Qloss[h, t]`
 
 **Variables:** `hp_p[h, t]` (electrical consumption), `temp[h, t]` (indoor temperature)
@@ -287,13 +289,17 @@ Heatpump_multi_period(
 - `hp_temp_update_con` — thermal dynamics:
 
 $$
-\theta_{h,t} = \theta_{h,t-1} + \Delta t \cdot \frac{\text{CoP}_h \cdot p_{h,t}^\text{hp} - Q_{h,t}^\text{loss}}{C_h^\text{therm}}
+\theta_{h,t} = \theta_{h,t-1} + \Delta t \cdot S_\text{base} \cdot \frac{\text{CoP}_h \cdot p_{h,t}^\text{hp} - Q_{h,t}^\text{loss}}{C_h^\text{therm}}
 $$
 
 The thermal capacity $C_h^\text{therm}$ (MWh/K) is derived from the house
 geometry using standard air and concrete physical constants.  `HP_CoP` and
 `HP_ThermCap` are mutable Pyomo parameters so they can be updated after model
-construction without a full rebuild.
+construction without a full rebuild. Powers are in p.u.; multiplying by
+`model.baseMVA` converts them to MW. `temp[h,t]` is the temperature at the
+end of interval `t`. The first interval starts at `HP_TempInit[h]`, set by
+`initial_temp_c` (default: midpoint of the temperature bounds), and has the
+same heat balance as every subsequent interval.
 
 ### Example
 

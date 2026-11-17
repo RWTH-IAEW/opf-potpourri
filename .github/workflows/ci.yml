@@ -17,7 +17,7 @@ jobs:
       # Pinned to the same version as .pre-commit-config.yaml. An unpinned
       # install silently follows ruff's latest release, so a new ruff could
       # fail this job on untouched code. Bump both together.
-      - run: pip install ruff==0.16.8
+      - run: pip install ruff==0.17.5
       - run: ruff check .
       - run: ruff format --check .
 

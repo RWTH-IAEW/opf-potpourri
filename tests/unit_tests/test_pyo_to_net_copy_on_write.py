@@ -67,7 +67,11 @@ def _dc_net():
     pp.create_gen(net, 1, p_mw=0.5, vm_pu=1.05)
     pp.create_load(net, 0, p_mw=1.0)
     pp.create_load(net, 2, p_mw=0.5)
-    pp.rundcpp(net)
+    # pandapower's result extraction writes to .values and cannot run with
+    # copy-on-write enabled. Only prepare the reference net in legacy mode;
+    # the potpourri result mapper is still tested with copy-on-write on.
+    with pd.option_context("mode.copy_on_write", False):
+        pp.rundcpp(net)
     return net
 
 
